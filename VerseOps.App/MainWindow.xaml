@@ -134,7 +134,7 @@
                 <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="TxtAuthState" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="#9CDCFE"/>
                     <Button Content="Register SP" Click="OnRegisterSp" Background="#3A6A3A" BorderBrush="#4A8A4A"
-                            ToolTip="One-time, per tenant. Signs in interactively as a Power Platform admin and registers the App-only ClientId as a tenant admin management application via BAP /adminApplications."/>
+                            ToolTip="One-time, per tenant. Signs in interactively as a Power Platform admin and registers the App-only ClientId as a tenant admin management application. (Required for any SP to call admin APIs — PPAC and BAP both honor this registration.)"/>
                     <Button Content="Sign out" Click="OnSignOut" Background="#5A1A1A" BorderBrush="#7A2A2A"/>
                 </StackPanel>
             </Grid>
@@ -147,20 +147,11 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <GroupBox Grid.Column="0">
-                <GroupBox.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Operations  —  surface:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <RadioButton x:Name="RbSurfBap"  Content="BAP (deprecated)" IsChecked="True" GroupName="Surf" Checked="OnSurfaceChanged" Foreground="#D7BA7D"
-                                     ToolTip="Legacy api.bap.microsoft.com / api.powerapps.com / api.flow.microsoft.com surface."/>
-                        <RadioButton x:Name="RbSurfPpac" Content="PPAC (preview)"   GroupName="Surf" Checked="OnSurfaceChanged" Foreground="#9CDCFE" Margin="8,0,0,0"
-                                     ToolTip="New api.powerplatform.com control plane — preview, not yet GA."/>
-                    </StackPanel>
-                </GroupBox.Header>
+            <GroupBox Grid.Column="0" Header="PPAC operations (api.powerplatform.com — preview)">
                 <DockPanel>
-                    <Border DockPanel.Dock="Top" Background="#2D2A1F" BorderBrush="#5A4A20" BorderThickness="1"
+                    <Border DockPanel.Dock="Top" Background="#1F2A2D" BorderBrush="#205A5A" BorderThickness="1"
                             Padding="6" Margin="0,0,0,4" CornerRadius="2">
-                        <TextBlock x:Name="TxtSurfaceNotice" TextWrapping="Wrap" Foreground="#D7BA7D" FontSize="11"/>
+                        <TextBlock x:Name="TxtSurfaceNotice" TextWrapping="Wrap" Foreground="#9CDCFE" FontSize="11"/>
                     </Border>
                     <TreeView x:Name="TvOps" SelectedItemChanged="OnOperationSelected"/>
                 </DockPanel>
@@ -198,14 +189,14 @@
                             </ComboBox>
                             <Label Content="Scope:" Margin="12,0,0,0"/>
                             <ComboBox x:Name="CbScope" Width="320">
-                                <ComboBoxItem Content="https://service.powerapps.com/.default" IsSelected="True"/>
-                                <ComboBoxItem Content="https://api.powerplatform.com/.default"/>
+                                <ComboBoxItem Content="https://api.powerplatform.com/.default" IsSelected="True"/>
+                                <ComboBoxItem Content="https://service.powerapps.com/.default"/>
+                                <ComboBoxItem Content="https://api.bap.microsoft.com/.default"/>
                                 <ComboBoxItem Content="https://graph.microsoft.com/.default"/>
-                                <ComboBoxItem Content="https://api.flow.microsoft.com/.default"/>
                             </ComboBox>
                             <Button x:Name="BtnSend" Content="Send" Click="OnSend" Margin="16,0,0,0" Padding="22,4"/>
                             <Button x:Name="BtnDecode" Content="Decode bearer" Click="OnDecodeToken"/>
-                            <Button x:Name="BtnSweep" Content="Sweep PPAC × 10 envs" Click="OnPpacSweep"
+                            <Button x:Name="BtnSweep" Content="Sweep × 10 envs" Click="OnPpacSweep"
                                     ToolTip="Run every PPAC operation against the first N environments and dump a report into the Body tab."/>
                             <Button x:Name="BtnCancel" Content="Cancel" Click="OnCancel" IsEnabled="False" Background="#5A1A1A" BorderBrush="#7A2A2A"/>
                         </StackPanel>
