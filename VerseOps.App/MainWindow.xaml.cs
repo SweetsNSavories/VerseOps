@@ -38,19 +38,38 @@ public partial class MainWindow : Window
         var ops = ApiCatalog.ForSurface(surface);
         foreach (var grp in ops.GroupBy(o => o.Category))
         {
-            var node = new TreeViewItem { Header = grp.Key, IsExpanded = true };
-            foreach (var op in grp)
+            var node = new TreeViewItem { Header = grp.Key, IsExpanded = false };
+            // Group by SubCategory when present; otherwise leaves attach directly.
+            var subGroups = grp.GroupBy(o => o.SubCategory ?? string.Empty).ToList();
+            var hasSub = subGroups.Any(s => !string.IsNullOrEmpty(s.Key));
+            if (hasSub)
             {
-                var leaf = new TreeViewItem
+                foreach (var sub in subGroups.OrderBy(s => s.Key))
                 {
-                    Header = $"{op.HttpMethod}  {op.Name}",
-                    Tag = op
-                };
-                node.Items.Add(leaf);
+                    if (string.IsNullOrEmpty(sub.Key))
+                    {
+                        foreach (var op in sub) node.Items.Add(MakeOpLeaf(op));
+                        continue;
+                    }
+                    var subNode = new TreeViewItem { Header = sub.Key, IsExpanded = false };
+                    foreach (var op in sub.OrderBy(o => o.Name))
+                        subNode.Items.Add(MakeOpLeaf(op));
+                    node.Items.Add(subNode);
+                }
+            }
+            else
+            {
+                foreach (var op in grp) node.Items.Add(MakeOpLeaf(op));
             }
             TvOps.Items.Add(node);
         }
     }
+
+    private static TreeViewItem MakeOpLeaf(ApiOperation op) => new()
+    {
+        Header = $"{op.HttpMethod}  {op.Name}",
+        Tag = op
+    };
 
     private ApiSurface GetSelectedSurface() => ApiSurface.Ppac;
 

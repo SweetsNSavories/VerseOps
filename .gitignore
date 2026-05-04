@@ -49,3 +49,9 @@ secrets.json
 # OS
 Thumbs.db
 .DS_Store
+ppac-pdf*.txt
+ppac-ops*.txt
+ppac-toc*.json
+parse-ops.ps1
+gen.ps1
+rest-api*.pdf
