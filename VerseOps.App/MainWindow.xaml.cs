@@ -394,8 +394,19 @@ public partial class MainWindow : Window
             {
                 foreach (var el in arr.EnumerateArray())
                 {
-                    string id = TryStr(el, "name") ?? TryStr(el, "id") ?? TryStr(el, "policyId") ?? "";
+                    // PPAC billing policies (and similar resources) put a GUID in
+                    // the trailing segment of the ARM-style "id" field, while
+                    // "name" carries a human-readable slug. The route expects
+                    // the GUID. Prefer the trailing segment of "id" when it is
+                    // GUID-shaped; fall back to "name" / "policyId" otherwise.
+                    string id =
+                        TryGuidFromArmId(el)
+                        ?? TryStr(el, "policyId")
+                        ?? TryStr(el, "id")
+                        ?? TryStr(el, "name")
+                        ?? "";
                     string name = TryStr(el, "displayName")
+                              ?? TryStr(el, "name")
                               ?? (el.TryGetProperty("properties", out var pp) ? TryStr(pp, "displayName") ?? id : id);
                     if (!string.IsNullOrEmpty(id)) items.Add((id, name ?? id));
                 }
@@ -414,6 +425,19 @@ public partial class MainWindow : Window
 
     private static string? TryStr(JsonElement el, string prop)
         => el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    /// <summary>
+    /// Extracts a GUID from the trailing segment of an ARM-style id like
+    /// "/providers/.../billingPolicies/3b451e9c-c4d7-4c12-8d12-69f996e7fd48".
+    /// Returns null if the element has no string "id" or the tail is not GUID-shaped.
+    /// </summary>
+    private static string? TryGuidFromArmId(JsonElement el)
+    {
+        var s = TryStr(el, "id");
+        if (string.IsNullOrEmpty(s)) return null;
+        var tail = s.TrimEnd('/').Split('/').Last();
+        return Guid.TryParse(tail, out _) ? tail : null;
+    }
 
     private async void OnSend(object sender, RoutedEventArgs e)
     {
