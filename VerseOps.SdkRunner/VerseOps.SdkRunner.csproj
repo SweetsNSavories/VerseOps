@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>VerseOps.SdkRunner</RootNamespace>
+    <UserSecretsId>fcbe964c-2579-4a4c-86e5-c1f751adfa3a</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\VerseOps\VerseOps.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.PowerPlatform.Management" Version="2.0.3060.142" />
+    <PackageReference Include="Microsoft.Kiota.Authentication.Azure" Version="1.17.2" />
+    <PackageReference Include="Microsoft.Kiota.Http.HttpClientLibrary" Version="1.17.2" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Json" Version="1.17.2" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Text" Version="1.17.2" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Form" Version="1.17.2" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Multipart" Version="1.17.2" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.71.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.0" />
+  </ItemGroup>
+</Project>

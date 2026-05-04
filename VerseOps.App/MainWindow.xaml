@@ -1,0 +1,314 @@
+﻿<Window x:Class="VerseOps.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:VerseOps.App"
+        mc:Ignorable="d"
+        Title="VerseOps — Power Platform Control-Plane Console"
+        Height="820" Width="1400"
+        WindowStartupLocation="CenterScreen"
+        Background="#1E1E1E" Foreground="#E8E8E8"
+        FontFamily="Segoe UI" FontSize="12">
+
+    <Window.Resources>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#252526"/>
+            <Setter Property="Foreground" Value="#E8E8E8"/>
+            <Setter Property="BorderBrush" Value="#3F3F46"/>
+            <Setter Property="CaretBrush" Value="#E8E8E8"/>
+            <Setter Property="Padding" Value="4,2"/>
+        </Style>
+        <Style TargetType="PasswordBox">
+            <Setter Property="Background" Value="#252526"/>
+            <Setter Property="Foreground" Value="#E8E8E8"/>
+            <Setter Property="BorderBrush" Value="#3F3F46"/>
+            <Setter Property="Padding" Value="4,2"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#0E639C"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#1177BB"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style TargetType="GroupBox">
+            <Setter Property="Foreground" Value="#9CDCFE"/>
+            <Setter Property="BorderBrush" Value="#3F3F46"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="Padding" Value="6"/>
+        </Style>
+        <Style TargetType="Label">
+            <Setter Property="Foreground" Value="#CCCCCC"/>
+        </Style>
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#E8E8E8"/>
+            <Setter Property="Margin" Value="4,0"/>
+        </Style>
+        <Style TargetType="TreeView">
+            <Setter Property="Background" Value="#252526"/>
+            <Setter Property="Foreground" Value="#E8E8E8"/>
+            <Setter Property="BorderBrush" Value="#3F3F46"/>
+        </Style>
+        <Style TargetType="TreeViewItem">
+            <Setter Property="Foreground" Value="#E8E8E8"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="2"/>
+            <Style.Resources>
+                <!-- Override the system selection brushes so even when the TreeView
+                     loses focus the selected row stays readable. -->
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#094771"/>
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FFFFFF"/>
+                <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#37373D"/>
+                <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#FFFFFF"/>
+                <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#37373D"/>
+            </Style.Resources>
+            <Style.Triggers>
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsSelected" Value="True"/>
+                        <Condition Property="IsSelectionActive" Value="True"/>
+                    </MultiTrigger.Conditions>
+                    <Setter Property="Background" Value="#094771"/>
+                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                </MultiTrigger>
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsSelected" Value="True"/>
+                        <Condition Property="IsSelectionActive" Value="False"/>
+                    </MultiTrigger.Conditions>
+                    <Setter Property="Background" Value="#37373D"/>
+                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                </MultiTrigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#2A2D2E"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <GroupBox Grid.Row="0" Header="Authentication">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Margin="0,0,12,4">
+                    <RadioButton x:Name="RbUser" Content="User (interactive)" IsChecked="True" GroupName="AuthMode" Checked="OnAuthModeChanged"/>
+                    <RadioButton x:Name="RbApp"  Content="App-only (client credentials)" GroupName="AuthMode" Checked="OnAuthModeChanged"/>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal">
+                    <Label Content="Tenant:" VerticalAlignment="Center"/>
+                    <TextBox x:Name="TbTenant" Width="280" Text="common"/>
+                </StackPanel>
+
+                <StackPanel x:Name="UserPanel" Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
+                    <Label Content="Public client id:" VerticalAlignment="Center"/>
+                    <TextBox x:Name="TbPublicClientId" Width="290" Text="04b07795-8ddb-461a-bbee-02f9e1bf7b46"
+                             ToolTip="Default = Azure CLI public client (works in most tenants)."/>
+                </StackPanel>
+
+                <StackPanel x:Name="AppPanel" Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0" Visibility="Collapsed">
+                    <Label Content="App ClientId:" VerticalAlignment="Center"/>
+                    <TextBox x:Name="TbAppClientId" Width="280"/>
+                    <Label Content="Secret:" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    <PasswordBox x:Name="PbAppSecret" Width="280"/>
+                </StackPanel>
+
+                <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="TxtAuthState" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="#9CDCFE"/>
+                    <Button Content="Register SP" Click="OnRegisterSp" Background="#3A6A3A" BorderBrush="#4A8A4A"
+                            ToolTip="One-time, per tenant. Signs in interactively as a Power Platform admin and registers the App-only ClientId as a tenant admin management application via BAP /adminApplications."/>
+                    <Button Content="Sign out" Click="OnSignOut" Background="#5A1A1A" BorderBrush="#7A2A2A"/>
+                </StackPanel>
+            </Grid>
+        </GroupBox>
+
+        <Grid Grid.Row="1" Margin="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="290"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <GroupBox Grid.Column="0">
+                <GroupBox.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Operations  —  surface:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <RadioButton x:Name="RbSurfBap"  Content="BAP (deprecated)" IsChecked="True" GroupName="Surf" Checked="OnSurfaceChanged" Foreground="#D7BA7D"
+                                     ToolTip="Legacy api.bap.microsoft.com / api.powerapps.com / api.flow.microsoft.com surface."/>
+                        <RadioButton x:Name="RbSurfPpac" Content="PPAC (preview)"   GroupName="Surf" Checked="OnSurfaceChanged" Foreground="#9CDCFE" Margin="8,0,0,0"
+                                     ToolTip="New api.powerplatform.com control plane — preview, not yet GA."/>
+                    </StackPanel>
+                </GroupBox.Header>
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Background="#2D2A1F" BorderBrush="#5A4A20" BorderThickness="1"
+                            Padding="6" Margin="0,0,0,4" CornerRadius="2">
+                        <TextBlock x:Name="TxtSurfaceNotice" TextWrapping="Wrap" Foreground="#D7BA7D" FontSize="11"/>
+                    </Border>
+                    <TreeView x:Name="TvOps" SelectedItemChanged="OnOperationSelected"/>
+                </DockPanel>
+            </GroupBox>
+
+            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" Background="#3F3F46"/>
+
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <GroupBox Grid.Row="0" Header="Request">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Label Grid.Row="0" Grid.Column="0" Content="Method:"/>
+                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
+                            <ComboBox x:Name="CbMethod" Width="100">
+                                <ComboBoxItem>GET</ComboBoxItem>
+                                <ComboBoxItem>POST</ComboBoxItem>
+                                <ComboBoxItem>PATCH</ComboBoxItem>
+                                <ComboBoxItem>PUT</ComboBoxItem>
+                                <ComboBoxItem>DELETE</ComboBoxItem>
+                            </ComboBox>
+                            <Label Content="Scope:" Margin="12,0,0,0"/>
+                            <ComboBox x:Name="CbScope" Width="320">
+                                <ComboBoxItem Content="https://service.powerapps.com/.default" IsSelected="True"/>
+                                <ComboBoxItem Content="https://api.powerplatform.com/.default"/>
+                                <ComboBoxItem Content="https://graph.microsoft.com/.default"/>
+                                <ComboBoxItem Content="https://api.flow.microsoft.com/.default"/>
+                            </ComboBox>
+                            <Button x:Name="BtnSend" Content="Send" Click="OnSend" Margin="16,0,0,0" Padding="22,4"/>
+                            <Button x:Name="BtnDecode" Content="Decode bearer" Click="OnDecodeToken"/>
+                            <Button x:Name="BtnSweep" Content="Sweep PPAC × 10 envs" Click="OnPpacSweep"
+                                    ToolTip="Run every PPAC operation against the first N environments and dump a report into the Body tab."/>
+                            <Button x:Name="BtnCancel" Content="Cancel" Click="OnCancel" IsEnabled="False" Background="#5A1A1A" BorderBrush="#7A2A2A"/>
+                        </StackPanel>
+
+                        <Label Grid.Row="1" Grid.Column="0" Content="URL:"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="TbUrl" FontFamily="Cascadia Mono, Consolas"/>
+
+                        <Label Grid.Row="2" Grid.Column="0" Content="Body:" VerticalAlignment="Top"/>
+                        <TabControl Grid.Row="2" Grid.Column="1" Background="#1E1E1E">
+                            <TabItem Header="Form">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Margin="6">
+                                        <TextBlock x:Name="TxtFormHint" Foreground="#888"
+                                                   Text="Select an operation to see its parameters."
+                                                   Margin="0,0,0,6"/>
+                                        <Grid x:Name="GridForm"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                            <Button x:Name="BtnApplyForm"   Content="Apply to URL + Body" Click="OnApplyForm"/>
+                                            <Button x:Name="BtnLoadEnvs"    Content="Load environments" Click="OnLoadEnvironments" Margin="6,0,0,0"/>
+                                            <Button x:Name="BtnLoadGroups"  Content="Load groups"       Click="OnLoadGroups"       Margin="6,0,0,0"/>
+                                            <Button x:Name="BtnLoadDlp"     Content="Load DLP"          Click="OnLoadDlp"          Margin="6,0,0,0"/>
+                                            <Button x:Name="BtnLoadBilling" Content="Load billing"      Click="OnLoadBilling"      Margin="6,0,0,0"/>
+                                            <TextBlock x:Name="TxtFormStatus" Margin="10,5,0,0" Foreground="#9CDCFE"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </TabItem>
+                            <TabItem Header="Raw body">
+                                <TextBox x:Name="TbBody"
+                                         FontFamily="Cascadia Mono, Consolas"
+                                         AcceptsReturn="True" AcceptsTab="True"
+                                         VerticalScrollBarVisibility="Auto"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         TextWrapping="NoWrap"/>
+                            </TabItem>
+                        </TabControl>
+                    </Grid>
+                </GroupBox>
+
+                <GridSplitter Grid.Row="1" Height="4" HorizontalAlignment="Stretch" Background="#3F3F46"/>
+
+                <GroupBox Grid.Row="2">
+                    <GroupBox.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Response"/>
+                            <TextBlock x:Name="TxtRespMeta" Margin="14,0,0,0" Foreground="#CE9178"/>
+                        </StackPanel>
+                    </GroupBox.Header>
+                    <TabControl Background="#1E1E1E" Foreground="Black">
+                        <TabItem Header="Body">
+                            <TextBox x:Name="TbResponse"
+                                     FontFamily="Cascadia Mono, Consolas"
+                                     IsReadOnly="True" AcceptsReturn="True"
+                                     VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Auto"
+                                     TextWrapping="NoWrap"/>
+                        </TabItem>
+                        <TabItem Header="Tree">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="4">
+                                    <Button x:Name="BtnTreeExpand"   Content="Expand all"   Margin="0,0,6,0" Click="OnTreeExpandAll"/>
+                                    <Button x:Name="BtnTreeCollapse" Content="Collapse all" Click="OnTreeCollapseAll"/>
+                                    <TextBlock x:Name="TxtTreeStats" Margin="14,4,0,0" Foreground="#888"/>
+                                </StackPanel>
+                                <TreeView x:Name="TvJson" Grid.Row="1"
+                                          FontFamily="Cascadia Mono, Consolas"
+                                          VirtualizingStackPanel.IsVirtualizing="True"
+                                          VirtualizingStackPanel.VirtualizationMode="Recycling"/>
+                            </Grid>
+                        </TabItem>
+                        <TabItem Header="Headers">
+                            <TextBox x:Name="TbHeaders"
+                                     FontFamily="Cascadia Mono, Consolas"
+                                     IsReadOnly="True" AcceptsReturn="True"
+                                     VerticalScrollBarVisibility="Auto"/>
+                        </TabItem>
+                        <TabItem Header="Description">
+                            <TextBox x:Name="TbDescription"
+                                     IsReadOnly="True" TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto"/>
+                        </TabItem>
+                    </TabControl>
+                </GroupBox>
+            </Grid>
+        </Grid>
+
+        <Border Grid.Row="2" Background="#0E639C" Padding="6,3">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="TxtStatus" Grid.Column="0" Foreground="White" VerticalAlignment="Center" Text="Ready."/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="TxtElapsed" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ProgressBar x:Name="PbBusy" Width="180" Height="12" IsIndeterminate="True" Visibility="Collapsed"
+                                 Background="#0A4A78" Foreground="#9CDCFE" BorderBrush="#1177BB"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

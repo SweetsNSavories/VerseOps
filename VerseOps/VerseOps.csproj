@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <RootNamespace>VerseOps</RootNamespace>
+    <AssemblyName>VerseOps</AssemblyName>
+    <Description>Provisions Power Platform environments (with optional Dataverse) using app-only auth against the Power Platform control-plane (BAP) APIs.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Power Platform control-plane management SDK.
+      This package wraps the BAP / PPAC (Business Application Platform / Power Platform Admin Center)
+      control-plane endpoints used to create, list, and delete environments.
+      It is NOT the Dataverse Web API and is NOT Microsoft.PowerPlatform.Dataverse.Client.
+    -->
+    <PackageReference Include="Microsoft.PowerPlatform.Management" Version="2.0.3060.142" />
+
+    <!-- Token acquisition for app-only (client credentials) flow. -->
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.71.0" />
+
+    <!-- Logging abstractions so the consumer (e.g. a Windows app) can plug in any provider. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

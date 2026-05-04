@@ -1,0 +1,51 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.suo
+.vs/
+
+# NuGet
+*.nupkg
+**/packages/*
+!**/packages/build/
+project.lock.json
+.nuget/
+
+# Rider / VS Code
+.idea/
+.vscode/
+
+# Test / coverage
+[Tt]est[Rr]esult*/
+*.coverage
+*.coveragexml
+
+# ---- Diagnostic captures (may contain tenant ids / app ids / env ids) ----
+*.log
+sdk-sweep*.log
+bap-sweep*.log
+bap-routes.txt
+svc.txt
+svc2.txt
+types.txt
+introspect/svc.txt
+introspect/svc2.txt
+introspect/types.txt
+VerseOps.SdkRunner/last-run*.log
+
+# ---- Local secrets ----
+appsettings.local.json
+appsettings.*.local.json
+secrets.json
+*.pem
+*.pfx
+*.key
+
+# OS
+Thumbs.db
+.DS_Store
