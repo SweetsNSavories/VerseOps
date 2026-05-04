@@ -554,5 +554,20 @@ public static class PpacGeneratedCatalog
         new("Workflows agent", "Get Run History Data Non Singleton", "GET",
             "https://api.powerplatform.com/workflowsagent/environments/{environmentId}/flows/{flowId}/runs/{runId}/runHistoryData?api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/workflowsagent/environments/{environmentId}/flows/{flowId}/runs/{runId}/runHistoryData  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/workflowsagent/dsr-compliance/get-run-history-data-non-singleton", ApiSurface.Ppac, new OpParam[] { EnvParam, new("flowId", "Flow Id", ParamKind.Text), new("runId", "Run Id", ParamKind.Text) }, SubCategory: "Dsr Compliance"),
+
+        // ===== SDK-only routes (present in Microsoft.PowerPlatform.Management reflection sweep but not yet documented in the public REST API TOC) =====
+        // Inserted at appropriate categories so users can discover/probe them. These may return RouteNotFound until Microsoft documents them.
+        new("Governance", "List Shared Connectors (SDK)", "GET",
+            "https://api.powerplatform.com/governance/sharedConnectors?api-version=2022-03-01-preview",
+            ScopePpac, null, "SDK-only: shared connectors across the tenant. Found via Microsoft.PowerPlatform.Management reflection; not in the public docs TOC yet.", ApiSurface.Ppac, SubCategory: "Shared Connectors (SDK)"),
+        new("User management", "List Plugins (SDK)", "GET",
+            "https://api.powerplatform.com/usermanagement/environments/{environmentId}/plugins?api-version=2022-03-01-preview",
+            ScopePpac, null, "SDK-only: per-environment plugin inventory exposed by the SDK Usermanagement namespace. Not in the public docs TOC yet.", ApiSurface.Ppac, new OpParam[] { EnvParam }, SubCategory: "Plugins (SDK)"),
+        new("User management", "Get Sync Report (SDK)", "GET",
+            "https://api.powerplatform.com/usermanagement/environments/{environmentId}/syncReport?api-version=2022-03-01-preview",
+            ScopePpac, null, "SDK-only: per-environment user sync report exposed by the SDK Usermanagement namespace. Not in the public docs TOC yet.", ApiSurface.Ppac, new OpParam[] { EnvParam }, SubCategory: "Sync Report (SDK)"),
+        new("Copilot Studio", "Get Bot Quarantine (PVA alias) (SDK)", "GET",
+            "https://api.powerplatform.com/powervirtualagents/environments/{environmentId}/bots/{botId}/api/botQuarantine?api-version=2022-03-01-preview",
+            ScopePpac, null, "SDK-only: legacy /powervirtualagents/ path for bot quarantine status (docs uses /copilotstudio/). Both shapes can route to the same backend.", ApiSurface.Ppac, new OpParam[] { EnvParam, new("botId", "Bot Id", ParamKind.Text) }, SubCategory: "Bots"),
     }.AsReadOnly();
 }
