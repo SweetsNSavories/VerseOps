@@ -25,7 +25,7 @@ public partial class MainWindow : Window
         _executor = new ApiExecutor(_auth);
         CbMethod.SelectedIndex = 0;
         BuildOperationsTree();
-        if (TxtSurfaceNotice != null) TxtSurfaceNotice.Text = BapNotice;
+        if (TxtSurfaceNotice != null) TxtSurfaceNotice.Text = PpacNotice;
         UpdateAuthState();
         _elapsedTimer.Tick += (_, _) =>
             TxtElapsed.Text = $"{(DateTime.UtcNow - _busyStartedUtc).TotalSeconds:0.0}s";
@@ -52,27 +52,23 @@ public partial class MainWindow : Window
         }
     }
 
-    private ApiSurface GetSelectedSurface()
-    {
-        if (RbSurfPpac?.IsChecked == true) return ApiSurface.Ppac;
-        return ApiSurface.Bap;
-    }
+    private ApiSurface GetSelectedSurface() => ApiSurface.Ppac;
 
-    // Disclaimer shown above the operations tree. The BAP routes used by this app
-    // are reverse-engineered from the Microsoft.PowerApps.Administration.PowerShell
-    // module on the PowerShell Gallery — they are NOT publicly documented or
-    // officially supported REST endpoints. They remain reachable only until the
-    // new api.powerplatform.com (PPAC) surface reaches GA, at which point BAP is
-    // expected to be retired. PPAC itself is still preview and subject to change.
+    // Disclaimer shown above the operations tree. VerseOps now ships PPAC-only:
+    // BAP is deprecated and undocumented, so we no longer expose it in the tree.
+    // The Register-SP button still uses the BAP /adminApplications PUT because
+    // that is the documented bootstrap path for tenant-admin service principals
+    // that PPAC itself does not yet replace.
     private const string BapNotice =
-        "BAP surface (deprecated). These routes are extracted from the " +
-        "Microsoft.PowerApps.Administration.PowerShell module — they have no " +
-        "official REST documentation or support contract, and will be retired once " +
-        "PPAC reaches GA. Useful today for advanced Power Platform admin scenarios " +
-        "that PPAC does not yet cover.";
+        "BAP surface (deprecated). Hidden from the tree in this build. Use the\r\n" +
+        "Register SP button to bootstrap an SP for admin access — that one BAP\r\n" +
+        "route remains the documented setup path until PPAC ships an equivalent.";
     private const string PpacNotice =
-        "PPAC surface (preview). api.powerplatform.com is the new control plane and " +
-        "the long-term replacement for BAP. Routes and api-versions may change before GA.";
+        "PPAC surface (preview). api.powerplatform.com is the new control plane and the\r\n" +
+        "long-term replacement for BAP. Many routes return RouteNotFound today; that is\r\n" +
+        "expected during preview. Once Microsoft GAs api.powerplatform.com we hope every\r\n" +
+        "entry in this tree responds successfully — we will keep improvising the catalog\r\n" +
+        "as new routes light up. Edit the URL / body inline and re-Send to experiment.";
 
     private static string SurfaceTag(ApiSurface s) => s switch
     {
@@ -83,21 +79,8 @@ public partial class MainWindow : Window
 
     private void OnSurfaceChanged(object sender, RoutedEventArgs e)
     {
-        if (TvOps == null) return;
-        BuildOperationsTree();
-        // Auto-pick a sensible default scope for the surface.
-        var surface = GetSelectedSurface();
-        if (CbScope != null)
-        {
-            var target = surface == ApiSurface.Ppac
-                ? ApiCatalog.ScopePpac
-                : ApiCatalog.ScopePowerApps;
-            CbScope.SelectedItem = CbScope.Items.OfType<ComboBoxItem>()
-                .FirstOrDefault(i => (string)i.Content == target) ?? CbScope.SelectedItem;
-        }
-        if (TxtSurfaceNotice != null)
-            TxtSurfaceNotice.Text = surface == ApiSurface.Ppac ? PpacNotice : BapNotice;
-        if (TxtStatus != null) TxtStatus.Text = $"Surface: {surface}.";
+        // Surface toggle removed — PPAC-only build. Method retained as a no-op
+        // so the XAML reference remains valid.
     }
 
     private void OnAuthModeChanged(object sender, RoutedEventArgs e)
@@ -290,16 +273,10 @@ public partial class MainWindow : Window
             BeginBusy("Loading environments...");
             var ct = _cts!.Token;
 
-            // Pick the right list endpoint for the current auth mode.
-            //  - User (delegated):   /environments returns the caller's envs.
-            //  - App-only (SP):      /environments is empty (no per-user view);
-            //                        must use /scopes/admin/environments which is
-            //                        what registered SPs are authorized for.
-            //  - PPAC:               /environmentmanagement/environments works for
-            //                        both modes once the SP is registered.
-            var (url, scope) = _auth.Mode == VerseOps.App.Auth.AuthService.AuthMode.AppOnly
-                ? ("https://api.powerplatform.com/environmentmanagement/environments?api-version=2022-03-01-preview", ApiCatalog.ScopePpac)
-                : ("https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/environments?api-version=2021-04-01", ApiCatalog.ScopePowerApps);
+            // PPAC-only build: always use the PPAC environment list, regardless of
+            // user vs app-only mode. (Once registered, both identity types work.)
+            var url   = "https://api.powerplatform.com/environmentmanagement/environments?api-version=2022-03-01-preview";
+            var scope = ApiCatalog.ScopePpac;
 
             var result = await Task.Run(() => _executor.ExecuteAsync("GET", url, null, scope, ct), ct);
             var envs = new List<(string Id, string DisplayName)>();
