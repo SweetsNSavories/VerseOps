@@ -12,10 +12,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\VerseOps\VerseOps.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Microsoft.Identity.Client" Version="4.71.0" />
     <PackageReference Include="Microsoft.Identity.Client.Broker" Version="4.71.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
