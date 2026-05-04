@@ -1,4 +1,4 @@
-namespace VerseOps.App.Api;
+﻿namespace VerseOps.App.Api;
 
 public enum ApiSurface { Bap, Ppac, Local }
 
@@ -16,7 +16,7 @@ public enum ParamKind
 }
 
 public sealed record OpParam(
-    string Token,                       // e.g. "environmentId" — replaces {environmentId}
+    string Token,                       // e.g. "environmentId" â€” replaces {environmentId}
     string Label,
     ParamKind Kind = ParamKind.Text,
     string? Default = null,
@@ -39,7 +39,8 @@ public sealed record ApiOperation(
     string? RequestBodyTemplate,
     string Description,
     ApiSurface Surface = ApiSurface.Bap,
-    IReadOnlyList<OpParam>? Parameters = null
+    IReadOnlyList<OpParam>? Parameters = null,
+    string? SubCategory = null  // optional second-level grouping (e.g. "Billing Policy")
 );
 
 public static class ApiCatalog
@@ -91,7 +92,7 @@ public static class ApiCatalog
         Default: "unitedstates", Choices: Locations);
     private static OpParam SkuParam => new("sku", "Org type (SKU)", ParamKind.Choice,
         Default: "Sandbox", Choices: Skus,
-        Help: "SDK enum allows Developer; PPAC behaviour for Developer is undocumented — check the response body's environmentSku to confirm what was actually provisioned.");
+        Help: "SDK enum allows Developer; PPAC behaviour for Developer is undocumented â€” check the response body's environmentSku to confirm what was actually provisioned.");
     private static OpParam CurrencyParam => new("currency", "Currency", ParamKind.Choice,
         Default: "USD", Choices: Currencies);
     private static OpParam LanguageParam => new("language", "Base language LCID", ParamKind.Choice,
@@ -265,269 +266,19 @@ public static class ApiCatalog
     }.AsReadOnly();
 
     // -----------------------------------------------------------------
-    // PPAC (api.powerplatform.com) — new control-plane surface
+    // PPAC (api.powerplatform.com) â€” new control-plane surface
     // Mirrors the Microsoft.PowerPlatform.Management SDK shape.
     // -----------------------------------------------------------------
-    private const string PpacApiVer = "api-version=2022-03-01-preview";
+    public const string PpacApiVer = "api-version=2022-03-01-preview";
 
-    public static IReadOnlyList<ApiOperation> PpacOperations { get; } = new List<ApiOperation>
-    {
-        // Environments — PPAC list does NOT accept $expand=properties/capacity
-        // (returns 400). Use the per-env GET below if you need the capacity block.
-        new("Environments", "List environments", "GET",
-            $"https://api.powerplatform.com/environmentmanagement/environments?{PpacApiVer}",
-            ScopePpac, null, "PPAC: tenant environments.", ApiSurface.Ppac),
+    /// <summary>
+    /// PPAC operations sourced from the public Power Platform REST API documentation
+    /// (learn.microsoft.com/rest/api/power-platform). Built by scraping every leaf page
+    /// in the official TOC, so the categories/sub-categories/names exactly match what
+    /// users see in the docs sidebar.
+    /// </summary>
+    public static IReadOnlyList<ApiOperation> PpacOperations { get; } = PpacGeneratedCatalog.Operations;
 
-        new("Environments", "Get environment", "GET",
-            $"https://api.powerplatform.com/environmentmanagement/environments/{{environmentId}}?{PpacApiVer}",
-            ScopePpac, null, "PPAC: single environment.", ApiSurface.Ppac, new[] { EnvParam }),
-
-        new("Environments", "Create environment", "POST",
-            $"https://api.powerplatform.com/environmentmanagement/environments?{PpacApiVer}",
-            ScopePpac, EnvCreateBody, "PPAC: provision a new environment.", ApiSurface.Ppac,
-            new[] { LocationParam, DisplayNameParam, SkuParam, CurrencyParam, LanguageParam }),
-
-        new("Environments", "Delete environment", "DELETE",
-            $"https://api.powerplatform.com/environmentmanagement/environments/{{environmentId}}?{PpacApiVer}",
-            ScopePpac, null, "PPAC: soft-delete environment.", ApiSurface.Ppac, new[] { EnvParam }),
-
-        // Environment Groups (PPAC-only)
-        new("EnvironmentGroups", "List environment groups", "GET",
-            $"https://api.powerplatform.com/environmentmanagement/environmentGroups?{PpacApiVer}",
-            ScopePpac, null, "PPAC: environment groups (no BAP equivalent).", ApiSurface.Ppac),
-
-        new("EnvironmentGroups", "Get environment group", "GET",
-            $"https://api.powerplatform.com/environmentmanagement/environmentGroups/{{groupId}}?{PpacApiVer}",
-            ScopePpac, null, "PPAC: single environment group.", ApiSurface.Ppac, new[] { GroupParam }),
-
-        // Operations / lifecycle
-        new("Operations", "Get operation", "GET",
-            $"https://api.powerplatform.com/environmentmanagement/operations/{{operationId}}?{PpacApiVer}",
-            ScopePpac, null, "PPAC: long-running operation status.", ApiSurface.Ppac, new[] { OperationIdParam }),
-
-        // Tenant — NOTE: there is no verified PPAC route for tenant info / settings.
-        //   /tenant and /tenant/settings on api.powerplatform.com return RouteNotFound.
-        //   Use BAP's "Get tenant settings" entry instead.
-
-        // Licensing / billing
-        new("Billing", "List billing policies", "GET",
-            $"https://api.powerplatform.com/licensing/billingPolicies?{PpacApiVer}",
-            ScopePpac, null, "PPAC: pay-as-you-go billing policies (no BAP equivalent).", ApiSurface.Ppac),
-
-        new("Billing", "Get billing policy", "GET",
-            $"https://api.powerplatform.com/licensing/billingPolicies/{{policyId}}?{PpacApiVer}",
-            ScopePpac, null, "PPAC: single billing policy.", ApiSurface.Ppac, new[] { BillingParam }),
-
-        // Capacity
-        new("Capacity", "Tenant capacity", "GET",
-            $"https://api.powerplatform.com/licensing/tenantCapacity?{PpacApiVer}",
-            ScopePpac, null, "PPAC: tenant capacity rollup.", ApiSurface.Ppac),
-
-        new("Capacity", "Environment capacity ($expand)", "GET",
-            $"https://api.powerplatform.com/environmentmanagement/environments/{{environmentId}}?{PpacApiVer}&$expand=properties/capacity",
-            ScopePpac, null, "PPAC: per-env capacity via env Get with $expand=properties/capacity. The capacity block is nested inside properties.capacity.",
-            ApiSurface.Ppac, new[] { EnvParam }),
-
-        new("Licensing", "Tenant licenses", "GET",
-            $"https://api.powerplatform.com/licensing/tenantLicenses?{PpacApiVer}",
-            ScopePpac, null, "PPAC: tenant licenses. Requires PAYG/billing-enabled tenant — returns RouteNotFound otherwise.", ApiSurface.Ppac),
-
-        new("Licensing", "Product inventory", "GET",
-            $"https://api.powerplatform.com/licensing/productInventory?{PpacApiVer}",
-            ScopePpac, null, "PPAC: product inventory across the tenant. Requires PAYG/billing-enabled tenant.", ApiSurface.Ppac),
-
-        new("Licensing", "Currency reports", "GET",
-            $"https://api.powerplatform.com/licensing/currencyReports?{PpacApiVer}",
-            ScopePpac, null, "PPAC: currency / consumption reports. Requires PAYG/billing-enabled tenant.", ApiSurface.Ppac),
-
-        // Governance / DLP
-        // NOTE: rule-based policies route requires the api-version query param;
-        //       the v1 prefix variant returns RouteNotFound. DLP itself has no PPAC
-        //       equivalent yet — use the BAP entry under the BAP surface.
-        new("Governance", "List rule-based policies", "GET",
-            $"https://api.powerplatform.com/governance/ruleBasedPolicies?{PpacApiVer}",
-            ScopePpac, null, "PPAC: rule-based governance policies.", ApiSurface.Ppac),
-
-        // App management — PPAC exposes installed *application packages* per env,
-        // not the BAP-style /apps list. Use the BAP surface for canvas/MD apps.
-        new("Apps", "List application packages", "GET",
-            $"https://api.powerplatform.com/appmanagement/environments/{{environmentId}}/applicationPackages?{PpacApiVer}",
-            ScopePpac, null, "PPAC: installed application packages for an environment.", ApiSurface.Ppac, new[] { EnvParam }),
-
-        // Power Pages — the resource is /websites on PPAC (not /sites).
-        new("PowerPages", "List websites (per environment)", "GET",
-            $"https://api.powerplatform.com/powerpages/environments/{{environmentId}}/websites?{PpacApiVer}",
-            ScopePpac, null, "PPAC: Power Pages websites in an environment.", ApiSurface.Ppac, new[] { EnvParam }),
-
-        // Users — /usermanagement is in the SDK shape but the public PPAC surface
-        // does not expose it (RouteNotFound). For per-env users use the Dataverse
-        // systemusers entity in that environment, or the BAP delegated user APIs.
-
-        // Connectors
-        // PPAC requires an explicit $filter on environment id; without it the route
-        // returns 400 MissingEnvironmentFilter. The {environmentId} token is reused
-        // inside the filter for convenience.
-        new("Connectors", "List connectors (per environment)", "GET",
-            $"https://api.powerplatform.com/connectivity/connectors?{PpacApiVer}&$filter=environment eq '{{environmentId}}'",
-            ScopePpac, null, "PPAC: connectors in environment.", ApiSurface.Ppac, new[] { EnvParam }),
-
-        new("Connections", "List connections (per environment)", "GET",
-            $"https://api.powerplatform.com/connectivity/environments/{{environmentId}}/connections?{PpacApiVer}",
-            ScopePpac, null, "PPAC: connections in environment.", ApiSurface.Ppac, new[] { EnvParam }),
-
-        // Environment lifecycle (PPAC equivalents to BAP recover/reset/copy/backup).
-        // Routes are documented in the Microsoft.PowerPlatform.Management SDK but
-        // most still return RouteNotFound on api.powerplatform.com today (preview).
-        // Listed here so users can re-test once Microsoft GAs the surface.
-        new("Environments", "Recover environment", "POST",
-            $"https://api.powerplatform.com/environmentmanagement/environments/{{environmentId}}/recover?{PpacApiVer}",
-            ScopePpac, "{}", "PPAC (preview): recover soft-deleted environment.",
-            ApiSurface.Ppac, new[] { EnvParam }),
-
-        new("Environments", "Reset environment", "POST",
-            $"https://api.powerplatform.com/environmentmanagement/environments/{{environmentId}}/reset?{PpacApiVer}",
-            ScopePpac,
-@"{
-  ""friendlyName"": ""{friendlyName}"",
-  ""baseLanguageCode"": {language},
-  ""currency"": { ""code"": ""{currency}"" },
-  ""templates"": []
-}", "PPAC (preview): reset Dataverse in environment.",
-            ApiSurface.Ppac, new[] { EnvParam, FriendlyNameParam with { Default = "VerseOps Reset" }, LanguageParam, CurrencyParam }),
-
-        new("Environments", "Copy environment", "POST",
-            $"https://api.powerplatform.com/environmentmanagement/environments/{{environmentId}}/copy?{PpacApiVer}",
-            ScopePpac,
-@"{
-  ""copyType"": ""{copyType}"",
-  ""targetEnvironmentName"": ""{targetEnvironmentName}"",
-  ""friendlyName"": ""{friendlyName}""
-}", "PPAC (preview): copy environment to target.",
-            ApiSurface.Ppac, new[] { EnvParam, TargetEnvParam, CopyTypeParam, FriendlyNameParam }),
-
-        new("Environments", "Backup environment", "POST",
-            $"https://api.powerplatform.com/environmentmanagement/environments/{{environmentId}}/backups?{PpacApiVer}",
-            ScopePpac, @"{ ""label"": ""{label}"" }", "PPAC (preview): create manual backup.",
-            ApiSurface.Ppac, new[] { EnvParam, LabelParam }),
-
-        new("Environments", "List backups", "GET",
-            $"https://api.powerplatform.com/environmentmanagement/environments/{{environmentId}}/backups?{PpacApiVer}",
-            ScopePpac, null, "PPAC (preview): list backups.",
-            ApiSurface.Ppac, new[] { EnvParam }),
-
-        new("Environments", "Get managed-env settings", "GET",
-            $"https://api.powerplatform.com/environmentmanagement/environments/{{environmentId}}/managedEnvironment?{PpacApiVer}",
-            ScopePpac, null, "PPAC: managed environment settings (verified working for managed envs).",
-            ApiSurface.Ppac, new[] { EnvParam }),
-
-        // Analytics (PPAC) — surfaced via the SDK's Analytics namespace.
-        // AdvisorRecommendations was verified working during the reflection sweep.
-        new("Analytics", "Advisor recommendations", "GET",
-            $"https://api.powerplatform.com/analytics/advisorRecommendations?{PpacApiVer}",
-            ScopePpac, null, "PPAC: tenant advisor recommendations (verified).", ApiSurface.Ppac),
-
-        new("Analytics", "Environment-scoped advisor recommendations", "GET",
-            $"https://api.powerplatform.com/analytics/environments/{{environmentId}}/advisorRecommendations?{PpacApiVer}",
-            ScopePpac, null, "PPAC (preview): per-env advisor recommendations.",
-            ApiSurface.Ppac, new[] { EnvParam }),
-
-        // Power Apps (PPAC) — empty list during sweep but route shape from SDK.
-        new("Apps", "List Power Apps (PPAC)", "GET",
-            $"https://api.powerplatform.com/powerapps/environments/{{environmentId}}/apps?{PpacApiVer}",
-            ScopePpac, null, "PPAC (preview): canvas/MD apps in env. Empty for SP today; falls back to BAP for real data.",
-            ApiSurface.Ppac, new[] { EnvParam }),
-
-        // User management (PPAC) — listed as RouteNotFound today.
-        new("Users", "List users (PPAC)", "GET",
-            $"https://api.powerplatform.com/usermanagement/users?{PpacApiVer}",
-            ScopePpac, null, "PPAC (not yet exposed): tenant Power Platform users. Currently returns RouteNotFound — listed for future GA.",
-            ApiSurface.Ppac),
-
-        new("Users", "List environment users", "GET",
-            $"https://api.powerplatform.com/usermanagement/environments/{{environmentId}}/users?{PpacApiVer}",
-            ScopePpac, null, "PPAC (not yet exposed): users in environment. Currently RouteNotFound.",
-            ApiSurface.Ppac, new[] { EnvParam }),
-
-        // Power Virtual Agents / Copilot Studio (PPAC).
-        new("CopilotStudio", "List bots (per environment)", "GET",
-            $"https://api.powerplatform.com/powervirtualagents/environments/{{environmentId}}/bots?{PpacApiVer}",
-            ScopePpac, null, "PPAC (preview): Copilot Studio / PVA bots in environment.",
-            ApiSurface.Ppac, new[] { EnvParam }),
-
-        // Identity (shared)
-        new("Identity", "Decode current token (local)", "GET",
-            "local://decode-token",
-            ScopePpac, null, "Decodes JWT for the PPAC scope so you can verify audience.",
-            ApiSurface.Local),
-
-        // ================================================================
-        // Full SDK surface — auto-imported from Microsoft.PowerPlatform.Management
-        // reflection sweep. Many of these return RouteNotFound today; they are
-        // listed so the tree shows every route the SDK exposes. Once Microsoft
-        // GAs api.powerplatform.com these should light up — at which point we
-        // will move successful ones into the curated section above.
-        // ================================================================
-
-        // Analytics
-        new("Analytics (full SDK)", "Advisor recommendation by id", "GET",
-            $"https://api.powerplatform.com/analytics/advisorRecommendations/{{recommendationId}}?{PpacApiVer}",
-            ScopePpac, null, "PPAC: single advisor recommendation by id.",
-            ApiSurface.Ppac, new[] { new OpParam("recommendationId", "Recommendation id", ParamKind.Text) }),
-        new("Analytics (full SDK)", "Advisor scenarios", "GET",
-            $"https://api.powerplatform.com/analytics/advisorRecommendations/scenarios?{PpacApiVer}",
-            ScopePpac, null, "PPAC: list advisor scenarios.", ApiSurface.Ppac),
-
-        // App management — tenant-wide application packages
-        new("Apps (full SDK)", "Application packages (tenant)", "GET",
-            $"https://api.powerplatform.com/appmanagement/applicationPackages?{PpacApiVer}",
-            ScopePpac, null, "PPAC: tenant-wide application packages catalog.", ApiSurface.Ppac),
-
-        // Environment management — env group operations
-        new("EnvironmentGroups (full SDK)", "Environment group operation by id", "GET",
-            $"https://api.powerplatform.com/environmentmanagement/environmentGroupOperations/{{operationId}}?{PpacApiVer}",
-            ScopePpac, null, "PPAC: status of an env-group long-running operation.",
-            ApiSurface.Ppac, new[] { OperationIdParam }),
-
-        // Governance
-        new("Governance (full SDK)", "Cross-tenant connection reports", "GET",
-            $"https://api.powerplatform.com/governance/crossTenantConnectionReports?{PpacApiVer}",
-            ScopePpac, null, "PPAC: cross-tenant connection reports across the tenant.", ApiSurface.Ppac),
-        new("Governance (full SDK)", "Cross-tenant connection report by env", "GET",
-            $"https://api.powerplatform.com/governance/crossTenantConnectionReports/{{environmentId}}?{PpacApiVer}",
-            ScopePpac, null, "PPAC: cross-tenant connection report for one env.",
-            ApiSurface.Ppac, new[] { EnvParam }),
-        new("Governance (full SDK)", "Rule-based policy assignments", "GET",
-            $"https://api.powerplatform.com/governance/ruleBasedPolicies/assignments?{PpacApiVer}",
-            ScopePpac, null, "PPAC: assignments across all rule-based policies.", ApiSurface.Ppac),
-        new("Governance (full SDK)", "Rule-based policy by id", "GET",
-            $"https://api.powerplatform.com/governance/ruleBasedPolicies/{{policyId}}?{PpacApiVer}",
-            ScopePpac, null, "PPAC: single rule-based policy by id.",
-            ApiSurface.Ppac, new[] { new OpParam("policyId", "Policy id", ParamKind.Text) }),
-        new("Governance (full SDK)", "Shared connectors", "GET",
-            $"https://api.powerplatform.com/governance/sharedConnectors?{PpacApiVer}",
-            ScopePpac, null, "PPAC: shared connectors across the tenant.", ApiSurface.Ppac),
-
-        // Licensing
-        new("Licensing (full SDK)", "Licensing per environment", "GET",
-            $"https://api.powerplatform.com/licensing/environments/{{environmentId}}?{PpacApiVer}",
-            ScopePpac, null, "PPAC: licensing details for one environment.",
-            ApiSurface.Ppac, new[] { EnvParam }),
-        new("Licensing (full SDK)", "ISV contracts", "GET",
-            $"https://api.powerplatform.com/licensing/isvContracts?{PpacApiVer}",
-            ScopePpac, null, "PPAC: ISV contract list.", ApiSurface.Ppac),
-        new("Licensing (full SDK)", "ISV contract by id", "GET",
-            $"https://api.powerplatform.com/licensing/isvContracts/{{contractId}}?{PpacApiVer}",
-            ScopePpac, null, "PPAC: single ISV contract.",
-            ApiSurface.Ppac, new[] { new OpParam("contractId", "Contract id", ParamKind.Text) }),
-        new("Licensing (full SDK)", "All storage warnings", "GET",
-            $"https://api.powerplatform.com/licensing/storageWarning/getAllStorageWarnings?{PpacApiVer}",
-            ScopePpac, null, "PPAC: every storage warning across the tenant.", ApiSurface.Ppac),
-        new("Licensing (full SDK)", "Storage warning by environment", "GET",
-            $"https://api.powerplatform.com/licensing/storageWarning/{{environmentId}}?{PpacApiVer}",
-            ScopePpac, null, "PPAC: storage warning details for one environment.",
-            ApiSurface.Ppac, new[] { EnvParam }),
-
-    }.AsReadOnly();
 
     /// <summary>Returns operations filtered by surface (BAP or PPAC).</summary>
     public static IEnumerable<ApiOperation> ForSurface(ApiSurface surface)
