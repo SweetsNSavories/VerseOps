@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using VerseOps.App.Api;
 using VerseOps.App.Auth;
+using VerseOps.App.Sdk;
 
 namespace VerseOps.App;
 
@@ -14,7 +15,9 @@ public partial class MainWindow : Window
 {
     private readonly AuthService _auth = new();
     private readonly ApiExecutor _executor;
+    private readonly SdkExecutor _sdkExecutor;
     private ApiOperation? _selected;
+    private SdkOp? _selectedSdk;
     private CancellationTokenSource? _cts;
     private readonly DispatcherTimer _elapsedTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private DateTime _busyStartedUtc;
@@ -23,6 +26,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _executor = new ApiExecutor(_auth);
+        _sdkExecutor = new SdkExecutor(_auth);
         CbMethod.SelectedIndex = 0;
         BuildOperationsTree();
         if (TxtSurfaceNotice != null) TxtSurfaceNotice.Text = PpacNotice;
@@ -34,6 +38,7 @@ public partial class MainWindow : Window
     private void BuildOperationsTree()
     {
         TvOps.Items.Clear();
+        if (RbModeSdk?.IsChecked == true) { BuildSdkTree(); return; }
         var surface = GetSelectedSurface();
         var ops = ApiCatalog.ForSurface(surface);
         foreach (var grp in ops.GroupBy(o => o.Category))
@@ -113,6 +118,74 @@ public partial class MainWindow : Window
 
     private ApiSurface GetSelectedSurface() => ApiSurface.Ppac;
 
+    // ---------- SDK mode tree (reflected from Microsoft.PowerPlatform.Management) ----------
+    private void OnTreeModeChanged(object sender, RoutedEventArgs e)
+    {
+        if (TxtSurfaceNotice == null) return;
+        var sdk = RbModeSdk?.IsChecked == true;
+        TxtSurfaceNotice.Text = sdk
+            ? "SDK mode — tree built by reflecting Microsoft.PowerPlatform.Management.dll. Selecting a node shows the C# RequestBuilder method signature; Send invokes it via Kiota using the same auth as REST mode. Indexed nodes (e.g. Environments[environment]) require the value in the Form tab."
+            : PpacNotice;
+        _selected = null; _selectedSdk = null;
+        BuildOperationsTree();
+    }
+
+    private void BuildSdkTree()
+    {
+        IReadOnlyList<SdkOp> ops;
+        try { ops = SdkCatalog.Operations; }
+        catch (Exception ex)
+        {
+            TvOps.Items.Add(new TreeViewItem { Header = $"(SDK reflection failed: {ex.Message})" });
+            return;
+        }
+        // Group into a tree by path segments. Root segment becomes a top-level node.
+        var root = new TreeNode("");
+        foreach (var op in ops)
+        {
+            var node = root;
+            foreach (var step in op.Path)
+            {
+                var key = step.IsIndexer ? $"{step.PropertyName}[{step.IndexParamName}]" : step.PropertyName;
+                if (!node.Children.TryGetValue(key, out var child))
+                {
+                    child = new TreeNode(key);
+                    node.Children[key] = child;
+                }
+                node = child;
+            }
+            node.Ops.Add(op);
+        }
+        foreach (var top in root.Children.Values.OrderBy(c => c.Name))
+            TvOps.Items.Add(BuildTreeViewItem(top));
+    }
+
+    private static TreeViewItem BuildTreeViewItem(TreeNode node)
+    {
+        var tvi = new TreeViewItem { Header = node.Name, IsExpanded = false };
+        foreach (var child in node.Children.Values.OrderBy(c => c.Name))
+            tvi.Items.Add(BuildTreeViewItem(child));
+        foreach (var op in node.Ops.OrderBy(o => o.HttpMethod))
+        {
+            var leaf = new TreeViewItem
+            {
+                Header = $"{op.HttpMethod}  {op.Method.Name}  — {op.SignatureText}",
+                Tag = op,
+                ToolTip = op.PathText
+            };
+            tvi.Items.Add(leaf);
+        }
+        return tvi;
+    }
+
+    private sealed class TreeNode
+    {
+        public string Name { get; }
+        public SortedDictionary<string, TreeNode> Children { get; } = new(StringComparer.Ordinal);
+        public List<SdkOp> Ops { get; } = new();
+        public TreeNode(string name) { Name = name; }
+    }
+
     // Disclaimer shown above the operations tree. VerseOps now ships PPAC-only:
     // BAP is deprecated and undocumented, so we no longer expose it in the tree.
     // The Register-SP button still uses the BAP /adminApplications PUT because
@@ -162,9 +235,26 @@ public partial class MainWindow : Window
 
     private void OnOperationSelected(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
+        if (e.NewValue is TreeViewItem { Tag: SdkOp sop })
+        {
+            _selected = null;
+            _selectedSdk = sop;
+            CbMethod.SelectedItem = CbMethod.Items.OfType<ComboBoxItem>()
+                .FirstOrDefault(i => string.Equals((string)i.Content, sop.HttpMethod, StringComparison.OrdinalIgnoreCase))
+                ?? CbMethod.Items[0];
+            CbScope.SelectedItem = CbScope.Items.OfType<ComboBoxItem>()
+                .FirstOrDefault(i => (string)i.Content == "https://api.powerplatform.com/.default") ?? CbScope.Items[0];
+            TbUrl.Text = sop.PathText + "   // SDK call";
+            TbBody.Text = BuildSdkBodyTemplate(sop);
+            TbDescription.Text = $"{sop.SignatureText}   |   builder: {sop.BuilderType.FullName}";
+            TxtStatus.Text = $"SDK: {sop.PathText}.{sop.Method.Name}";
+            BuildSdkForm(sop);
+            return;
+        }
         if (e.NewValue is TreeViewItem { Tag: ApiOperation op })
         {
             _selected = op;
+            _selectedSdk = null;
             CbMethod.SelectedItem = CbMethod.Items.OfType<ComboBoxItem>()
                 .FirstOrDefault(i => string.Equals((string)i.Content, op.HttpMethod, StringComparison.OrdinalIgnoreCase))
                 ?? CbMethod.Items[0];
@@ -177,6 +267,70 @@ public partial class MainWindow : Window
             BuildForm(op);
         }
     }
+
+    private static string BuildSdkBodyTemplate(SdkOp op)
+    {
+        if (op.BodyType == null || op.BodyType == typeof(CancellationToken)) return string.Empty;
+        try
+        {
+            // Try construct + serialize an empty instance to expose default property names.
+            var inst = Activator.CreateInstance(op.BodyType, nonPublic: true);
+            return JsonSerializer.Serialize(inst, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return $"// SDK body type: {op.BodyType.FullName}{Environment.NewLine}{{}}";
+        }
+    }
+
+    /// <summary>For SDK ops, the form only needs inputs for indexer params (envId, policyId, ...).</summary>
+    private void BuildSdkForm(SdkOp op)
+    {
+        _formInputs.Clear();
+        GridForm.Children.Clear();
+        GridForm.RowDefinitions.Clear();
+        GridForm.ColumnDefinitions.Clear();
+        GridForm.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+        GridForm.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var indexers = op.Path.Where(p => p.IsIndexer).ToList();
+        bool needEnv = indexers.Any(s => LooksLikeEnv(s.IndexParamName));
+        bool needGroup = indexers.Any(s => LooksLikeGroup(s.IndexParamName));
+        bool needBilling = indexers.Any(s => LooksLikeBilling(s.IndexParamName));
+        BtnLoadEnvs.Visibility    = needEnv     ? Visibility.Visible : Visibility.Collapsed;
+        BtnLoadGroups.Visibility  = needGroup   ? Visibility.Visible : Visibility.Collapsed;
+        BtnLoadDlp.Visibility     = Visibility.Collapsed;
+        BtnLoadBilling.Visibility = needBilling ? Visibility.Visible : Visibility.Collapsed;
+
+        if (indexers.Count == 0)
+        {
+            TxtFormHint.Text = "This SDK call takes no indexer values. Edit the body in the Raw body tab if needed and press Send.";
+            return;
+        }
+        TxtFormHint.Text = "Provide each indexer value (one per row). Use the Load buttons to populate dropdowns.";
+        int row = 0;
+        foreach (var step in indexers)
+        {
+            GridForm.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var lbl = new Label { Content = step.IndexParamName };
+            Grid.SetRow(lbl, row); Grid.SetColumn(lbl, 0);
+            GridForm.Children.Add(lbl);
+
+            FrameworkElement input = LooksLikeEnv(step.IndexParamName) ? MakeEnvCombo(null)
+                : LooksLikeGroup(step.IndexParamName) ? MakeGroupCombo(null)
+                : LooksLikeBilling(step.IndexParamName) ? MakeCachedCombo(_billingCache, "Load billing", null)
+                : (FrameworkElement)MakeText(null);
+            input.Margin = new Thickness(0, 2, 0, 2);
+            Grid.SetRow(input, row); Grid.SetColumn(input, 1);
+            GridForm.Children.Add(input);
+            _formInputs[step.IndexParamName!] = input;
+            row++;
+        }
+    }
+
+    private static bool LooksLikeEnv(string? n)     => n != null && n.Contains("environment", StringComparison.OrdinalIgnoreCase) && !n.Contains("group", StringComparison.OrdinalIgnoreCase);
+    private static bool LooksLikeGroup(string? n)   => n != null && n.Contains("group", StringComparison.OrdinalIgnoreCase);
+    private static bool LooksLikeBilling(string? n) => n != null && n.Contains("billing", StringComparison.OrdinalIgnoreCase);
 
     // -----------------------------------------------------------------
     // Dynamic Form (per-operation request builder)
@@ -523,6 +677,7 @@ public partial class MainWindow : Window
 
     private async void OnSend(object sender, RoutedEventArgs e)
     {
+        if (_selectedSdk != null) { await SendSdkAsync(); return; }
         string method = "GET", url = "", scope = ApiCatalog.ScopePowerApps;
         string? body = null;
         try
@@ -574,6 +729,33 @@ public partial class MainWindow : Window
             EndBusy();
         }
     }
+
+    private async Task SendSdkAsync()
+    {
+        var op = _selectedSdk!;
+        try
+        {
+            ApplyAuthInputs();
+            var values = ReadFormValues();
+            BeginBusy($"SDK invoke: {op.PathText}.{op.Method.Name} ...");
+            TbResponse.Text = ""; TbHeaders.Text = ""; TxtRespMeta.Text = ""; TvJson.Items.Clear();
+            var ct = _cts!.Token;
+            var body = string.IsNullOrWhiteSpace(TbBody.Text) ? null : TbBody.Text;
+            // Strip leading // ... comment line if user left the auto-comment
+            if (body != null && body.StartsWith("//")) body = string.Join('\n', body.Split('\n').Where(l => !l.TrimStart().StartsWith("//")));
+            var result = await Task.Run(() => _sdkExecutor.ExecuteAsync(op, values, body, ct), ct);
+            TbResponse.Text = result.Body;
+            RenderJsonTree(result.Body);
+            TxtRespMeta.Text = $"{(result.Success ? "OK" : "ERROR")}   {result.ElapsedMs} ms   ({result.StatusText})";
+            TxtStatus.Text = result.Success ? "SDK call succeeded." : $"SDK call failed: {result.Error}";
+            UpdateAuthState();
+        }
+        catch (OperationCanceledException) { TxtStatus.Text = "Cancelled."; TxtRespMeta.Text = "CANCELLED"; }
+        catch (Exception ex) { TbResponse.Text = ex.ToString(); TxtRespMeta.Text = "EXCEPTION"; TxtStatus.Text = $"Error: {ex.Message}"; }
+        finally { EndBusy(); }
+    }
+
+    private async void OnSendLegacy_KeepCompiler() { await Task.CompletedTask; } // ensures async context unaffected if dead
 
     // ---------------------------------------------------------------------
     // PPAC sweep — runs every PPAC operation against the first N environments
