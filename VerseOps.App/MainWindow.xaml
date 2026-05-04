@@ -246,7 +246,7 @@
                         </StackPanel>
                     </GroupBox.Header>
                     <TabControl Background="#1E1E1E" Foreground="Black">
-                        <TabItem Header="Body">
+                        <TabItem Header="Response body">
                             <TextBox x:Name="TbResponse"
                                      FontFamily="Cascadia Mono, Consolas"
                                      IsReadOnly="True" AcceptsReturn="True"
@@ -254,7 +254,7 @@
                                      HorizontalScrollBarVisibility="Auto"
                                      TextWrapping="NoWrap"/>
                         </TabItem>
-                        <TabItem Header="Tree">
+                        <TabItem Header="Response tree">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
