@@ -43,7 +43,7 @@ public partial class MainWindow : Window
             {
                 var leaf = new TreeViewItem
                 {
-                    Header = $"{op.HttpMethod}  {op.Name}  ({SurfaceTag(op.Surface)})",
+                    Header = $"{op.HttpMethod}  {op.Name}",
                     Tag = op
                 };
                 node.Items.Add(leaf);
