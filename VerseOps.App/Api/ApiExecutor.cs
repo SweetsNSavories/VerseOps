@@ -39,6 +39,10 @@ public sealed class ApiExecutor
         }
 
         var token = await _auth.GetTokenAsync(scope, ct).ConfigureAwait(false);
+
+        // Pre-flight: verify the token's `aud` claim matches the URL host so
+        // we don't waste a round-trip just to receive S2S17001 from the server.
+        var audMismatch = DetectAudienceMismatch(token, url);
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         using var req = new HttpRequestMessage(new HttpMethod(method), url);
@@ -59,6 +63,16 @@ public sealed class ApiExecutor
         if (string.IsNullOrWhiteSpace(respBody))
         {
             respBody = $"{{ \"status\": {(int)resp.StatusCode}, \"reason\": \"{resp.ReasonPhrase}\", \"note\": \"Server returned an empty response body.\" }}";
+        }
+
+        // If the server returned S2S17001 (audience mismatch), or our pre-flight
+        // detected one, prepend a friendly diagnosis so the user knows to fix
+        // the scope rather than the URL.
+        var s2sHit = respBody.Contains("S2S17001", StringComparison.OrdinalIgnoreCase);
+        if (s2sHit || (audMismatch != null && (int)resp.StatusCode is 401 or 403))
+        {
+            var diag = audMismatch ?? "Server reported S2S17001 (token audience mismatch).";
+            respBody = $"// VerseOps diagnosis: {diag}\n// (See ApiCatalog 'TokenScope' for the correct audience for this URL.)\n\n{respBody}";
         }
         respBody = TryPrettyPrint(respBody);
 
@@ -105,6 +119,47 @@ public sealed class ApiExecutor
         catch (Exception ex)
         {
             return $"(decode failed: {ex.Message})";
+        }
+    }
+
+    /// <summary>
+    /// Returns a human-readable warning string when the token's `aud` claim does
+    /// not match the URL host (the trigger for S2S17001 on the server).
+    /// Returns null when the token audience is consistent with the URL host.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> _hostToAcceptedAud = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["api.bap.microsoft.com"]      = new[] { "https://api.bap.microsoft.com", "https://service.powerapps.com" },
+        ["api.powerapps.com"]          = new[] { "https://service.powerapps.com", "https://api.powerapps.com" },
+        ["api.flow.microsoft.com"]     = new[] { "https://service.flow.microsoft.com", "https://api.flow.microsoft.com" },
+        ["api.powerplatform.com"]      = new[] { "https://api.powerplatform.com" },
+    };
+
+    public static string? DetectAudienceMismatch(string jwt, string url)
+    {
+        try
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var u)) return null;
+            if (!_hostToAcceptedAud.TryGetValue(u.Host, out var accepted)) return null;
+
+            var parts = jwt.Split('.');
+            if (parts.Length < 2) return null;
+            var payload = parts[1].Replace('-', '+').Replace('_', '/');
+            payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
+            using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(payload)));
+            if (!doc.RootElement.TryGetProperty("aud", out var audEl)) return null;
+            var aud = audEl.GetString() ?? "";
+            var audTrim = aud.TrimEnd('/');
+
+            foreach (var ok in accepted)
+                if (string.Equals(audTrim, ok, StringComparison.OrdinalIgnoreCase)) return null;
+
+            return $"Token audience '{aud}' does not match URL host '{u.Host}'. " +
+                   $"Expected one of: {string.Join(", ", accepted)}.";
+        }
+        catch
+        {
+            return null;
         }
     }
 }
