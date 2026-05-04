@@ -455,6 +455,73 @@ public static class ApiCatalog
             ScopePpac, null, "Decodes JWT for the PPAC scope so you can verify audience.",
             ApiSurface.Local),
 
+        // ================================================================
+        // Full SDK surface — auto-imported from Microsoft.PowerPlatform.Management
+        // reflection sweep. Many of these return RouteNotFound today; they are
+        // listed so the tree shows every route the SDK exposes. Once Microsoft
+        // GAs api.powerplatform.com these should light up — at which point we
+        // will move successful ones into the curated section above.
+        // ================================================================
+
+        // Analytics
+        new("Analytics (full SDK)", "Advisor recommendation by id", "GET",
+            $"https://api.powerplatform.com/analytics/advisorRecommendations/{{recommendationId}}?{PpacApiVer}",
+            ScopePpac, null, "PPAC: single advisor recommendation by id.",
+            ApiSurface.Ppac, new[] { new OpParam("recommendationId", "Recommendation id", ParamKind.Text) }),
+        new("Analytics (full SDK)", "Advisor scenarios", "GET",
+            $"https://api.powerplatform.com/analytics/advisorRecommendations/scenarios?{PpacApiVer}",
+            ScopePpac, null, "PPAC: list advisor scenarios.", ApiSurface.Ppac),
+
+        // App management — tenant-wide application packages
+        new("Apps (full SDK)", "Application packages (tenant)", "GET",
+            $"https://api.powerplatform.com/appmanagement/applicationPackages?{PpacApiVer}",
+            ScopePpac, null, "PPAC: tenant-wide application packages catalog.", ApiSurface.Ppac),
+
+        // Environment management — env group operations
+        new("EnvironmentGroups (full SDK)", "Environment group operation by id", "GET",
+            $"https://api.powerplatform.com/environmentmanagement/environmentGroupOperations/{{operationId}}?{PpacApiVer}",
+            ScopePpac, null, "PPAC: status of an env-group long-running operation.",
+            ApiSurface.Ppac, new[] { OperationIdParam }),
+
+        // Governance
+        new("Governance (full SDK)", "Cross-tenant connection reports", "GET",
+            $"https://api.powerplatform.com/governance/crossTenantConnectionReports?{PpacApiVer}",
+            ScopePpac, null, "PPAC: cross-tenant connection reports across the tenant.", ApiSurface.Ppac),
+        new("Governance (full SDK)", "Cross-tenant connection report by env", "GET",
+            $"https://api.powerplatform.com/governance/crossTenantConnectionReports/{{environmentId}}?{PpacApiVer}",
+            ScopePpac, null, "PPAC: cross-tenant connection report for one env.",
+            ApiSurface.Ppac, new[] { EnvParam }),
+        new("Governance (full SDK)", "Rule-based policy assignments", "GET",
+            $"https://api.powerplatform.com/governance/ruleBasedPolicies/assignments?{PpacApiVer}",
+            ScopePpac, null, "PPAC: assignments across all rule-based policies.", ApiSurface.Ppac),
+        new("Governance (full SDK)", "Rule-based policy by id", "GET",
+            $"https://api.powerplatform.com/governance/ruleBasedPolicies/{{policyId}}?{PpacApiVer}",
+            ScopePpac, null, "PPAC: single rule-based policy by id.",
+            ApiSurface.Ppac, new[] { new OpParam("policyId", "Policy id", ParamKind.Text) }),
+        new("Governance (full SDK)", "Shared connectors", "GET",
+            $"https://api.powerplatform.com/governance/sharedConnectors?{PpacApiVer}",
+            ScopePpac, null, "PPAC: shared connectors across the tenant.", ApiSurface.Ppac),
+
+        // Licensing
+        new("Licensing (full SDK)", "Licensing per environment", "GET",
+            $"https://api.powerplatform.com/licensing/environments/{{environmentId}}?{PpacApiVer}",
+            ScopePpac, null, "PPAC: licensing details for one environment.",
+            ApiSurface.Ppac, new[] { EnvParam }),
+        new("Licensing (full SDK)", "ISV contracts", "GET",
+            $"https://api.powerplatform.com/licensing/isvContracts?{PpacApiVer}",
+            ScopePpac, null, "PPAC: ISV contract list.", ApiSurface.Ppac),
+        new("Licensing (full SDK)", "ISV contract by id", "GET",
+            $"https://api.powerplatform.com/licensing/isvContracts/{{contractId}}?{PpacApiVer}",
+            ScopePpac, null, "PPAC: single ISV contract.",
+            ApiSurface.Ppac, new[] { new OpParam("contractId", "Contract id", ParamKind.Text) }),
+        new("Licensing (full SDK)", "All storage warnings", "GET",
+            $"https://api.powerplatform.com/licensing/storageWarning/getAllStorageWarnings?{PpacApiVer}",
+            ScopePpac, null, "PPAC: every storage warning across the tenant.", ApiSurface.Ppac),
+        new("Licensing (full SDK)", "Storage warning by environment", "GET",
+            $"https://api.powerplatform.com/licensing/storageWarning/{{environmentId}}?{PpacApiVer}",
+            ScopePpac, null, "PPAC: storage warning details for one environment.",
+            ApiSurface.Ppac, new[] { EnvParam }),
+
     }.AsReadOnly();
 
     /// <summary>Returns operations filtered by surface (BAP or PPAC).</summary>
