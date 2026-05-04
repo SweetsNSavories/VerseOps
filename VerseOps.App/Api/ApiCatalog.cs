@@ -323,6 +323,11 @@ public static class ApiCatalog
             $"https://api.powerplatform.com/licensing/tenantCapacity?{PpacApiVer}",
             ScopePpac, null, "PPAC: tenant capacity rollup.", ApiSurface.Ppac),
 
+        new("Capacity", "Environment capacity ($expand)", "GET",
+            $"https://api.powerplatform.com/environmentmanagement/environments/{{environmentId}}?{PpacApiVer}&$expand=properties/capacity",
+            ScopePpac, null, "PPAC: per-env capacity via env Get with $expand=properties/capacity. The capacity block is nested inside properties.capacity.",
+            ApiSurface.Ppac, new[] { EnvParam }),
+
         new("Licensing", "Tenant licenses", "GET",
             $"https://api.powerplatform.com/licensing/tenantLicenses?{PpacApiVer}",
             ScopePpac, null, "PPAC: tenant licenses. Requires PAYG/billing-enabled tenant — returns RouteNotFound otherwise.", ApiSurface.Ppac),
