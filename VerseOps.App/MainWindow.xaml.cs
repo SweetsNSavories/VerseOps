@@ -65,11 +65,51 @@ public partial class MainWindow : Window
         }
     }
 
-    private static TreeViewItem MakeOpLeaf(ApiOperation op) => new()
+    private static TreeViewItem MakeOpLeaf(ApiOperation op)
     {
-        Header = $"{op.HttpMethod}  {op.Name}",
-        Tag = op
-    };
+        var item = new TreeViewItem
+        {
+            Header = $"{op.HttpMethod}  {op.Name}",
+            Tag = op
+        };
+        var docUrl = ExtractDocUrl(op.Description);
+        var menu = new ContextMenu();
+        if (!string.IsNullOrEmpty(docUrl))
+        {
+            var open = new MenuItem { Header = "Open documentation" };
+            open.Click += (_, _) => OpenUrl(docUrl);
+            menu.Items.Add(open);
+        }
+        var copyUrl = new MenuItem { Header = "Copy URL template" };
+        copyUrl.Click += (_, _) => { try { Clipboard.SetText(op.UrlTemplate); } catch { } };
+        menu.Items.Add(copyUrl);
+        item.ContextMenu = menu;
+        if (!string.IsNullOrEmpty(docUrl))
+        {
+            item.MouseDoubleClick += (s, ev) =>
+            {
+                if (s is TreeViewItem tvi && tvi.IsSelected) { OpenUrl(docUrl); ev.Handled = true; }
+            };
+            item.ToolTip = $"Double-click or right-click → Open documentation\n{docUrl}";
+        }
+        return item;
+    }
+
+    private static string? ExtractDocUrl(string? description)
+    {
+        if (string.IsNullOrEmpty(description)) return null;
+        var idx = description.IndexOf("Docs:", StringComparison.OrdinalIgnoreCase);
+        if (idx < 0) return null;
+        var rest = description.Substring(idx + 5).TrimStart();
+        var end = rest.IndexOfAny(new[] { ' ', '\t', '\r', '\n', '|' });
+        return end < 0 ? rest : rest.Substring(0, end);
+    }
+
+    private static void OpenUrl(string url)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch { }
+    }
 
     private ApiSurface GetSelectedSurface() => ApiSurface.Ppac;
 
@@ -157,6 +197,7 @@ public partial class MainWindow : Window
         GridForm.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         var ps = op.Parameters;
+        UpdateLoadButtonVisibility(ps);
         if (ps is null || ps.Count == 0)
         {
             TxtFormHint.Text = "This operation has no defined parameters. Edit URL/body directly in the Raw body tab.";
@@ -190,6 +231,28 @@ public partial class MainWindow : Window
             _formInputs[p.Token] = input;
             row++;
         }
+    }
+
+    private void UpdateLoadButtonVisibility(IReadOnlyList<OpParam>? ps)
+    {
+        bool needEnv = false, needGroup = false, needDlp = false, needBilling = false;
+        if (ps != null)
+        {
+            foreach (var p in ps)
+            {
+                switch (p.Kind)
+                {
+                    case ParamKind.Environment: needEnv = true; break;
+                    case ParamKind.EnvironmentGroup: needGroup = true; break;
+                    case ParamKind.DlpPolicy: needDlp = true; break;
+                    case ParamKind.BillingPolicy: needBilling = true; break;
+                }
+            }
+        }
+        BtnLoadEnvs.Visibility    = needEnv     ? Visibility.Visible : Visibility.Collapsed;
+        BtnLoadGroups.Visibility  = needGroup   ? Visibility.Visible : Visibility.Collapsed;
+        BtnLoadDlp.Visibility     = needDlp     ? Visibility.Visible : Visibility.Collapsed;
+        BtnLoadBilling.Visibility = needBilling ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static ComboBox MakeChoice(IReadOnlyList<string> choices, string? def)

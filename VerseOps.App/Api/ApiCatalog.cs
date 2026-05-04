@@ -277,8 +277,29 @@ public static class ApiCatalog
     /// in the official TOC, so the categories/sub-categories/names exactly match what
     /// users see in the docs sidebar.
     /// </summary>
-    public static IReadOnlyList<ApiOperation> PpacOperations { get; } = PpacGeneratedCatalog.Operations;
+    public static IReadOnlyList<ApiOperation> PpacOperations { get; } = BuildPpacOperations();
 
+    private static IReadOnlyList<ApiOperation> BuildPpacOperations()
+    {
+        var list = new List<ApiOperation>(PpacGeneratedCatalog.Operations);
+        // ----- Manual additions: routes the public docs do not list under api.powerplatform.com -----
+        // Create environment — PPAC has no documented provisioning endpoint yet, but the Microsoft.PowerPlatform.Management
+        // SDK still provisions via the BAP route, and it works for admin-registered SPs (returns 202 + operation-location).
+        // Surface it under "Environment management" so Sandbox / Production org creation lives next to the rest of the
+        // environment lifecycle ops.
+        list.Add(new ApiOperation(
+            "Environment management",
+            "Create Environment (BAP fallback)",
+            "POST",
+            "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/environments?api-version=2021-04-01&retainOnProvisionFailure=false",
+            ScopePowerApps,
+            EnvCreateBody,
+            "PPAC has no documented Create Environment route; this falls back to the BAP /environments POST that the Microsoft.PowerPlatform.Management SDK also uses. Verified working with admin-registered SPs (returns 202 + operation-location header). Once PPAC GAs an equivalent route we will swap the URL.  |  Docs: https://learn.microsoft.com/en-us/power-platform/admin/create-environment",
+            ApiSurface.Ppac,
+            new[] { LocationParam, DisplayNameParam, SkuParam, CurrencyParam, LanguageParam },
+            SubCategory: "Environments"));
+        return list;
+    }
 
     /// <summary>Returns operations filtered by surface (BAP or PPAC).</summary>
     public static IEnumerable<ApiOperation> ForSurface(ApiSurface surface)
