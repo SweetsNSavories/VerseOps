@@ -153,6 +153,11 @@
                             Padding="6" Margin="0,0,0,4" CornerRadius="2">
                         <TextBlock x:Name="TxtSurfaceNotice" TextWrapping="Wrap" Foreground="#9CDCFE" FontSize="11"/>
                     </Border>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
+                        <RadioButton x:Name="RbModeRest" Content="REST (docs)" IsChecked="True" Checked="OnTreeModeChanged" GroupName="TreeMode" Margin="0,0,12,0"/>
+                        <RadioButton x:Name="RbModeSdk"  Content="SDK (NuGet)" Checked="OnTreeModeChanged" GroupName="TreeMode"
+                            ToolTip="Browse and invoke Microsoft.PowerPlatform.Management RequestBuilders via Kiota. Same auth as REST mode."/>
+                    </StackPanel>
                     <TreeView x:Name="TvOps" SelectedItemChanged="OnOperationSelected"/>
                 </DockPanel>
             </GroupBox>

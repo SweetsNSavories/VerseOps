@@ -1,0 +1,200 @@
+﻿{
+    if (idPool.TryGetValue(indexParamName, out var list) && list.Count > 0)
+        return list[0];
+    return idPool.Values.SelectMany(l => l).FirstOrDefault();
+}
+
+IEnumerable<string> PickIds(string indexParamName, int max)
+{
+    if (idPool.TryGetValue(indexParamName, out var list) && list.Count > 0)
+        return list.Take(max);
+    // Fallback: take up to `max` distinct ids from any pool
+    return idPool.Values.SelectMany(l => l).Distinct().Take(max);
+}
+
+async Task<object?> InvokeGetAsync(object builder, MethodInfo getAsync)
+{
+    var pars = getAsync.GetParameters();
+    var args = pars.Select(p => p.HasDefaultValue ? p.DefaultValue : (object?)null).ToArray();
+    var task = (Task)getAsync.Invoke(builder, args)!;
+    await task.ConfigureAwait(false);
+    return task.GetType().GetProperty("Result")?.GetValue(task);
+}
+
+string Summarise(object? response)
+{
+    if (response is null) return "(null)";
+    var t = response.GetType();
+    var v = t.GetProperty("Value")?.GetValue(response);
+    if (v is ICollection col) return $"{col.Count} items";
+    if (v is IEnumerable e)
+    {
+        int n = 0; foreach (var _ in e) n++;
+        return $"{n} items";
+    }
+    return t.Name;
+}
+
+// Navigation step recorded as a tuple to avoid mid-file type declarations.
+// Item1 = property name, Item2 = indexer key (null = property navigation).
+object? Navigate(object root, IReadOnlyList<(string Name, string? Key)> steps)
+{
+    object? current = root;
+    foreach (var step in steps)
+    {
+        if (current is null) return null;
+        var t = current.GetType();
+        if (step.Key is null)
+        {
+            var p = t.GetProperty(step.Name, BindingFlags.Public | BindingFlags.Instance);
+            if (p is null || p.GetIndexParameters().Length != 0) return null;
+            current = p.GetValue(current);
+        }
+        else
+        {
+            var idx = t.GetProperty(step.Name, BindingFlags.Public | BindingFlags.Instance);
+            if (idx is null || idx.GetIndexParameters().Length != 1) return null;
+            current = idx.GetValue(current, new object[] { step.Key });
+        }
+    }
+    return current;
+}
+
+async Task TryGetAsync(object builder, string path, IReadOnlyList<(string Name, string? Key)> nav)
+{
+    var t = builder.GetType();
+    var getAsync = t.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+        .FirstOrDefault(m => m.Name == "GetAsync"
+                          && m.GetParameters().All(p => p.HasDefaultValue || !p.ParameterType.IsValueType || Nullable.GetUnderlyingType(p.ParameterType) != null));
+    if (getAsync is null) return;
+
+    attempted++;
+    Console.Write($"  [{attempted,3}] GET {path,-100} ");
+    try
+    {
+        var resp = await InvokeGetAsync(builder, getAsync);
+        Console.WriteLine($"OK   {Summarise(resp)}");
+        ok++;
+        HarvestIds(resp);
+    }
+    catch (TargetInvocationException tie) when (tie.InnerException is not null)
+    {
+        var msg = tie.InnerException.Message;
+        if (msg.Length > 110) msg = msg[..110] + "...";
+        var primaryFailed = $"FAIL {tie.InnerException.GetType().Name}: {msg}";
+        if (await TryFallbackAsync(nav)) { fail++; return; }
+        if (await TryBapAsync(nav)) { fail++; return; }
+        Console.WriteLine(primaryFailed);
+        fail++;
+    }
+    catch (Exception ex)
+    {
+        var msg = ex.Message;
+        if (msg.Length > 110) msg = msg[..110] + "...";
+        var primaryFailed = $"FAIL {ex.GetType().Name}: {msg}";
+        if (await TryFallbackAsync(nav)) { fail++; return; }
+        if (await TryBapAsync(nav)) { fail++; return; }
+        Console.WriteLine(primaryFailed);
+        fail++;
+    }
+}
+
+async Task<bool> TryFallbackAsync(IReadOnlyList<(string Name, string? Key)> nav)
+{
+    if (scFallback is null) return false;
+    try
+    {
+        object? fbBuilder = Navigate(scFallback, nav);
+        if (fbBuilder is null) return false;
+        var fbType = fbBuilder.GetType();
+        var fbGet = fbType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(m => m.Name == "GetAsync"
+                              && m.GetParameters().All(p => p.HasDefaultValue || !p.ParameterType.IsValueType || Nullable.GetUnderlyingType(p.ParameterType) != null));
+        if (fbGet is null) return false;
+        var resp = await InvokeGetAsync(fbBuilder, fbGet);
+        Console.WriteLine($"OK*  {Summarise(resp)}   (via app-only fallback)");
+        fallbackOk++;
+        HarvestIds(resp);
+        return true;
+    }
+    catch
+    {
+        return false;
+    }
+}
+
+async Task<bool> TryBapAsync(IReadOnlyList<(string Name, string? Key)> nav)
+{
+    if (bap is null) return false;
+    try
+    {
+        var (ok2, summary) = await bap.TryAsync(nav);
+        if (ok2)
+        {
+            Console.WriteLine($"OK** {summary}   (via BAP legacy api)");
+            bapOk++;
+            return true;
+        }
+        // Surface BAP failures so we can see why the layer isn't helping.
+        if (!string.IsNullOrEmpty(summary) && summary != "no BAP mapping")
+            Console.WriteLine($"     ([BAP] {summary})");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"     ([BAP] threw {ex.GetType().Name}: {ex.Message})");
+    }
+    return false;
+}
+
+async Task WalkAsync(object node, string path, int depth, int maxDepth, IReadOnlyList<(string Name, string? Key)> nav)
+{
+    if (node is null || depth > maxDepth) return;
+    if (!visitedPaths.Add(path)) return;
+    var t = node.GetType();
+
+    await TryGetAsync(node, path, nav);
+
+    // Recurse into nested non-indexed RequestBuilder properties
+    foreach (var prop in t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        .Where(p => p.CanRead
+                 && p.GetIndexParameters().Length == 0
+                 && p.PropertyType.Name.EndsWith("RequestBuilder", StringComparison.Ordinal)
+                 && p.PropertyType.Namespace?.StartsWith("Microsoft.PowerPlatform.Management") == true))
+    {
+        object? child = null;
+        try { child = prop.GetValue(node); } catch { }
+        if (child != null)
+        {
+            var nextNav = nav.Concat(new (string, string?)[] { (prop.Name, null) }).ToList();
+            await WalkAsync(child, $"{path}.{prop.Name}", depth + 1, maxDepth, nextNav);
+        }
+    }
+
+    // Recurse into indexers ΓÇö e.g. Environments[envId]. Iterate up to 3 ids per indexer.
+    foreach (var idx in t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        .Where(p => p.CanRead && p.GetIndexParameters().Length == 1
+                 && p.GetIndexParameters()[0].ParameterType == typeof(string)
+                 && p.PropertyType.Name.EndsWith("RequestBuilder", StringComparison.Ordinal)
+                 && p.PropertyType.Namespace?.StartsWith("Microsoft.PowerPlatform.Management") == true))
+    {
+        var paramName = idx.GetIndexParameters()[0].Name ?? "id";
+        var keys = PickIds(paramName, max: 3);
+        foreach (var key in keys)
+        {
+            object? child;
+            try { child = idx.GetValue(node, new object[] { key }); } catch { continue; }
+            if (child is null) continue;
+            var keyShort = key.Length > 8 ? key[..8] + "ΓÇª" : key;
+            var nextNav = nav.Concat(new (string, string?)[] { (idx.Name, key) }).ToList();
+            await WalkAsync(child, $"{path}[{keyShort}]", depth + 1, maxDepth, nextNav);
+        }
+    }
+}
+
+// --------------------------------------------------------------------------
+// Pass 1: collect ids by walking shallowly first (envs, groups, policies)
+// --------------------------------------------------------------------------
+Console.WriteLine("=== PASS 1: list endpoints (harvest ids) ===");
+Console.WriteLine();
+await WalkAsync(sc, "ServiceClient", 0, maxDepth: 3, nav: Array.Empty<(string, string?)>());
+
