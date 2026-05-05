@@ -56,8 +56,9 @@ public static class SdkCatalog
     private static void Walk(Type builderType, List<SdkStep> path, int depth, HashSet<Type> visited, List<SdkOp> sink)
     {
         if (depth > MaxDepth) return;
-        // Allow re-visiting via different paths (different parents) but stop if recursive on same path.
-        if (path.Any(p => p.ResultType == builderType)) return;
+        // Cycle guard: if any *prior* step (not the just-pushed one) was the same type, stop.
+        for (int i = 0; i < path.Count - 1; i++)
+            if (path[i].ResultType == builderType) return;
 
         // Emit verb methods on this builder.
         foreach (var m in builderType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
@@ -109,8 +110,15 @@ public static class SdkCatalog
             if (ip[0].ParameterType != typeof(string)) continue;
             if (!IsBuilder(idx.PropertyType)) continue;
 
+            // If this indexer sits on an "Item" wrapper builder (Kiota convention),
+            // attribute the friendly param name to the *enclosing* collection step.
+            string? parentCollection = null;
+            if (string.Equals(idx.Name, "Item", StringComparison.Ordinal) && path.Count > 0 && !path[^1].IsIndexer)
+                parentCollection = path[^1].PropertyName;
+
             path.Add(new SdkStep(idx.Name, IsIndexer: true, IndexParamName: ip[0].Name ?? "id",
-                DeclaringType: builderType, ResultType: idx.PropertyType));
+                DeclaringType: builderType, ResultType: idx.PropertyType,
+                ParentCollectionName: parentCollection));
             Walk(idx.PropertyType, path, depth + 1, visited, sink);
             path.RemoveAt(path.Count - 1);
         }

@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -121,7 +122,7 @@ public partial class MainWindow : Window
     // ---------- SDK mode tree (reflected from Microsoft.PowerPlatform.Management) ----------
     private void OnTreeModeChanged(object sender, RoutedEventArgs e)
     {
-        if (TxtSurfaceNotice == null) return;
+        if (TxtSurfaceNotice == null || TvOps == null) return;
         var sdk = RbModeSdk?.IsChecked == true;
         TxtSurfaceNotice.Text = sdk
             ? "SDK mode — tree built by reflecting Microsoft.PowerPlatform.Management.dll. Selecting a node shows the C# RequestBuilder method signature; Send invokes it via Kiota using the same auth as REST mode. Indexed nodes (e.g. Environments[environment]) require the value in the Form tab."
@@ -136,20 +137,50 @@ public partial class MainWindow : Window
         try { ops = SdkCatalog.Operations; }
         catch (Exception ex)
         {
-            TvOps.Items.Add(new TreeViewItem { Header = $"(SDK reflection failed: {ex.Message})" });
+            TvOps.Items.Add(new TreeViewItem { Header = $"(SDK reflection failed: {ex.GetType().Name}: {ex.Message})" });
             return;
         }
-        // Group into a tree by path segments. Root segment becomes a top-level node.
+        if (ops.Count == 0)
+        {
+            TvOps.Items.Add(new TreeViewItem { Header = "(No SDK operations discovered — check SdkCatalog reflection)" });
+            return;
+        }
+        if (TxtSurfaceNotice != null) TxtSurfaceNotice.Text += $"\r\nDiscovered {ops.Count} SDK ops.";
+        // Group into a tree. Fold the Kiota Item[position] indexer into the parent
+        // collection name: e.g. "Environments" + "Item[position]" => one tree node
+        // "Environments[environmentId]".
         var root = new TreeNode("");
         foreach (var op in ops)
         {
             var node = root;
-            foreach (var step in op.Path)
+            for (int i = 0; i < op.Path.Count; i++)
             {
-                var key = step.IsIndexer ? $"{step.PropertyName}[{step.IndexParamName}]" : step.PropertyName;
+                var step = op.Path[i];
+                string key;
+                if (step.IsIndexer && string.Equals(step.PropertyName, "Item", StringComparison.Ordinal)
+                    && i > 0 && !op.Path[i - 1].IsIndexer
+                    && node.Name == op.Path[i - 1].PropertyName)
+                {
+                    // Re-label the *current* (parent collection) node to include the indexer.
+                    var newName = $"{node.Name}[{step.FriendlyParamName}]";
+                    if (!ReferenceEquals(node, root) && node.Name != newName)
+                    {
+                        // Move children/ops to a renamed node under the same parent.
+                        var parent = node.Parent!;
+                        if (!parent.Children.TryGetValue(newName, out var renamed))
+                        {
+                            renamed = new TreeNode(newName) { Parent = parent };
+                            // Migrate existing collection-only ops onto a child labelled "(collection)" if any
+                            parent.Children[newName] = renamed;
+                        }
+                        node = renamed;
+                    }
+                    continue;
+                }
+                key = step.IsIndexer ? $"{step.PropertyName}[{step.FriendlyParamName}]" : step.PropertyName;
                 if (!node.Children.TryGetValue(key, out var child))
                 {
-                    child = new TreeNode(key);
+                    child = new TreeNode(key) { Parent = node };
                     node.Children[key] = child;
                 }
                 node = child;
@@ -181,6 +212,7 @@ public partial class MainWindow : Window
     private sealed class TreeNode
     {
         public string Name { get; }
+        public TreeNode? Parent { get; set; }
         public SortedDictionary<string, TreeNode> Children { get; } = new(StringComparer.Ordinal);
         public List<SdkOp> Ops { get; } = new();
         public TreeNode(string name) { Name = name; }
@@ -246,7 +278,7 @@ public partial class MainWindow : Window
                 .FirstOrDefault(i => (string)i.Content == "https://api.powerplatform.com/.default") ?? CbScope.Items[0];
             TbUrl.Text = sop.PathText + "   // SDK call";
             TbBody.Text = BuildSdkBodyTemplate(sop);
-            TbDescription.Text = $"{sop.SignatureText}   |   builder: {sop.BuilderType.FullName}";
+            TbDescription.Text = DescribeSdkOp(sop);
             TxtStatus.Text = $"SDK: {sop.PathText}.{sop.Method.Name}";
             BuildSdkForm(sop);
             return;
@@ -266,6 +298,83 @@ public partial class MainWindow : Window
             TxtStatus.Text = $"Loaded template: {op.Category} / {op.Name}";
             BuildForm(op);
         }
+    }
+
+    private static string DescribeSdkOp(SdkOp op)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"PATH:  {op.PathText}");
+        sb.AppendLine($"VERB:  {op.HttpMethod}   ({op.Method.Name})");
+        sb.AppendLine($"BUILDER: {op.BuilderType.FullName}");
+        sb.AppendLine();
+        sb.AppendLine("--- INPUT PARAMETERS ---");
+        var ps = op.Method.GetParameters();
+        if (ps.Length == 0) sb.AppendLine("  (none)");
+        foreach (var p in ps)
+        {
+            string role = p.ParameterType == typeof(System.Threading.CancellationToken) ? "cancellation"
+                : p.ParameterType.IsGenericType && p.ParameterType.GetGenericTypeDefinition() == typeof(Action<>) ? "request configuration"
+                : "BODY";
+            sb.AppendLine($"  {p.Name}  :  {FriendlyName(p.ParameterType)}   [{role}]");
+        }
+        var indexers = op.Path.Where(s => s.IsIndexer).ToList();
+        if (indexers.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("--- URL INDEXERS (set in Form tab) ---");
+            foreach (var s in indexers)
+                sb.AppendLine($"  {s.IndexParamName}  :  string   [path token]");
+        }
+        sb.AppendLine();
+        sb.AppendLine("--- OUTPUT ---");
+        var ret = UnwrapTask(op.Method.ReturnType);
+        sb.AppendLine($"  Return: {FriendlyName(ret)}");
+        if (ret != typeof(void) && ret != typeof(System.Threading.Tasks.Task))
+            DescribeType(ret, sb, depth: 1, maxDepth: 2, visited: new HashSet<Type>());
+        return sb.ToString();
+    }
+
+    private static Type UnwrapTask(Type t)
+    {
+        if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(System.Threading.Tasks.Task<>))
+            return t.GetGenericArguments()[0];
+        if (t == typeof(System.Threading.Tasks.Task)) return typeof(void);
+        return t;
+    }
+
+    private static void DescribeType(Type t, StringBuilder sb, int depth, int maxDepth, HashSet<Type> visited)
+    {
+        if (depth > maxDepth) return;
+        if (!visited.Add(t)) return;
+        if (t.IsPrimitive || t == typeof(string) || t == typeof(Guid) || t == typeof(DateTime) || t == typeof(DateTimeOffset)) return;
+        var props = t.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        if (props.Length == 0) return;
+        var indent = new string(' ', depth * 4);
+        foreach (var p in props.Take(40))
+        {
+            sb.AppendLine($"{indent}- {p.Name} : {FriendlyName(p.PropertyType)}");
+            // Recurse into complex SDK model types only.
+            var inner = p.PropertyType;
+            if (inner.IsGenericType && (inner.GetGenericTypeDefinition() == typeof(List<>) || inner.GetGenericTypeDefinition() == typeof(IList<>) || inner.GetGenericTypeDefinition() == typeof(IEnumerable<>)))
+                inner = inner.GetGenericArguments()[0];
+            if (inner.Namespace?.StartsWith("Microsoft.PowerPlatform.Management", StringComparison.Ordinal) == true)
+                DescribeType(inner, sb, depth + 1, maxDepth, visited);
+        }
+        if (props.Length > 40) sb.AppendLine($"{indent}… ({props.Length - 40} more properties)");
+    }
+
+    private static string FriendlyName(Type t)
+    {
+        if (t == typeof(void)) return "void";
+        if (t.IsGenericType)
+        {
+            var n = t.GetGenericTypeDefinition().Name;
+            var i = n.IndexOf('`');
+            if (i >= 0) n = n.Substring(0, i);
+            var inner = string.Join(", ", t.GetGenericArguments().Select(FriendlyName));
+            return $"{n}<{inner}>";
+        }
+        return t.Name;
     }
 
     private static string BuildSdkBodyTemplate(SdkOp op)
@@ -293,37 +402,43 @@ public partial class MainWindow : Window
         GridForm.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
         GridForm.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var indexers = op.Path.Where(p => p.IsIndexer).ToList();
-        bool needEnv = indexers.Any(s => LooksLikeEnv(s.IndexParamName));
-        bool needGroup = indexers.Any(s => LooksLikeGroup(s.IndexParamName));
-        bool needBilling = indexers.Any(s => LooksLikeBilling(s.IndexParamName));
+        var indexers = op.Path.Where(s => s.IsIndexer).ToList();
+        // Dedupe by SlotKey so when the same collection appears more than once in a path
+        // we still ask for it once (and reuse the same value across both indexers).
+        var uniqueSlots = indexers
+            .GroupBy(s => s.SlotKey)
+            .Select(g => g.First())
+            .ToList();
+        bool needEnv = uniqueSlots.Any(s => LooksLikeEnv(s.FriendlyParamName));
+        bool needGroup = uniqueSlots.Any(s => LooksLikeGroup(s.FriendlyParamName));
+        bool needBilling = uniqueSlots.Any(s => LooksLikeBilling(s.FriendlyParamName));
         BtnLoadEnvs.Visibility    = needEnv     ? Visibility.Visible : Visibility.Collapsed;
         BtnLoadGroups.Visibility  = needGroup   ? Visibility.Visible : Visibility.Collapsed;
         BtnLoadDlp.Visibility     = Visibility.Collapsed;
         BtnLoadBilling.Visibility = needBilling ? Visibility.Visible : Visibility.Collapsed;
 
-        if (indexers.Count == 0)
+        if (uniqueSlots.Count == 0)
         {
             TxtFormHint.Text = "This SDK call takes no indexer values. Edit the body in the Raw body tab if needed and press Send.";
             return;
         }
         TxtFormHint.Text = "Provide each indexer value (one per row). Use the Load buttons to populate dropdowns.";
         int row = 0;
-        foreach (var step in indexers)
+        foreach (var step in uniqueSlots)
         {
             GridForm.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var lbl = new Label { Content = step.IndexParamName };
+            var lbl = new Label { Content = step.FriendlyParamName };
             Grid.SetRow(lbl, row); Grid.SetColumn(lbl, 0);
             GridForm.Children.Add(lbl);
 
-            FrameworkElement input = LooksLikeEnv(step.IndexParamName) ? MakeEnvCombo(null)
-                : LooksLikeGroup(step.IndexParamName) ? MakeGroupCombo(null)
-                : LooksLikeBilling(step.IndexParamName) ? MakeCachedCombo(_billingCache, "Load billing", null)
+            FrameworkElement input = LooksLikeEnv(step.FriendlyParamName) ? MakeEnvCombo(null)
+                : LooksLikeGroup(step.FriendlyParamName) ? MakeGroupCombo(null)
+                : LooksLikeBilling(step.FriendlyParamName) ? MakeCachedCombo(_billingCache, "Load billing", null)
                 : (FrameworkElement)MakeText(null);
             input.Margin = new Thickness(0, 2, 0, 2);
             Grid.SetRow(input, row); Grid.SetColumn(input, 1);
             GridForm.Children.Add(input);
-            _formInputs[step.IndexParamName!] = input;
+            _formInputs[step.SlotKey] = input;
             row++;
         }
     }
