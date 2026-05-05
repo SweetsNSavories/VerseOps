@@ -1,7 +1,9 @@
 using System.Collections;
 using System.Net.Http;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
+using Microsoft.Kiota.Abstractions;
 using Microsoft.Kiota.Abstractions.Authentication;
 using Microsoft.Kiota.Http.HttpClientLibrary;
 using Microsoft.PowerPlatform.Management;
@@ -95,12 +97,72 @@ public sealed class SdkExecutor
         catch (TargetInvocationException tie) when (tie.InnerException != null)
         {
             sw.Stop();
-            return SdkResult.Fail($"{tie.InnerException.GetType().Name}: {tie.InnerException.Message}", sw.ElapsedMilliseconds);
+            return BuildExceptionResult(tie.InnerException, sw.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
             sw.Stop();
-            return SdkResult.Fail($"{ex.GetType().Name}: {ex.Message}", sw.ElapsedMilliseconds);
+            return BuildExceptionResult(ex, sw.ElapsedMilliseconds);
+        }
+    }
+
+    /// <summary>
+    /// Kiota's ApiException carries the HTTP status code and (often) the raw response
+    /// headers + body. Surface them so the user sees the same level of detail as REST
+    /// mode — not just "ApiException: 400".
+    /// </summary>
+    private static SdkResult BuildExceptionResult(Exception ex, long elapsedMs)
+    {
+        // ApiException is in Microsoft.Kiota.Abstractions and exposes ResponseStatusCode + ResponseHeaders.
+        if (ex is ApiException apiEx)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"HTTP {apiEx.ResponseStatusCode}   {ex.GetType().Name}");
+            sb.AppendLine($"Message: {apiEx.Message}");
+            if (apiEx.ResponseHeaders != null && apiEx.ResponseHeaders.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("--- Response headers ---");
+                foreach (var h in apiEx.ResponseHeaders)
+                    sb.AppendLine($"{h.Key}: {string.Join(", ", h.Value)}");
+            }
+            // Some Kiota error types add a typed payload via reflection; pull whatever public
+            // properties they expose so the user can see the body the server sent.
+            var extra = SerializeExceptionPayload(ex);
+            if (!string.IsNullOrEmpty(extra))
+            {
+                sb.AppendLine();
+                sb.AppendLine("--- Response body (deserialized) ---");
+                sb.AppendLine(extra);
+            }
+            return new SdkResult(false, elapsedMs, $"HTTP {apiEx.ResponseStatusCode}", sb.ToString(), apiEx.Message);
+        }
+        return SdkResult.Fail($"{ex.GetType().Name}: {ex.Message}", elapsedMs);
+    }
+
+    private static string SerializeExceptionPayload(Exception ex)
+    {
+        try
+        {
+            // Skip the standard Exception properties; only emit anything the SDK added.
+            var standard = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "Message", "Data", "InnerException", "TargetSite", "StackTrace", "HelpLink", "Source", "HResult",
+                "ResponseStatusCode", "ResponseHeaders"
+            };
+            var props = ex.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => !standard.Contains(p.Name))
+                .ToDictionary(p => p.Name, p => { try { return p.GetValue(ex); } catch { return null; } });
+            if (props.Count == 0) return string.Empty;
+            return JsonSerializer.Serialize(props, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            });
+        }
+        catch (Exception ser)
+        {
+            return $"(could not serialize exception payload: {ser.Message})";
         }
     }
 

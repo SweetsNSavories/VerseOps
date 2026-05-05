@@ -860,8 +860,14 @@ public partial class MainWindow : Window
             if (body != null && body.StartsWith("//")) body = string.Join('\n', body.Split('\n').Where(l => !l.TrimStart().StartsWith("//")));
             var result = await Task.Run(() => _sdkExecutor.ExecuteAsync(op, values, body, ct), ct);
             TbResponse.Text = result.Body;
-            RenderJsonTree(result.Body);
-            TxtRespMeta.Text = $"{(result.Success ? "OK" : "ERROR")}   {result.ElapsedMs} ms   ({result.StatusText})";
+            RenderJsonTree(result.Success ? result.Body : "");
+            // Headers tab: show what the SDK call sent / received at HTTP level when available.
+            TbHeaders.Text = $"SDK call:  {op.PathText}.{op.Method.Name}\r\n" +
+                             $"Verb:      {op.HttpMethod}\r\n" +
+                             $"Status:    {result.StatusText}\r\n" +
+                             $"Elapsed:   {result.ElapsedMs} ms\r\n" +
+                             (result.Error == null ? "" : $"Error:     {result.Error}\r\n");
+            TxtRespMeta.Text = $"{result.StatusText}   {result.ElapsedMs} ms" + (result.Success ? "" : $"   ({result.Error})");
             TxtStatus.Text = result.Success ? "SDK call succeeded." : $"SDK call failed: {result.Error}";
             UpdateAuthState();
         }
