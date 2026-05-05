@@ -126,18 +126,35 @@ public sealed class SdkExecutor
                 foreach (var h in apiEx.ResponseHeaders)
                     sb.AppendLine($"{h.Key}: {string.Join(", ", h.Value)}");
             }
-            // Some Kiota error types add a typed payload via reflection; pull whatever public
-            // properties they expose so the user can see the body the server sent.
+            // Raw body that our DelegatingHandler captured before Kiota disposed it.
+            var raw = ErrorBodyCaptureHandler.LastBody.Value;
+            if (!string.IsNullOrEmpty(raw))
+            {
+                sb.AppendLine();
+                sb.AppendLine("--- Raw response body ---");
+                sb.AppendLine(PrettyJsonOrRaw(raw));
+            }
+            // Some Kiota error types also add typed properties via reflection.
             var extra = SerializeExceptionPayload(ex);
             if (!string.IsNullOrEmpty(extra))
             {
                 sb.AppendLine();
-                sb.AppendLine("--- Response body (deserialized) ---");
+                sb.AppendLine("--- Exception typed properties ---");
                 sb.AppendLine(extra);
             }
             return new SdkResult(false, elapsedMs, $"HTTP {apiEx.ResponseStatusCode}", sb.ToString(), apiEx.Message);
         }
         return SdkResult.Fail($"{ex.GetType().Name}: {ex.Message}", elapsedMs);
+    }
+
+    private static string PrettyJsonOrRaw(string s)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(s);
+            return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch { return s; }
     }
 
     private static string SerializeExceptionPayload(Exception ex)
@@ -173,10 +190,15 @@ public sealed class SdkExecutor
         var authProv = new BaseBearerTokenAuthenticationProvider(provider);
         var handlers = KiotaClientFactory.CreateDefaultHandlers();
         handlers.Insert(0, new ApiVersionHandler(ApiVersion));
+        handlers.Insert(0, _errorCapture); // outermost so it sees the final response
         var http = KiotaClientFactory.Create(handlers);
         var adapter = new HttpClientRequestAdapter(authProv, httpClient: http) { BaseUrl = PpacBaseUrl };
         return new ServiceClient(adapter);
     }
+
+    // Single, reusable handler. AsyncLocal makes the captured payload visible
+    // to the calling thread regardless of pipeline jumps.
+    private readonly ErrorBodyCaptureHandler _errorCapture = new();
 
     private static string Summarise(object? response)
     {
@@ -227,6 +249,36 @@ public sealed class SdkExecutor
                 request.RequestUri = new Uri($"{u}{sep}api-version={_ver}");
             }
             return base.SendAsync(request, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Captures the raw response body of any non-2xx response into an AsyncLocal so
+    /// BuildExceptionResult can include it in the user-visible error — Kiota otherwise
+    /// disposes the response stream before throwing ApiException.
+    /// </summary>
+    private sealed class ErrorBodyCaptureHandler : DelegatingHandler
+    {
+        public static readonly System.Threading.AsyncLocal<string?> LastBody = new();
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            LastBody.Value = null;
+            var response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode && response.Content != null)
+            {
+                try
+                {
+                    var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+                    LastBody.Value = Encoding.UTF8.GetString(bytes);
+                    // Re-create the content so downstream Kiota code can still read it.
+                    var copy = new ByteArrayContent(bytes);
+                    foreach (var h in response.Content.Headers)
+                        copy.Headers.TryAddWithoutValidation(h.Key, h.Value);
+                    response.Content = copy;
+                }
+                catch { /* best-effort capture */ }
+            }
+            return response;
         }
     }
 }
