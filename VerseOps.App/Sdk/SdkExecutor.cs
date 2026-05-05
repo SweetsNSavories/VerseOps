@@ -38,8 +38,8 @@ public sealed class SdkExecutor
                     return SdkResult.Fail($"Navigation failed: {t.Name}.{step.PropertyName} not found.", sw.ElapsedMilliseconds);
                 if (step.IsIndexer)
                 {
-                    if (!indexerValues.TryGetValue(step.IndexParamName!, out var key) || string.IsNullOrWhiteSpace(key))
-                        return SdkResult.Fail($"Missing indexer value for '{step.IndexParamName}'.", sw.ElapsedMilliseconds);
+                    if (!indexerValues.TryGetValue(step.SlotKey, out var key) || string.IsNullOrWhiteSpace(key))
+                        return SdkResult.Fail($"Missing indexer value for '{step.FriendlyParamName}' (slot '{step.SlotKey}').", sw.ElapsedMilliseconds);
                     current = prop.GetValue(current, new object[] { key })
                               ?? throw new InvalidOperationException($"{step.PropertyName}[{key}] returned null.");
                 }
