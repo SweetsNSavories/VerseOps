@@ -44,6 +44,21 @@ public sealed class DataverseEnvClient
         string instanceUrl,
         IReadOnlyList<AssetRow> envAssets,
         CancellationToken ct = default)
+        => await LoadAllAsync(envId, instanceUrl, envAssets, dlpPolicies: null, ct).ConfigureAwait(false);
+
+    /// <summary>
+    /// Pulls solutions, Power Pages, users, and asset metadata (status,
+    /// premium classification, DLP compliance) for one env in parallel.
+    /// When <paramref name="dlpPolicies"/> is supplied the canvas-app
+    /// enrichment also evaluates each app's connector graph against every
+    /// in-scope tenant DLP policy and stamps <see cref="AssetRow.DlpStatus"/>.
+    /// </summary>
+    public async Task<EnvDetails> LoadAllAsync(
+        string envId,
+        string instanceUrl,
+        IReadOnlyList<AssetRow> envAssets,
+        IReadOnlyList<BapDlpClient.DlpPolicyDto>? dlpPolicies,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(instanceUrl))
             throw new InvalidOperationException("Environment has no Dataverse instance URL (non-Dataverse env).");
@@ -79,12 +94,12 @@ public sealed class DataverseEnvClient
         var solutionsTask = SafeAsync(() => LoadSolutionsAsync(http, envId, envAssets, ct));
         var pagesTask     = SafeAsync(() => LoadPowerPagesAsync(http, envId, ct));
         var usersTask     = SafeAsync(() => LoadUsersAsync(http, origin, ct));
-        // Asset-status loader stamps Status on workflows / canvas apps /
-        // model-driven apps in-place. Runs in parallel with the others; if it
-        // fails (table missing on stripped-down envs, role doesn't include
-        // read on the table, etc.) the rows simply keep Status=null and the
-        // UI shows "—".
-        var statusTask    = SafeAsync(() => LoadAssetStatusAsync(http, envAssets, ct));
+        // Asset metadata loader stamps Status, IsPremium and DlpStatus on
+        // workflows / canvas apps / model-driven apps in-place. Runs in
+        // parallel with the others; if it fails (table missing on
+        // stripped-down envs, role doesn't include read on the table, etc.)
+        // the rows simply keep Status=null and the UI shows "—".
+        var statusTask    = SafeAsync(() => LoadAssetMetaAsync(http, envId, envAssets, dlpPolicies, ct));
         await Task.WhenAll(solutionsTask, pagesTask, usersTask, statusTask).ConfigureAwait(false);
 
         return new EnvDetails(
@@ -324,25 +339,30 @@ public sealed class DataverseEnvClient
     }
 
     // ------------------------------------------------------------------
-    // Asset status: fan out to the three Dataverse tables that own the
-    // lifecycle state for our three asset families and stamp AssetRow.Status
-    // in place. All three queries run in parallel and any one can return
-    // empty / fail without affecting the others (e.g. canvasapp table is
-    // disabled on stripped-down envs, signed-in user has no read on appmodule
-    // but does on workflows, etc.).
+    // Asset metadata: fan out to the three Dataverse tables that own the
+    // lifecycle state for our three asset families and stamp AssetRow.Status,
+    // AssetRow.IsPremium and AssetRow.DlpStatus in place. All queries run in
+    // parallel and any one can return empty / fail without affecting the
+    // others (e.g. canvasapp table is disabled on stripped-down envs,
+    // signed-in user has no read on appmodule but does on workflows, etc.).
     //
     //   workflows  (cloud flows)            statecode 0=Draft (Off), 1=Activated (On), 2=Suspended
     //   canvasapps (canvas + code apps)     statecode 0=Active (Ready), 1=Inactive
+    //                                       + connectionreferences JSON
+    //                                         → IsPremium + DlpStatus
     //   appmodule  (model-driven apps)      statecode 0=Active (Ready), 1=Inactive
+    //                                       always premium (require Dataverse)
     //
     // We deliberately ignore agents (componenttype 300) because the
     // bot/copilotbotframework table doesn't expose a useful global state
     // field — the live/draft distinction is held inside the bot's component
     // graph, not on the parent row.
     // ------------------------------------------------------------------
-    private async Task<IReadOnlyList<AssetRow>> LoadAssetStatusAsync(
+    private async Task<IReadOnlyList<AssetRow>> LoadAssetMetaAsync(
         HttpClient http,
+        string envId,
         IReadOnlyList<AssetRow> envAssets,
+        IReadOnlyList<BapDlpClient.DlpPolicyDto>? dlpPolicies,
         CancellationToken ct)
     {
         // Index assets by lower-case GUID once. Inventory API and Dataverse
@@ -360,25 +380,31 @@ public sealed class DataverseEnvClient
         // throw — the caller wraps us in SafeAsync so we won't propagate
         // failures to the user. We DO want partial success though, so each
         // sub-query is itself wrapped in try/catch.
-        var flowTask   = TryStampAsync(http,
+        var flowTask   = TryStampStatusAsync(http,
             "workflows?$select=workflowid,statecode,statuscode&$filter=category eq 5&$top=5000",
             "workflowid",
             byId,
             MapWorkflowStatecode,
             ct);
-        var canvasTask = TryStampAsync(http,
-            "canvasapps?$select=canvasappid,statecode,statuscode&$top=5000",
-            "canvasappid",
-            byId,
-            MapCanvasOrModelStatecode,
-            ct);
-        var mdaTask    = TryStampAsync(http,
+        var canvasTask = TryStampCanvasAsync(http, envId, byId, dlpPolicies, ct);
+        var mdaTask    = TryStampStatusAsync(http,
             "appmodules?$select=appmoduleid,statecode,statuscode&$top=5000",
             "appmoduleid",
             byId,
             MapCanvasOrModelStatecode,
             ct);
         await Task.WhenAll(flowTask, canvasTask, mdaTask).ConfigureAwait(false);
+
+        // Model-driven apps always need Dataverse (and therefore a per-user
+        // premium license to USE the app). Stamp them all as premium so the
+        // grid shows a consistent badge instead of "—" for MDAs.
+        foreach (var a in envAssets)
+        {
+            if (string.Equals(a.AssetType, "modeldrivenapps", StringComparison.OrdinalIgnoreCase))
+            {
+                a.IsPremium ??= true;
+            }
+        }
 
         // Return value is unused (Status is stamped in-place via INPC) but
         // keep the IReadOnlyList contract symmetrical with the other loaders.
@@ -419,7 +445,7 @@ public sealed class DataverseEnvClient
     /// swallowed — the caller has no recovery action and the UI is happy
     /// to show "—" for unstamped rows.
     /// </summary>
-    private static async Task TryStampAsync(
+    private static async Task TryStampStatusAsync(
         HttpClient http,
         string url,
         string idField,
@@ -442,6 +468,71 @@ public sealed class DataverseEnvClient
                 if (string.IsNullOrEmpty(id)) continue;
                 if (!byId.TryGetValue(id, out var asset)) continue;
                 asset.Status = mapStatecode(ReadInt(el, "statecode"));
+            }
+        }
+        catch
+        {
+            // best-effort enrichment; swallow and let other tables stamp.
+        }
+    }
+
+    /// <summary>
+    /// Specialised stamper for the <c>canvasapps</c> table that pulls the
+    /// extra <c>connectionreferences</c> column (JSON) along with state, then
+    /// stamps:
+    ///   <see cref="AssetRow.Status"/>    — On / Off (Ready / Inactive)
+    ///   <see cref="AssetRow.IsPremium"/> — true if any non-standard connector
+    ///   <see cref="AssetRow.DlpStatus"/> — Compliant / Violation / —
+    /// All in one Dataverse round-trip per env. Failures are swallowed so
+    /// other rows in the grid still light up.
+    /// </summary>
+    private static async Task TryStampCanvasAsync(
+        HttpClient http,
+        string envId,
+        IReadOnlyDictionary<string, AssetRow> byId,
+        IReadOnlyList<BapDlpClient.DlpPolicyDto>? dlpPolicies,
+        CancellationToken ct)
+    {
+        try
+        {
+            // connectionreferences is a memo (string) field. The DV Web API
+            // returns it as a JSON string we re-parse client-side.
+            const string url = "canvasapps?$select=canvasappid,statecode,statuscode,connectionreferences&$top=5000";
+            using var resp = await http.GetAsync(url, ct).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode) return;
+            var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("value", out var arr) || arr.ValueKind != JsonValueKind.Array)
+                return;
+
+            foreach (var el in arr.EnumerateArray())
+            {
+                var id = ReadString(el, "canvasappid");
+                if (string.IsNullOrEmpty(id)) continue;
+                if (!byId.TryGetValue(id, out var asset)) continue;
+
+                asset.Status = MapCanvasOrModelStatecode(ReadInt(el, "statecode"));
+
+                // Parse the connector graph once, reuse for premium + DLP.
+                var refsJson  = ReadString(el, "connectionreferences");
+                var connectors = ConnectorClassifier.ParseConnectorIds(refsJson);
+
+                if (connectors.Count > 0)
+                {
+                    // Premium iff at least one connector is NOT in the curated
+                    // standard list. Apps with zero connectors stay null
+                    // (we can't tell — could be a pure UI app).
+                    bool anyPremium = false;
+                    foreach (var c in connectors)
+                    {
+                        if (!ConnectorClassifier.IsStandardConnector(c)) { anyPremium = true; break; }
+                    }
+                    asset.IsPremium = anyPremium;
+                }
+
+                // DLP evaluation is best-effort: returns "—" when there are
+                // no policies in scope or no connectors to evaluate.
+                asset.DlpStatus = ConnectorClassifier.EvaluateDlp(envId, connectors, dlpPolicies);
             }
         }
         catch

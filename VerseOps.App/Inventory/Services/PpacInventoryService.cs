@@ -67,6 +67,11 @@ public sealed class PpacInventoryService : IInventoryService
     /// <summary>
     /// Per-env Dataverse drill-down. The row itself isn't mutated here —
     /// the caller (view-model) owns the property assignments + threading.
+    /// Also kicks the tenant DLP policy fetch (cached after first call) so
+    /// the canvas-app enrichment can stamp <see cref="AssetRow.DlpStatus"/>
+    /// in the same Dataverse round-trip. The DLP fetch is best-effort: if
+    /// the user lacks the policy.read permission, canvas apps still get
+    /// status + premium classification stamped, just no DLP badge.
     /// </summary>
     public async Task<DataverseEnvClient.EnvDetails> LoadEnvironmentDetailsAsync(
         EnvironmentRow env,
@@ -77,8 +82,14 @@ public sealed class PpacInventoryService : IInventoryService
             throw new InvalidOperationException(
                 "This environment has no Dataverse instance URL — no database to query (it may be a Teams or Developer env without Dataverse, or PPAC hasn't reported the URL yet).");
 
+        // Best-effort DLP policy snapshot. Cached service-side so subsequent
+        // env-expands reuse the same in-memory list (no extra HTTP).
+        IReadOnlyList<BapDlpClient.DlpPolicyDto>? dlpPolicies = null;
+        try { dlpPolicies = await LoadDlpPoliciesAsync(ct).ConfigureAwait(false); }
+        catch { /* user lacks policy.read or BAP transient — proceed without DLP eval */ }
+
         var client = new DataverseEnvClient(_auth, _diagnostics);
-        return await client.LoadAllAsync(env.EnvId, env.InstanceUrl, envAssets, ct).ConfigureAwait(false);
+        return await client.LoadAllAsync(env.EnvId, env.InstanceUrl, envAssets, dlpPolicies, ct).ConfigureAwait(false);
     }
 
     /// <summary>
