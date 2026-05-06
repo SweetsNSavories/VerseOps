@@ -1,102 +1,49 @@
-﻿<Window x:Class="VerseOps.App.MainWindow"
+﻿<ui:FluentWindow x:Class="VerseOps.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:local="clr-namespace:VerseOps.App"
+        xmlns:inventory="clr-namespace:VerseOps.App.Inventory"
         mc:Ignorable="d"
         Title="VerseOps — Power Platform Control-Plane Console"
         Height="820" Width="1400"
         WindowStartupLocation="CenterScreen"
-        Background="#1E1E1E" Foreground="#E8E8E8"
-        FontFamily="Segoe UI" FontSize="12">
+        WindowBackdropType="Mica"
+        ExtendsContentIntoTitleBar="True"
+        Background="{DynamicResource TokenSurfaceCanvas}"
+        Foreground="{DynamicResource TokenTextPrimary}"
+        FontFamily="{DynamicResource TokenFontFamilyBase}" FontSize="12">
 
     <Window.Resources>
-        <Style TargetType="TextBox">
-            <Setter Property="Background" Value="#252526"/>
-            <Setter Property="Foreground" Value="#E8E8E8"/>
-            <Setter Property="BorderBrush" Value="#3F3F46"/>
-            <Setter Property="CaretBrush" Value="#E8E8E8"/>
-            <Setter Property="Padding" Value="4,2"/>
-        </Style>
-        <Style TargetType="PasswordBox">
-            <Setter Property="Background" Value="#252526"/>
-            <Setter Property="Foreground" Value="#E8E8E8"/>
-            <Setter Property="BorderBrush" Value="#3F3F46"/>
-            <Setter Property="Padding" Value="4,2"/>
-        </Style>
-        <Style TargetType="Button">
-            <Setter Property="Background" Value="#0E639C"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#1177BB"/>
-            <Setter Property="Padding" Value="10,4"/>
-            <Setter Property="Margin" Value="2"/>
-            <Setter Property="Cursor" Value="Hand"/>
-        </Style>
-        <Style TargetType="GroupBox">
-            <Setter Property="Foreground" Value="#9CDCFE"/>
-            <Setter Property="BorderBrush" Value="#3F3F46"/>
-            <Setter Property="Margin" Value="4"/>
-            <Setter Property="Padding" Value="6"/>
-        </Style>
-        <Style TargetType="Label">
-            <Setter Property="Foreground" Value="#CCCCCC"/>
-        </Style>
-        <Style TargetType="RadioButton">
-            <Setter Property="Foreground" Value="#E8E8E8"/>
-            <Setter Property="Margin" Value="4,0"/>
-        </Style>
-        <Style TargetType="TreeView">
-            <Setter Property="Background" Value="#252526"/>
-            <Setter Property="Foreground" Value="#E8E8E8"/>
-            <Setter Property="BorderBrush" Value="#3F3F46"/>
-        </Style>
-        <Style TargetType="TreeViewItem">
-            <Setter Property="Foreground" Value="#E8E8E8"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Padding" Value="2"/>
-            <Style.Resources>
-                <!-- Override the system selection brushes so even when the TreeView
-                     loses focus the selected row stays readable. -->
-                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#094771"/>
-                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FFFFFF"/>
-                <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#37373D"/>
-                <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#FFFFFF"/>
-                <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#37373D"/>
-            </Style.Resources>
-            <Style.Triggers>
-                <MultiTrigger>
-                    <MultiTrigger.Conditions>
-                        <Condition Property="IsSelected" Value="True"/>
-                        <Condition Property="IsSelectionActive" Value="True"/>
-                    </MultiTrigger.Conditions>
-                    <Setter Property="Background" Value="#094771"/>
-                    <Setter Property="Foreground" Value="#FFFFFF"/>
-                </MultiTrigger>
-                <MultiTrigger>
-                    <MultiTrigger.Conditions>
-                        <Condition Property="IsSelected" Value="True"/>
-                        <Condition Property="IsSelectionActive" Value="False"/>
-                    </MultiTrigger.Conditions>
-                    <Setter Property="Background" Value="#37373D"/>
-                    <Setter Property="Foreground" Value="#FFFFFF"/>
-                </MultiTrigger>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#2A2D2E"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
+        <!-- All control styling now comes from App.xaml's Fluent token theme.
+             We keep this dictionary node so future window-scoped tweaks have
+             a place to land. -->
     </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <GroupBox Grid.Row="0" Header="Authentication">
-            <Grid>
+        <!-- Fluent title bar (replaces the OS chrome). Hosts the app icon,
+             title, and the system min / max / close caption buttons. -->
+        <ui:TitleBar Grid.Row="0"
+                     Title="VerseOps — Power Platform Control-Plane Console"
+                     ShowMaximize="True" ShowMinimize="True"/>
+
+        <!-- Authentication settings. Wrapped in a collapsible Expander so the
+             (rarely-changed) auth fields can be folded away to give the
+             dashboard / API explorer the full vertical space below the title
+             bar. Default-collapsed once the user is signed in (we set
+             IsExpanded=false in code-behind on first successful sign-in). -->
+        <Expander Grid.Row="1" Header="Authentication" x:Name="AuthExpander"
+                  IsExpanded="True" Margin="4,2,4,0">
+            <Grid Margin="6,4,6,6">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -132,15 +79,30 @@
                 </StackPanel>
 
                 <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock x:Name="TxtAuthState" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="#9CDCFE"/>
-                    <Button Content="Register SP" Click="OnRegisterSp" Background="#3A6A3A" BorderBrush="#4A8A4A"
+                    <TextBlock x:Name="TxtAuthState" VerticalAlignment="Center" Margin="0,0,12,0"
+                               Foreground="{DynamicResource TokenBrandForeground}"/>
+                    <Button Content="Register SP" Click="OnRegisterSp"
+                            Background="{DynamicResource TokenSuccessBackground}"
+                            BorderBrush="{DynamicResource TokenSuccessBackground}"
+                            Foreground="{DynamicResource TokenTextOnAccent}"
                             ToolTip="One-time, per tenant. Signs in interactively as a Power Platform admin and registers the App-only ClientId as a tenant admin management application. (Required for any SP to call admin APIs — PPAC and BAP both honor this registration.)"/>
-                    <Button Content="Sign out" Click="OnSignOut" Background="#5A1A1A" BorderBrush="#7A2A2A"/>
+                    <Button Content="Sign out" Click="OnSignOut" Style="{StaticResource DangerButton}"/>
                 </StackPanel>
             </Grid>
-        </GroupBox>
+        </Expander>
 
-        <Grid Grid.Row="1" Margin="4">
+        <TabControl Grid.Row="2" Margin="4">
+            <TabControl.Resources>
+                <!-- Tab styling now comes from the global Fluent theme; the
+                     selected tab gets a brand-blue underline indicator. -->
+            </TabControl.Resources>
+
+            <TabItem Header="Inventory Dashboard">
+                <inventory:InventoryView x:Name="InventoryDashboard"/>
+            </TabItem>
+
+            <TabItem Header="API Explorer">
+                <Grid Margin="4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="290"/>
                 <ColumnDefinition Width="Auto"/>
@@ -162,7 +124,8 @@
                 </DockPanel>
             </GroupBox>
 
-            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" Background="#3F3F46"/>
+            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
+                          Background="{DynamicResource TokenStrokeSubtle}"/>
 
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
@@ -199,22 +162,26 @@
                                 <ComboBoxItem Content="https://api.bap.microsoft.com/.default"/>
                                 <ComboBoxItem Content="https://graph.microsoft.com/.default"/>
                             </ComboBox>
-                            <Button x:Name="BtnSend" Content="Send" Click="OnSend" Margin="16,0,0,0" Padding="22,4"/>
+                            <Button x:Name="BtnSend" Content="Send" Click="OnSend"
+                                    Style="{StaticResource AccentButton}"
+                                    Margin="16,0,0,0" Padding="22,4"/>
                             <Button x:Name="BtnDecode" Content="Decode bearer" Click="OnDecodeToken"/>
                             <Button x:Name="BtnSweep" Content="Sweep × 10 envs" Click="OnPpacSweep"
                                     ToolTip="Run every PPAC operation against the first N environments and dump a report into the Body tab."/>
-                            <Button x:Name="BtnCancel" Content="Cancel" Click="OnCancel" IsEnabled="False" Background="#5A1A1A" BorderBrush="#7A2A2A"/>
+                            <Button x:Name="BtnCancel" Content="Cancel" Click="OnCancel" IsEnabled="False"
+                                    Style="{StaticResource DangerButton}"/>
                         </StackPanel>
 
                         <Label Grid.Row="1" Grid.Column="0" Content="URL:"/>
                         <TextBox Grid.Row="1" Grid.Column="1" x:Name="TbUrl" FontFamily="Cascadia Mono, Consolas"/>
 
                         <Label Grid.Row="2" Grid.Column="0" Content="Body:" VerticalAlignment="Top"/>
-                        <TabControl Grid.Row="2" Grid.Column="1" Background="#1E1E1E">
+                        <TabControl Grid.Row="2" Grid.Column="1">
                             <TabItem Header="Form">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <StackPanel Margin="6">
-                                        <TextBlock x:Name="TxtFormHint" Foreground="#888"
+                                        <TextBlock x:Name="TxtFormHint"
+                                                   Foreground="{DynamicResource TokenTextTertiary}"
                                                    Text="Select an operation to see its parameters."
                                                    Margin="0,0,0,6"/>
                                         <Grid x:Name="GridForm"/>
@@ -224,7 +191,8 @@
                                             <Button x:Name="BtnLoadGroups"  Content="Load groups"       Click="OnLoadGroups"       Margin="6,0,0,0"/>
                                             <Button x:Name="BtnLoadDlp"     Content="Load DLP"          Click="OnLoadDlp"          Margin="6,0,0,0"/>
                                             <Button x:Name="BtnLoadBilling" Content="Load billing"      Click="OnLoadBilling"      Margin="6,0,0,0"/>
-                                            <TextBlock x:Name="TxtFormStatus" Margin="10,5,0,0" Foreground="#9CDCFE"/>
+                                            <TextBlock x:Name="TxtFormStatus" Margin="10,5,0,0"
+                                                       Foreground="{DynamicResource TokenBrandForeground}"/>
                                         </StackPanel>
                                     </StackPanel>
                                 </ScrollViewer>
@@ -241,16 +209,18 @@
                     </Grid>
                 </GroupBox>
 
-                <GridSplitter Grid.Row="1" Height="4" HorizontalAlignment="Stretch" Background="#3F3F46"/>
+                <GridSplitter Grid.Row="1" Height="4" HorizontalAlignment="Stretch"
+                              Background="{DynamicResource TokenStrokeSubtle}"/>
 
                 <GroupBox Grid.Row="2">
                     <GroupBox.Header>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Response"/>
-                            <TextBlock x:Name="TxtRespMeta" Margin="14,0,0,0" Foreground="#CE9178"/>
+                            <TextBlock x:Name="TxtRespMeta" Margin="14,0,0,0"
+                                       Foreground="{DynamicResource TokenCodeString}"/>
                         </StackPanel>
                     </GroupBox.Header>
-                    <TabControl Background="#1E1E1E" Foreground="Black">
+                    <TabControl>
                         <TabItem Header="Response body">
                             <TextBox x:Name="TbResponse"
                                      FontFamily="Cascadia Mono, Consolas"
@@ -268,7 +238,8 @@
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="4">
                                     <Button x:Name="BtnTreeExpand"   Content="Expand all"   Margin="0,0,6,0" Click="OnTreeExpandAll"/>
                                     <Button x:Name="BtnTreeCollapse" Content="Collapse all" Click="OnTreeCollapseAll"/>
-                                    <TextBlock x:Name="TxtTreeStats" Margin="14,4,0,0" Foreground="#888"/>
+                                    <TextBlock x:Name="TxtTreeStats" Margin="14,4,0,0"
+                                               Foreground="{DynamicResource TokenTextTertiary}"/>
                                 </StackPanel>
                                 <TreeView x:Name="TvJson" Grid.Row="1"
                                           FontFamily="Cascadia Mono, Consolas"
@@ -287,24 +258,46 @@
                                      IsReadOnly="True" TextWrapping="Wrap"
                                      VerticalScrollBarVisibility="Auto"/>
                         </TabItem>
+                        <TabItem Header="Return type (SDK)">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock x:Name="TxtReturnTypeHeader" Grid.Row="0" Margin="6,4"
+                                           Foreground="{DynamicResource TokenBrandForeground}"
+                                           FontFamily="{DynamicResource TokenFontFamilyMono}"
+                                           Text="(select an SDK leaf to see its return shape)"/>
+                                <TreeView x:Name="TvReturn" Grid.Row="1"
+                                          FontFamily="Cascadia Mono, Consolas"
+                                          VirtualizingStackPanel.IsVirtualizing="True"
+                                          VirtualizingStackPanel.VirtualizationMode="Recycling"/>
+                            </Grid>
+                        </TabItem>
                     </TabControl>
                 </GroupBox>
             </Grid>
-        </Grid>
+                </Grid>
+            </TabItem>
+        </TabControl>
 
-        <Border Grid.Row="2" Background="#0E639C" Padding="6,3">
+        <Border Grid.Row="3" Background="{DynamicResource TokenBrandBackground}" Padding="10,5">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="TxtStatus" Grid.Column="0" Foreground="White" VerticalAlignment="Center" Text="Ready."/>
+                <TextBlock x:Name="TxtStatus" Grid.Column="0"
+                           Foreground="{DynamicResource TokenTextOnAccent}"
+                           VerticalAlignment="Center" Text="Ready."/>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock x:Name="TxtElapsed" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <ProgressBar x:Name="PbBusy" Width="180" Height="12" IsIndeterminate="True" Visibility="Collapsed"
-                                 Background="#0A4A78" Foreground="#9CDCFE" BorderBrush="#1177BB"/>
+                    <TextBlock x:Name="TxtElapsed"
+                               Foreground="{DynamicResource TokenTextOnAccent}"
+                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ProgressBar x:Name="PbBusy" Width="180" Height="6" IsIndeterminate="True"
+                                 Visibility="Collapsed"/>
                 </StackPanel>
             </Grid>
         </Border>
     </Grid>
-</Window>
+</ui:FluentWindow>
