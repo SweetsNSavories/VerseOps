@@ -79,7 +79,13 @@ public sealed class DataverseEnvClient
         var solutionsTask = SafeAsync(() => LoadSolutionsAsync(http, envId, envAssets, ct));
         var pagesTask     = SafeAsync(() => LoadPowerPagesAsync(http, envId, ct));
         var usersTask     = SafeAsync(() => LoadUsersAsync(http, origin, ct));
-        await Task.WhenAll(solutionsTask, pagesTask, usersTask).ConfigureAwait(false);
+        // Asset-status loader stamps Status on workflows / canvas apps /
+        // model-driven apps in-place. Runs in parallel with the others; if it
+        // fails (table missing on stripped-down envs, role doesn't include
+        // read on the table, etc.) the rows simply keep Status=null and the
+        // UI shows "—".
+        var statusTask    = SafeAsync(() => LoadAssetStatusAsync(http, envAssets, ct));
+        await Task.WhenAll(solutionsTask, pagesTask, usersTask, statusTask).ConfigureAwait(false);
 
         return new EnvDetails(
             solutionsTask.Result ?? Array.Empty<SolutionGroup>(),
@@ -242,19 +248,24 @@ public sealed class DataverseEnvClient
             }
 
             var solutionName = ReadString(s, "friendlyname") ?? ReadString(s, "uniquename") ?? "(unnamed)";
+            var solutionManaged = ReadBool(s, "ismanaged") ?? false;
 
             // Stamp the friendly solution name back onto each asset so the
             // FLAT-view DataGrids can show a "Solution" column without a
             // second lookup. INPC fires so any already-bound row repaints.
-            foreach (var asset in apps)   asset.SolutionName = solutionName;
-            foreach (var asset in flows)  asset.SolutionName = solutionName;
-            foreach (var asset in agents) asset.SolutionName = solutionName;
+            // ALM badge: stamp IsManaged from the parent solution at the
+            // same time. The Inventory API doesn't expose this per-asset, so
+            // the solutioncomponent join is the only way to know without
+            // querying the asset's own table. Free side-effect — same loop.
+            foreach (var asset in apps)   { asset.SolutionName = solutionName; asset.IsManaged = solutionManaged; }
+            foreach (var asset in flows)  { asset.SolutionName = solutionName; asset.IsManaged = solutionManaged; }
+            foreach (var asset in agents) { asset.SolutionName = solutionName; asset.IsManaged = solutionManaged; }
 
             result.Add(new SolutionGroup
             {
                 Name        = solutionName,
                 UniqueName  = ReadString(s, "uniquename"),
-                IsManaged   = ReadBool(s, "ismanaged") ?? false,
+                IsManaged   = solutionManaged,
                 Version     = ReadString(s, "version"),
                 SolutionId  = solutionId,
                 EnvId       = envId,
@@ -288,6 +299,9 @@ public sealed class DataverseEnvClient
         {
             // Stamp the synthetic name onto orphan assets so the FLAT view
             // shows them as "(unmatched)" instead of empty.
+            // Leave IsManaged as null — orphans aren't in any visible
+            // solution, so we can't honestly call them either Managed or
+            // Unmanaged; the UI renders "—" via ManagedDisplay.
             foreach (var a in orphanApps)   a.SolutionName = "(unmatched)";
             foreach (var a in orphanFlows)  a.SolutionName = "(unmatched)";
             foreach (var a in orphanAgents) a.SolutionName = "(unmatched)";
@@ -307,6 +321,133 @@ public sealed class DataverseEnvClient
         }
 
         return result;
+    }
+
+    // ------------------------------------------------------------------
+    // Asset status: fan out to the three Dataverse tables that own the
+    // lifecycle state for our three asset families and stamp AssetRow.Status
+    // in place. All three queries run in parallel and any one can return
+    // empty / fail without affecting the others (e.g. canvasapp table is
+    // disabled on stripped-down envs, signed-in user has no read on appmodule
+    // but does on workflows, etc.).
+    //
+    //   workflows  (cloud flows)            statecode 0=Draft (Off), 1=Activated (On), 2=Suspended
+    //   canvasapps (canvas + code apps)     statecode 0=Active (Ready), 1=Inactive
+    //   appmodule  (model-driven apps)      statecode 0=Active (Ready), 1=Inactive
+    //
+    // We deliberately ignore agents (componenttype 300) because the
+    // bot/copilotbotframework table doesn't expose a useful global state
+    // field — the live/draft distinction is held inside the bot's component
+    // graph, not on the parent row.
+    // ------------------------------------------------------------------
+    private async Task<IReadOnlyList<AssetRow>> LoadAssetStatusAsync(
+        HttpClient http,
+        IReadOnlyList<AssetRow> envAssets,
+        CancellationToken ct)
+    {
+        // Index assets by lower-case GUID once. Inventory API and Dataverse
+        // both return lower-case canonical GUIDs but be defensive in case
+        // either flips casing convention in a future revision.
+        var byId = new Dictionary<string, AssetRow>(StringComparer.OrdinalIgnoreCase);
+        foreach (var a in envAssets)
+        {
+            if (!string.IsNullOrEmpty(a.AssetId))
+                byId[a.AssetId] = a;
+        }
+        if (byId.Count == 0) return Array.Empty<AssetRow>();
+
+        // Fan out three queries in parallel. Each handler is allowed to
+        // throw — the caller wraps us in SafeAsync so we won't propagate
+        // failures to the user. We DO want partial success though, so each
+        // sub-query is itself wrapped in try/catch.
+        var flowTask   = TryStampAsync(http,
+            "workflows?$select=workflowid,statecode,statuscode&$filter=category eq 5&$top=5000",
+            "workflowid",
+            byId,
+            MapWorkflowStatecode,
+            ct);
+        var canvasTask = TryStampAsync(http,
+            "canvasapps?$select=canvasappid,statecode,statuscode&$top=5000",
+            "canvasappid",
+            byId,
+            MapCanvasOrModelStatecode,
+            ct);
+        var mdaTask    = TryStampAsync(http,
+            "appmodules?$select=appmoduleid,statecode,statuscode&$top=5000",
+            "appmoduleid",
+            byId,
+            MapCanvasOrModelStatecode,
+            ct);
+        await Task.WhenAll(flowTask, canvasTask, mdaTask).ConfigureAwait(false);
+
+        // Return value is unused (Status is stamped in-place via INPC) but
+        // keep the IReadOnlyList contract symmetrical with the other loaders.
+        return envAssets;
+    }
+
+    /// <summary>
+    /// Statecode mapping for Dataverse <c>workflow</c> rows (cloud flows
+    /// surface as workflows with category=5). Values per Dataverse docs:
+    /// 0 = Draft, 1 = Activated, 2 = Suspended.
+    /// </summary>
+    private static string MapWorkflowStatecode(int? statecode) => statecode switch
+    {
+        0 => "Off",        // Draft = the flow is saved but not turned on
+        1 => "On",
+        2 => "Suspended",
+        _ => "—"
+    };
+
+    /// <summary>
+    /// Statecode mapping for <c>canvasapp</c> + <c>appmodule</c> rows.
+    /// Both tables share the global option-set (0 = Active, 1 = Inactive).
+    /// We surface "Ready" instead of "Active" so the column reads naturally
+    /// next to flows ("On / Off / Suspended").
+    /// </summary>
+    private static string MapCanvasOrModelStatecode(int? statecode) => statecode switch
+    {
+        0 => "Ready",
+        1 => "Inactive",
+        _ => "—"
+    };
+
+    /// <summary>
+    /// Issues a single Dataverse query, walks the result rows, and stamps
+    /// <see cref="AssetRow.Status"/> on any AssetRow whose AssetId matches
+    /// the row's primary-key field. Any failure (404 if the table doesn't
+    /// exist on the env, 401/403 if the user lacks read, parse errors) is
+    /// swallowed — the caller has no recovery action and the UI is happy
+    /// to show "—" for unstamped rows.
+    /// </summary>
+    private static async Task TryStampAsync(
+        HttpClient http,
+        string url,
+        string idField,
+        IReadOnlyDictionary<string, AssetRow> byId,
+        Func<int?, string> mapStatecode,
+        CancellationToken ct)
+    {
+        try
+        {
+            using var resp = await http.GetAsync(url, ct).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode) return;
+            var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("value", out var arr) || arr.ValueKind != JsonValueKind.Array)
+                return;
+
+            foreach (var el in arr.EnumerateArray())
+            {
+                var id = ReadString(el, idField);
+                if (string.IsNullOrEmpty(id)) continue;
+                if (!byId.TryGetValue(id, out var asset)) continue;
+                asset.Status = mapStatecode(ReadInt(el, "statecode"));
+            }
+        }
+        catch
+        {
+            // best-effort enrichment; swallow and let other tables stamp.
+        }
     }
 
     // ------------------------------------------------------------------
