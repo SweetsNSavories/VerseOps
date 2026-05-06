@@ -1134,6 +1134,8 @@
                                                                             <DataGridTextColumn Header="Type"        Binding="{Binding TypeDisplay}" Width="110"/>
                                                                             <DataGridTextColumn Header="Status"      Binding="{Binding Status, TargetNullValue=—}" Width="80"/>
                                                                             <DataGridTextColumn Header="ALM"         Binding="{Binding ManagedDisplay}" Width="90"/>
+                                                                            <DataGridTextColumn Header="Premium"     Binding="{Binding PremiumDisplay}" Width="80"/>
+                                                                            <DataGridTextColumn Header="DLP"         Binding="{Binding DlpStatus, TargetNullValue=—}" Width="90"/>
                                                                             <DataGridTextColumn Header="Owner"       Binding="{Binding OwnerDisplay}"     Width="180"/>
                                                                             <DataGridTextColumn Header="Created"     Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
                                                                             <DataGridTextColumn Header="Modified"    Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
@@ -1186,6 +1188,8 @@
                                                                             <DataGridTextColumn Header="Type"     Binding="{Binding TypeDisplay}" Width="110"/>
                                                                             <DataGridTextColumn Header="Status"   Binding="{Binding Status, TargetNullValue=—}" Width="80"/>
                                                                             <DataGridTextColumn Header="ALM"      Binding="{Binding ManagedDisplay}" Width="90"/>
+                                                                            <DataGridTextColumn Header="Premium"  Binding="{Binding PremiumDisplay}" Width="80"/>
+                                                                            <DataGridTextColumn Header="DLP"      Binding="{Binding DlpStatus, TargetNullValue=—}" Width="90"/>
                                                                             <DataGridTextColumn Header="Owner"    Binding="{Binding OwnerDisplay}"     Width="180"/>
                                                                             <DataGridTextColumn Header="Created"  Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
                                                                             <DataGridTextColumn Header="Modified" Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
@@ -1336,6 +1340,8 @@
                                                     <DataGridTextColumn Header="Type"        Binding="{Binding TypeDisplay}" Width="130"/>
                                                     <DataGridTextColumn Header="Status"      Binding="{Binding Status, TargetNullValue=—}" Width="80"/>
                                                     <DataGridTextColumn Header="ALM"         Binding="{Binding ManagedDisplay}" Width="90"/>
+                                                    <DataGridTextColumn Header="Premium"     Binding="{Binding PremiumDisplay}" Width="80"/>
+                                                    <DataGridTextColumn Header="DLP"         Binding="{Binding DlpStatus, TargetNullValue=—}" Width="90"/>
                                                     <DataGridTextColumn Header="Solution" Binding="{Binding SolutionName, TargetNullValue=(none)}" Width="160"/>
                                                     <DataGridTextColumn Header="Owner"       Binding="{Binding OwnerDisplay}"     Width="200"/>
                                                     <DataGridTextColumn Header="Created"     Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
@@ -1380,6 +1386,8 @@
                                                     <DataGridTextColumn Header="Type"     Binding="{Binding TypeDisplay}" Width="130"/>
                                                     <DataGridTextColumn Header="Status"   Binding="{Binding Status, TargetNullValue=—}" Width="80"/>
                                                     <DataGridTextColumn Header="ALM"      Binding="{Binding ManagedDisplay}" Width="90"/>
+                                                    <DataGridTextColumn Header="Premium"  Binding="{Binding PremiumDisplay}" Width="80"/>
+                                                    <DataGridTextColumn Header="DLP"      Binding="{Binding DlpStatus, TargetNullValue=—}" Width="90"/>
                                                     <DataGridTextColumn Header="Solution" Binding="{Binding SolutionName, TargetNullValue=(none)}" Width="160"/>
                                                     <DataGridTextColumn Header="Owner"    Binding="{Binding OwnerDisplay}"     Width="200"/>
                                                     <DataGridTextColumn Header="Created"  Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>

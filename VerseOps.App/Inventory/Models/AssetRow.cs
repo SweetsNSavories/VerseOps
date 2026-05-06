@@ -117,6 +117,61 @@ public sealed class AssetRow : System.ComponentModel.INotifyPropertyChanged
         set { if (_status == value) return; _status = value; OnPropertyChanged(); }
     }
 
+    private string? _uiKind;
+    /// <summary>
+    /// Form factor for canvas + code apps (Tablet / Phone / Web). Null on
+    /// model-driven apps (always render in the model-driven shell), flows,
+    /// and agents. Stamped by the per-env BAP enrichment that runs only
+    /// when the user expands the env row.
+    /// </summary>
+    public string? UiKind
+    {
+        get => _uiKind;
+        set { if (_uiKind == value) return; _uiKind = value; OnPropertyChanged(); }
+    }
+
+    private bool? _isPremium;
+    /// <summary>
+    /// True when the asset uses at least one premium connector (anything
+    /// outside the curated Microsoft "standard" list — Office 365, Teams,
+    /// SharePoint, OneDrive, Forms, Planner, Outlook.com, Excel, OneNote,
+    /// To Do, Stream, Approvals, Power BI standard ops, etc.). Stamped from
+    /// canvas-app <c>connectionreferences</c> during the per-env load.
+    /// Null until the canvas enrichment runs OR for asset kinds we can't
+    /// inspect (cloud flows / agents — TBD).
+    /// </summary>
+    public bool? IsPremium
+    {
+        get => _isPremium;
+        set { if (_isPremium == value) return; _isPremium = value; OnPropertyChanged(); OnPropertyChanged(nameof(PremiumDisplay)); }
+    }
+
+    /// <summary>UI binding helper: "Premium" / "Standard" / "—".</summary>
+    public string PremiumDisplay => _isPremium switch
+    {
+        true  => "Premium",
+        false => "Standard",
+        _     => "—"
+    };
+
+    private string? _dlpStatus;
+    /// <summary>
+    /// DLP compliance for this asset against the cached tenant DLP policy
+    /// list, evaluated at env-expand time:
+    ///   "Compliant" — no in-scope policy is violated by this asset's connectors
+    ///   "Violation" — at least one connector is Blocked, or the connectors
+    ///                 are split across the Business / Non-Business buckets
+    ///                 of an in-scope policy
+    ///   "—"         — not yet evaluated, or not evaluable (connectors
+    ///                 unknown — e.g. cloud-flow or agent inspection still
+    ///                 deferred)
+    /// </summary>
+    public string? DlpStatus
+    {
+        get => _dlpStatus;
+        set { if (_dlpStatus == value) return; _dlpStatus = value; OnPropertyChanged(); }
+    }
+
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(name));
