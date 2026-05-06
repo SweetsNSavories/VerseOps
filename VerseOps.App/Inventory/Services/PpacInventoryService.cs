@@ -110,6 +110,20 @@ public sealed class PpacInventoryService : IInventoryService
         return client;
     }
 
+    // Cached DLP policy list — second call returns the same snapshot. Cleared
+    // implicitly on next refresh because the service instance is rebuilt
+    // alongside the catalog read.
+    private IReadOnlyList<BapDlpClient.DlpPolicyDto>? _dlpPolicies;
+
+    public async Task<IReadOnlyList<BapDlpClient.DlpPolicyDto>> LoadDlpPoliciesAsync(CancellationToken ct = default)
+    {
+        if (_dlpPolicies is not null) return _dlpPolicies;
+        var client = new BapDlpClient(_auth, _diagnostics);
+        var policies = await client.ListPoliciesAsync(ct: ct).ConfigureAwait(false);
+        _dlpPolicies = policies;
+        return policies;
+    }
+
     public async Task<HashSet<string>> CheckSecurityGroupMembershipAsync(
         IEnumerable<string> groupIds,
         CancellationToken ct = default)

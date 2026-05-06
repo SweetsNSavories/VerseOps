@@ -76,6 +76,15 @@ public interface IInventoryService
     Task<GraphLicenseClient> LoadGraphLicensesAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// Lazy-load the tenant-wide DLP policy list from BAP
+    /// (<c>PowerPlatform.Governance/v2/policies</c>). Cached after first
+    /// successful pull so re-opening the Governance drawer is instant.
+    /// Throws on auth failure / non-2xx so the caller can surface the body
+    /// in the error pane.
+    /// </summary>
+    Task<IReadOnlyList<BapDlpClient.DlpPolicyDto>> LoadDlpPoliciesAsync(CancellationToken ct = default);
+
+    /// <summary>
     /// Single Microsoft Graph round-trip to determine which of the supplied
     /// security-group ids the signed-in user is a transitive member of.
     /// Used by the strict "Only my environments" filter — envs whose
