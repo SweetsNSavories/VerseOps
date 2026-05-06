@@ -9,6 +9,7 @@
         mc:Ignorable="d"
         Title="VerseOps — Power Platform Inventory Console"
         Height="820" Width="1400"
+        Icon="pack://application:,,,/Assets/app.ico"
         WindowStartupLocation="CenterScreen"
         WindowBackdropType="Mica"
         ExtendsContentIntoTitleBar="True"

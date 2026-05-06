@@ -8,7 +8,7 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>VerseOps.App</RootNamespace>
     <AssemblyName>VerseOps.App</AssemblyName>
-    <ApplicationIcon />
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,12 +23,22 @@
     <PackageReference Include="Microsoft.Kiota.Serialization.Multipart" Version="1.21.2" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
     <PackageReference Include="WPF-UI" Version="3.0.5" />
+    <!-- Renders Microsoft brand SVG assets (Power Platform / D365 / Entra /
+         Azure architecture icons) natively as XAML at runtime. MIT licensed. -->
+    <PackageReference Include="SharpVectors.Reloaded" Version="1.8.4.2" />
   </ItemGroup>
 
   <ItemGroup>
     <None Update="Inventory\Sql\schema.sql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <!-- Microsoft brand SVG icons (Power Platform, D365, Entra, Azure). Embedded
+       as Resource so SharpVectors can resolve them via pack:// URIs at runtime.
+       Trademarks of Microsoft Corporation; see ATTRIBUTIONS.md for terms. -->
+  <ItemGroup>
+    <Resource Include="Assets\MicrosoftIcons\**\*.svg" />
   </ItemGroup>
 
 </Project>

@@ -4,6 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:svgc="clr-namespace:SharpVectors.Converters;assembly=SharpVectors.Converters.Wpf"
              xmlns:local="clr-namespace:VerseOps.App.Inventory"
              mc:Ignorable="d"
              Background="{DynamicResource TokenSurfaceCanvas}"
@@ -272,12 +273,15 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Logo tile + wordmark -->
+                    <!-- Logo tile + wordmark. The brand mark is the official
+                         Power Platform SVG (see ATTRIBUTIONS.md) — VerseOps is
+                         not a Microsoft product, the icon attributes the
+                         platform we govern. -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                         <Border Width="44" Height="44" CornerRadius="6"
-                                Background="#1E6FD9" Margin="0,0,12,0">
-                            <TextBlock Text="V" Foreground="White" FontSize="22" FontWeight="Bold"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                Background="#FFFFFF" Margin="0,0,12,0" Padding="6">
+                            <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/PowerPlatform_scalable.svg"
+                                             Width="32" Height="32"/>
                         </Border>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="VerseOps Inventory" Foreground="#FFFFFF"
@@ -291,18 +295,26 @@
                     <!-- Refresh + Cancel buttons. Cancel is only enabled while a refresh is in flight. -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal">
                         <Button Style="{StaticResource ToolbarButton}"
-                                Content="â†» Refresh"
                                 Command="{Binding RefreshCommand}"
                                 Background="#15314D" BorderBrush="#1F4A75"
-                                Padding="18,6" FontSize="13" FontWeight="SemiBold"
-                                ToolTip="Pull all environments + capacity via PPAC SDK and BAP capacity route, then replace the local catalog."/>
+                                Padding="14,6" FontSize="13" FontWeight="SemiBold"
+                                ToolTip="Pull all environments + capacity via PPAC SDK and BAP capacity route, then replace the local catalog.">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="16" Margin="0,0,6,0"/>
+                                <TextBlock Text="Refresh" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                         <Button Style="{StaticResource ToolbarButton}"
-                                Content="âœ• Cancel"
                                 Command="{Binding CancelRefreshCommand}"
                                 Background="#3A1A1A" BorderBrush="#5A2A2A"
-                                Padding="14,6" FontSize="13" FontWeight="SemiBold"
+                                Padding="12,6" FontSize="13" FontWeight="SemiBold"
                                 Margin="6,0,0,0"
-                                ToolTip="Cancel the in-flight refresh. Already-loaded data stays."/>
+                                ToolTip="Cancel the in-flight refresh. Already-loaded data stays.">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Dismiss24" FontSize="16" Margin="0,0,6,0"/>
+                                <TextBlock Text="Cancel" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -322,11 +334,17 @@
                         Margin="4">
                     <Border Style="{StaticResource TileBorder}">
                         <Grid>
-                            <StackPanel>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <svgc:SvgViewbox Grid.Column="0" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center"
+                                             Source="/Assets/MicrosoftIcons/PowerPlatform/PowerPlatform_scalable.svg"/>
+                            <StackPanel Grid.Column="1">
                                 <TextBlock Text="ENVIRONMENTS" Style="{StaticResource TileLabel}"/>
                                 <TextBlock Text="{Binding EnvironmentCount}" Style="{StaticResource TileValue}"/>
                             </StackPanel>
-                            <Border Style="{StaticResource StatusBadge}" HorizontalAlignment="Right" VerticalAlignment="Top">
+                            <Border Grid.Column="1" Style="{StaticResource StatusBadge}" HorizontalAlignment="Right" VerticalAlignment="Top">
                                 <TextBlock Text="SYNCED" Style="{StaticResource StatusBadgeText}"/>
                             </Border>
                         </Grid>
@@ -338,12 +356,18 @@
                         Margin="4">
                     <Border Style="{StaticResource TileBorder}">
                         <Grid>
-                            <StackPanel>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <svgc:SvgViewbox Grid.Column="0" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center"
+                                             Source="/Assets/MicrosoftIcons/PowerPlatform/Dataverse_scalable.svg"/>
+                            <StackPanel Grid.Column="1">
                                 <TextBlock Text="TENANT DATABASE" Style="{StaticResource TileLabel}"/>
                                 <TextBlock Text="{Binding DatabaseGbDisplay}" Style="{StaticResource TileValue}"
                                            ToolTip="Tenant-wide Dataverse database storage (consumed / max). Click for per-env breakdown."/>
                             </StackPanel>
-                            <Border Style="{StaticResource StatusBadge}" HorizontalAlignment="Right" VerticalAlignment="Top">
+                            <Border Grid.Column="1" Style="{StaticResource StatusBadge}" HorizontalAlignment="Right" VerticalAlignment="Top">
                                 <TextBlock Text="HEALTHY" Style="{StaticResource StatusBadgeText}"/>
                             </Border>
                         </Grid>
@@ -355,12 +379,18 @@
                         Margin="4">
                     <Border Style="{StaticResource TileBorder}">
                         <Grid>
-                            <StackPanel>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <svgc:SvgViewbox Grid.Column="0" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center"
+                                             Source="/Assets/MicrosoftIcons/Azure/Storage-Accounts.svg"/>
+                            <StackPanel Grid.Column="1">
                                 <TextBlock Text="TENANT FILE" Style="{StaticResource TileLabel}"/>
                                 <TextBlock Text="{Binding FileGbDisplay}" Style="{StaticResource TileValue}"
                                            ToolTip="Tenant-wide Dataverse file storage (consumed / max). Click for per-env breakdown."/>
                             </StackPanel>
-                            <Border Style="{StaticResource StatusBadge}" HorizontalAlignment="Right" VerticalAlignment="Top">
+                            <Border Grid.Column="1" Style="{StaticResource StatusBadge}" HorizontalAlignment="Right" VerticalAlignment="Top">
                                 <TextBlock Text="HEALTHY" Style="{StaticResource StatusBadgeText}"/>
                             </Border>
                         </Grid>
@@ -372,13 +402,19 @@
                         Margin="4">
                     <Border Style="{StaticResource TileBorder}" Background="#2A1F3D" BorderBrush="#4B3A6E">
                         <Grid>
-                            <StackPanel>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <svgc:SvgViewbox Grid.Column="0" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center"
+                                             Source="/Assets/MicrosoftIcons/PowerPlatform/PowerApps_scalable.svg"/>
+                            <StackPanel Grid.Column="1">
                                 <TextBlock Text="TOTAL ASSETS" Style="{StaticResource TileLabel}"
                                            Foreground="#C5B0F0"/>
                                 <TextBlock Text="{Binding AssetCountDisplay}" Style="{StaticResource TileValue}"
                                            ToolTip="Tenant-wide assets (apps + flows + agents) from the Power Platform Inventory API. Click for breakdown by type."/>
                             </StackPanel>
-                            <Border Style="{StaticResource StatusBadge}" Background="#3D2D5C"
+                            <Border Grid.Column="1" Style="{StaticResource StatusBadge}" Background="#3D2D5C"
                                     HorizontalAlignment="Right" VerticalAlignment="Top">
                                 <TextBlock Text="LIVE" Style="{StaticResource StatusBadgeText}" Foreground="#C5B0F0"/>
                             </Border>
@@ -395,13 +431,19 @@
                         Margin="4">
                     <Border Style="{StaticResource TileBorder}" Background="#1F2D3D" BorderBrush="#3A547A">
                         <Grid>
-                            <StackPanel>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <svgc:SvgViewbox Grid.Column="0" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center"
+                                             Source="/Assets/MicrosoftIcons/Entra/Entra-ID.svg"/>
+                            <StackPanel Grid.Column="1">
                                 <TextBlock Text="LICENSED USERS" Style="{StaticResource TileLabel}"
                                            Foreground="#9CC2F5"/>
                                 <TextBlock Text="{Binding LicensedUserCountDisplay}" Style="{StaticResource TileValue}"
                                            ToolTip="Distinct users with at least one Microsoft 365 / Power Platform license assigned (Microsoft Graph). Click for the SKU breakdown."/>
                             </StackPanel>
-                            <Border Style="{StaticResource StatusBadge}" Background="#2A4569"
+                            <Border Grid.Column="1" Style="{StaticResource StatusBadge}" Background="#2A4569"
                                     HorizontalAlignment="Right" VerticalAlignment="Top">
                                 <TextBlock Text="GRAPH" Style="{StaticResource StatusBadgeText}" Foreground="#9CC2F5"/>
                             </Border>
@@ -1050,9 +1092,13 @@
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="SOLUTIONS"
-                                                       Foreground="{DynamicResource TokenBrandForeground}" FontWeight="SemiBold" FontSize="10"
-                                                       VerticalAlignment="Center"/>
+                                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/Dataverse_scalable.svg"
+                                                                 Width="14" Height="14" Margin="0,0,6,0"/>
+                                                <TextBlock Text="SOLUTIONS"
+                                                           Foreground="{DynamicResource TokenBrandForeground}" FontWeight="SemiBold" FontSize="10"
+                                                           VerticalAlignment="Center"/>
+                                            </StackPanel>
                                             <TextBlock Grid.Column="1" HorizontalAlignment="Right"
                                                        Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
                                                        Text="{Binding SolutionCount, StringFormat={}{0} solution(s) â€” Dataverse}"
@@ -1114,8 +1160,12 @@
                                                                             <ColumnDefinition Width="Auto"/>
                                                                             <ColumnDefinition Width="*"/>
                                                                         </Grid.ColumnDefinitions>
-                                                                        <TextBlock Grid.Column="0" Text="APPS"
-                                                                                   Style="{StaticResource AssetSectionLabel}"/>
+                                                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                            <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/PowerApps_scalable.svg"
+                                                                                             Width="14" Height="14" Margin="0,0,6,0"/>
+                                                                            <TextBlock Text="APPS"
+                                                                                       Style="{StaticResource AssetSectionLabel}"/>
+                                                                        </StackPanel>
                                                                         <TextBlock Grid.Column="1" HorizontalAlignment="Right"
                                                                                    Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
                                                                                    Text="{Binding AppCount, StringFormat={}{0} item(s)}"/>
@@ -1168,8 +1218,12 @@
                                                                             <ColumnDefinition Width="Auto"/>
                                                                             <ColumnDefinition Width="*"/>
                                                                         </Grid.ColumnDefinitions>
-                                                                        <TextBlock Grid.Column="0" Text="FLOWS"
-                                                                                   Style="{StaticResource AssetSectionLabel}"/>
+                                                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                            <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/PowerAutomate_scalable.svg"
+                                                                                             Width="14" Height="14" Margin="0,0,6,0"/>
+                                                                            <TextBlock Text="FLOWS"
+                                                                                       Style="{StaticResource AssetSectionLabel}"/>
+                                                                        </StackPanel>
                                                                         <TextBlock Grid.Column="1" HorizontalAlignment="Right"
                                                                                    Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
                                                                                    Text="{Binding FlowCount, StringFormat={}{0} item(s)}"/>
@@ -1221,8 +1275,12 @@
                                                                             <ColumnDefinition Width="Auto"/>
                                                                             <ColumnDefinition Width="*"/>
                                                                         </Grid.ColumnDefinitions>
-                                                                        <TextBlock Grid.Column="0" Text="AGENTS"
-                                                                                   Style="{StaticResource AssetSectionLabel}"/>
+                                                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                            <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/CopilotStudio_scalable.svg"
+                                                                                             Width="14" Height="14" Margin="0,0,6,0"/>
+                                                                            <TextBlock Text="AGENTS"
+                                                                                       Style="{StaticResource AssetSectionLabel}"/>
+                                                                        </StackPanel>
                                                                         <TextBlock Grid.Column="1" HorizontalAlignment="Right"
                                                                                    Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
                                                                                    Text="{Binding AgentCount, StringFormat={}{0} item(s)}"/>
@@ -1286,8 +1344,12 @@
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="SOLUTIONS" Foreground="{DynamicResource TokenBrandForeground}"
-                                                           FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/Dataverse_scalable.svg"
+                                                                     Width="14" Height="14" Margin="0,0,6,0"/>
+                                                    <TextBlock Text="SOLUTIONS" Foreground="{DynamicResource TokenBrandForeground}"
+                                                               FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                </StackPanel>
                                                 <TextBlock Grid.Column="1" HorizontalAlignment="Right"
                                                            Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
                                                            Text="{Binding SolutionCount, StringFormat={}{0} solution(s) â€” visible Dataverse solutions only}"
@@ -1328,8 +1390,12 @@
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="APPS" Foreground="{DynamicResource TokenBrandForeground}"
-                                                           FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/PowerApps_scalable.svg"
+                                                                     Width="14" Height="14" Margin="0,0,6,0"/>
+                                                    <TextBlock Text="APPS" Foreground="{DynamicResource TokenBrandForeground}"
+                                                               FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                </StackPanel>
                                                 <TextBlock Grid.Column="1" HorizontalAlignment="Right"
                                                            Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
                                                            Text="{Binding AppCount, StringFormat={}{0} app(s) â€” every canvas / model-driven / code app}"
@@ -1374,8 +1440,12 @@
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="FLOWS" Foreground="{DynamicResource TokenBrandForeground}"
-                                                           FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/PowerAutomate_scalable.svg"
+                                                                     Width="14" Height="14" Margin="0,0,6,0"/>
+                                                    <TextBlock Text="FLOWS" Foreground="{DynamicResource TokenBrandForeground}"
+                                                               FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                </StackPanel>
                                                 <TextBlock Grid.Column="1" HorizontalAlignment="Right"
                                                            Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
                                                            Text="{Binding FlowCount, StringFormat={}{0} flow(s) â€” cloud / agent / M365 agent flows}"
@@ -1419,8 +1489,12 @@
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="AGENTS" Foreground="{DynamicResource TokenBrandForeground}"
-                                                           FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/CopilotStudio_scalable.svg"
+                                                                     Width="14" Height="14" Margin="0,0,6,0"/>
+                                                    <TextBlock Text="AGENTS" Foreground="{DynamicResource TokenBrandForeground}"
+                                                               FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                </StackPanel>
                                                 <TextBlock Grid.Column="1" HorizontalAlignment="Right"
                                                            Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
                                                            Text="{Binding AgentCount, StringFormat={}{0} agent(s) â€” Copilot Studio agents}"
