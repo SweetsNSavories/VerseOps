@@ -24,6 +24,13 @@ operation** with a single click, so you can see for yourself what works against 
 > **VerseOps is not affiliated with Microsoft.** It is an independent experiment for
 > advanced practitioners. Routes, parameters, and behaviour will change as PPAC moves toward GA.
 
+> **Brand assets disclaimer:** the Microsoft brand SVGs bundled under
+> [VerseOps.App/Assets/MicrosoftIcons/](VerseOps.App/Assets/MicrosoftIcons/)
+> (Power Platform, Dynamics 365, Microsoft Entra, and Azure architecture icons)
+> are trademarks of Microsoft Corporation, used for nominative identification of
+> the platforms VerseOps inspects. They are **not** covered by the MIT License
+> that applies to the rest of this repository — see [ATTRIBUTIONS.md](ATTRIBUTIONS.md).
+
 ---
 
 ## What's in the box

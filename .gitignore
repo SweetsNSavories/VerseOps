@@ -60,3 +60,10 @@ gen.ps1
 rest-api*.pdf
 ppac-ops-full.json
 gen2.ps1
+
+# ---- Microsoft brand icon source archives (extracted to VerseOps.App/Assets/MicrosoftIcons/) ----
+Azure_Public_Service_Icons*.zip
+Dynamics-365-icons*.zip
+Microsoft Entra*.zip
+Power-Platform-icons*.zip
+
