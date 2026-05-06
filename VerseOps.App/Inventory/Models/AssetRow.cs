@@ -77,6 +77,46 @@ public sealed class AssetRow : System.ComponentModel.INotifyPropertyChanged
         set { if (_solutionName == value) return; _solutionName = value; OnPropertyChanged(); }
     }
 
+    private bool? _isManaged;
+    /// <summary>
+    /// True if the asset belongs to a Managed solution, false if Unmanaged,
+    /// null if we couldn't trace the asset to any visible solution (the
+    /// "(unmatched)" / Default Solution bucket). Stamped by
+    /// <see cref="VerseOps.App.Inventory.Services.DataverseEnvClient"/>
+    /// alongside <see cref="SolutionName"/>; carries no extra HTTP cost
+    /// because the <c>solutions.ismanaged</c> flag is already in the row we
+    /// already pulled for the Solutions grid.
+    /// </summary>
+    public bool? IsManaged
+    {
+        get => _isManaged;
+        set { if (_isManaged == value) return; _isManaged = value; OnPropertyChanged(); OnPropertyChanged(nameof(ManagedDisplay)); }
+    }
+
+    /// <summary>UI binding helper: "Managed" / "Unmanaged" / "—".</summary>
+    public string ManagedDisplay => _isManaged switch
+    {
+        true  => "Managed",
+        false => "Unmanaged",
+        _     => "—"
+    };
+
+    private string? _status;
+    /// <summary>
+    /// Lifecycle state of the asset, normalised across the three Dataverse
+    /// tables that own each kind:
+    ///   workflows.statecode (cloud flows)            → "On" | "Off" | "Suspended"
+    ///   canvasapps.statecode (canvas / code apps)    → "Ready" | "Inactive"
+    ///   appmodule.statecode (model-driven apps)      → "Ready" | "Inactive"
+    /// Null until the asset-status loader completes (or for assets whose
+    /// table doesn't carry a state field — e.g. agents pre-2025).
+    /// </summary>
+    public string? Status
+    {
+        get => _status;
+        set { if (_status == value) return; _status = value; OnPropertyChanged(); }
+    }
+
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(name));

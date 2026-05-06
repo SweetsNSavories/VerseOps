@@ -3,6 +3,10 @@
 > A field report on building a single-pane-of-glass for Power Platform admins
 > that loads in seconds, works offline, and shows the things PPAC won't.
 
+![VerseOps Inventory cockpit — 714 environments, tenant capacity rollups, KPI tiles, per-column funnel filters, all loaded from local SQLite cache in under a second](images/01-overview.png)
+
+*Above: real production tenant — 714 environments, 4.5 TB tenant file storage, 146k assets — rendered from local cache before any network call. Per-column funnel filters (the small icon next to each column header) let you narrow on Name, SKU, Status, Region, Storage, FinOps tier, Instance URL, etc., with no round-trip.*
+
 ---
 
 ## Why build this when PPAC already exists?
@@ -17,17 +21,15 @@ If you administer a Power Platform tenant, you already know the workflow:
 6. Repeat for every env you care about. There are **716** of them in our reference tenant.
 
 PPAC is a beautiful, modern, **per-environment** UI. It does not pretend to be a
-cross-tenant inventory tool. The closest thing Microsoft ships is the
-**Inventory Sentinel** model-driven dashboard (community-built, not a
-first-party product) which paginates 688 environments at 15 per page across 46
-pages. It works. It's also a Dataverse model-driven app, so every interaction
-round-trips to the server, every filter triggers a fresh fetch, and you can't
-join its data with your own (license SKUs, Graph groups, FinOps storage tier,
-Power Pages site lists, etc.).
+cross-tenant inventory tool. We tried building one as a Dataverse model-driven
+app backed by a Function App ingesting into custom tables — the maintenance
+surface (custom tables, ribbon buttons, async plugins, Function App
+deployments, schema migrations across regions) ate more time than the feature
+work itself, and every filter or detail click still round-trips to the server.
 
 We wanted something different: **an opinionated, local-first, latency-zero
-admin cockpit**, hand-built by an engineer who got tired of waiting for a
-React tree to render.
+admin cockpit** — a native client, no server moving parts, joins data
+Microsoft never joins for you, ships in one EXE.
 
 The result is **VerseOps**.
 
@@ -158,36 +160,22 @@ exact overage in GB and a link to the FinOps tier upgrade flow.
 
 ---
 
-## How VerseOps compares to the Inventory Sentinel dashboard
+## What's missing today
 
-The Inventory Sentinel community dashboard (a Dataverse model-driven app) is the
-closest thing Microsoft has to a tenant-wide inventory UI. We've been benchmarking
-against it. Here's the honest delta:
+We surface every cross-env signal we've found valuable so far, but the
+per-asset metadata layer is still thin. The next sprint adds:
 
-| Capability | VerseOps today | Inventory Sentinel |
-|---|---|---|
-| Tenant env list | ✅ all 716 envs in one grid, instant | ✅ 688 envs, paged 15/page across 46 pages |
-| Live cross-column search | ✅ token-AND, client-side | ⚠️ filter per column |
-| Per-env DB/File/Log GB | ✅ | ✅ |
-| Tenant capacity rollup | ✅ | ✅ |
-| FinOps over-limit colouring | ✅ | ❌ |
-| Asset list (apps/flows/agents) | ✅ tenant-wide, single API call | ✅ per-env grids |
-| Owner display name (Graph) | ✅ | ⚠️ raw GUID/UPN |
-| Solution → asset mapping | ✅ per-env Dataverse join | ✅ |
-| Asset **UI** (Tablet/Phone) | ❌ | ✅ |
-| Asset **Premium** ✓ | ❌ | ✅ |
-| Asset **ALM** badge (Solution / Unmanaged) | ❌ | ✅ |
-| Asset **DLP** badge (Compliant / Blocked) | ❌ | ✅ |
-| Asset **Status** (Ready / Suspended / Draft) | ❌ | ✅ |
-| Flow **Status** (On / Off / Suspended) | ❌ | ✅ |
-| Per-env Power Pages site list | ✅ | ❌ |
-| Per-env Dataverse users + roles | ✅ with **Revoke admin** action | ❌ |
-| Microsoft Graph licence join | ✅ tenant SKU breakdown drawer | ❌ |
-| Local-first / offline launch | ✅ SQLite cache | ❌ always live |
-| HTTP trace log | ✅ every request, full body on error | ❌ |
+- **App UI** badge (Tablet / Phone) for canvas apps
+- **Premium connector** indicator (✓ if any premium connector is referenced)
+- **ALM badge** (Solution / Unmanaged) per asset
+- **DLP badge** (Compliant / Blocked) per app + flow, joined against the
+  tenant DLP policy list
+- **Asset Status** (Ready / Suspended / Draft) for canvas + model-driven apps
+- **Flow Status** (On / Off / Suspended) for cloud flows
 
-We win on speed, joins, diagnostics, and admin actions. We lose on **per-asset
-metadata** (UI, Premium, ALM, DLP, Status) — and that's the next sprint.
+These are all reachable via existing per-env Dataverse calls or BAP
+governance APIs we already authenticate against — it's a question of
+rendering, not auth or routing.
 
 ---
 

@@ -978,7 +978,7 @@
                                         <ProgressBar Width="120" Height="6" IsIndeterminate="True"
                                                      Background="{DynamicResource TokenSurfaceTertiary}" Foreground="{DynamicResource TokenBrandForeground}"
                                                      BorderBrush="{DynamicResource TokenBrandBackground}" VerticalAlignment="Center"/>
-                                        <TextBlock Text="Loading per-env details from Dataverse (solutions, Power Pages, users)â€¦"
+                                        <TextBlock Text="Loading per-env details from Dataverse (solutions, Power Pages, users, asset status)â€¦"
                                                    Foreground="{DynamicResource TokenBrandForeground}" FontSize="11" Margin="10,0,0,0"
                                                    VerticalAlignment="Center"/>
                                     </StackPanel>
@@ -1132,6 +1132,8 @@
                                                                         <DataGrid.Columns>
                                                                             <DataGridTextColumn Header="Name"        Binding="{Binding DisplayName}" Width="260"/>
                                                                             <DataGridTextColumn Header="Type"        Binding="{Binding TypeDisplay}" Width="110"/>
+                                                                            <DataGridTextColumn Header="Status"      Binding="{Binding Status, TargetNullValue=—}" Width="80"/>
+                                                                            <DataGridTextColumn Header="ALM"         Binding="{Binding ManagedDisplay}" Width="90"/>
                                                                             <DataGridTextColumn Header="Owner"       Binding="{Binding OwnerDisplay}"     Width="180"/>
                                                                             <DataGridTextColumn Header="Created"     Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
                                                                             <DataGridTextColumn Header="Modified"    Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
@@ -1182,6 +1184,8 @@
                                                                         <DataGrid.Columns>
                                                                             <DataGridTextColumn Header="Name"     Binding="{Binding DisplayName}" Width="260"/>
                                                                             <DataGridTextColumn Header="Type"     Binding="{Binding TypeDisplay}" Width="110"/>
+                                                                            <DataGridTextColumn Header="Status"   Binding="{Binding Status, TargetNullValue=—}" Width="80"/>
+                                                                            <DataGridTextColumn Header="ALM"      Binding="{Binding ManagedDisplay}" Width="90"/>
                                                                             <DataGridTextColumn Header="Owner"    Binding="{Binding OwnerDisplay}"     Width="180"/>
                                                                             <DataGridTextColumn Header="Created"  Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
                                                                             <DataGridTextColumn Header="Modified" Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
@@ -1230,6 +1234,7 @@
                                                                               MaxHeight="200">
                                                                         <DataGrid.Columns>
                                                                             <DataGridTextColumn Header="Name"     Binding="{Binding DisplayName}" Width="260"/>
+                                                                            <DataGridTextColumn Header="ALM"      Binding="{Binding ManagedDisplay}" Width="90"/>
                                                                             <DataGridTextColumn Header="Owner"    Binding="{Binding OwnerDisplay}"     Width="180"/>
                                                                             <DataGridTextColumn Header="Created"  Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
                                                                             <DataGridTextColumn Header="Modified" Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
@@ -1329,6 +1334,8 @@
                                             <local:PagedDataGrid ItemsSource="{Binding AllApps}" PageSize="10" MaxHeight="280">
 <DataGridTextColumn Header="Name"        Binding="{Binding DisplayName}" Width="260"/>
                                                     <DataGridTextColumn Header="Type"        Binding="{Binding TypeDisplay}" Width="130"/>
+                                                    <DataGridTextColumn Header="Status"      Binding="{Binding Status, TargetNullValue=—}" Width="80"/>
+                                                    <DataGridTextColumn Header="ALM"         Binding="{Binding ManagedDisplay}" Width="90"/>
                                                     <DataGridTextColumn Header="Solution" Binding="{Binding SolutionName, TargetNullValue=(none)}" Width="160"/>
                                                     <DataGridTextColumn Header="Owner"       Binding="{Binding OwnerDisplay}"     Width="200"/>
                                                     <DataGridTextColumn Header="Created"     Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
@@ -1371,6 +1378,8 @@
                                             <local:PagedDataGrid ItemsSource="{Binding AllFlows}" PageSize="10" MaxHeight="280">
 <DataGridTextColumn Header="Name"     Binding="{Binding DisplayName}" Width="260"/>
                                                     <DataGridTextColumn Header="Type"     Binding="{Binding TypeDisplay}" Width="130"/>
+                                                    <DataGridTextColumn Header="Status"   Binding="{Binding Status, TargetNullValue=—}" Width="80"/>
+                                                    <DataGridTextColumn Header="ALM"      Binding="{Binding ManagedDisplay}" Width="90"/>
                                                     <DataGridTextColumn Header="Solution" Binding="{Binding SolutionName, TargetNullValue=(none)}" Width="160"/>
                                                     <DataGridTextColumn Header="Owner"    Binding="{Binding OwnerDisplay}"     Width="200"/>
                                                     <DataGridTextColumn Header="Created"  Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
@@ -1411,6 +1420,7 @@
                                             </Grid>
                                             <local:PagedDataGrid ItemsSource="{Binding AllAgents}" PageSize="10" MaxHeight="280">
 <DataGridTextColumn Header="Name"     Binding="{Binding DisplayName}" Width="260"/>
+                                                    <DataGridTextColumn Header="ALM"      Binding="{Binding ManagedDisplay}" Width="90"/>
                                                     <DataGridTextColumn Header="Solution" Binding="{Binding SolutionName, TargetNullValue=(none)}" Width="160"/>
                                                     <DataGridTextColumn Header="Owner"    Binding="{Binding OwnerDisplay}"     Width="200"/>
                                                     <DataGridTextColumn Header="Created"  Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
