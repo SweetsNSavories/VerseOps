@@ -40,6 +40,94 @@ var authMode     = (args.FirstOrDefault(a => a.StartsWith("--auth=", StringCompa
 var envFilter    = args.FirstOrDefault(a => a.StartsWith("--env=", StringComparison.OrdinalIgnoreCase))?.Split('=', 2)[1] ?? "SeaCass";
 var publicCid    = args.FirstOrDefault(a => a.StartsWith("--client=", StringComparison.OrdinalIgnoreCase))?.Split('=', 2)[1]
                    ?? "9cee029c-6210-4654-90bb-17e6e9d36617"; // Power Platform CLI
+var inspectQps   = args.Any(a => a.Equals("--inspect-qps", StringComparison.OrdinalIgnoreCase));
+var catalogCrud  = args.Any(a => a.Equals("--catalog-crud", StringComparison.OrdinalIgnoreCase));
+var runCrud      = args.Any(a => a.Equals("--crud", StringComparison.OrdinalIgnoreCase));
+var sandboxEnv   = args.FirstOrDefault(a => a.StartsWith("--sandbox-env=", StringComparison.OrdinalIgnoreCase))?.Split('=', 2)[1] ?? "nyctest";
+
+// --inspect-qps: enumerate every *RequestBuilder.*GetQueryParameters nested type in the SDK
+// and dump (BuilderName, QpProperty, Type) tuples to sdk-qp-shapes.txt. No network needed.
+// Used to discover the actual SDK QP property names so BuildRequestConfigAction can target
+// them by name instead of guessing.
+if (inspectQps)
+{
+    var sdkAsm = typeof(ServiceClient).Assembly;
+    var rows = new List<string>();
+    foreach (var t in sdkAsm.GetTypes()
+                            .Where(t => t.Name.EndsWith("RequestBuilder", StringComparison.Ordinal))
+                            .OrderBy(t => t.FullName, StringComparer.Ordinal))
+    {
+        foreach (var nested in t.GetNestedTypes(System.Reflection.BindingFlags.Public)
+                                .Where(n => n.Name.EndsWith("GetQueryParameters", StringComparison.Ordinal)))
+        {
+            foreach (var p in nested.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                                    .Where(p => p.CanRead && p.CanWrite))
+            {
+                rows.Add($"{t.FullName}.{nested.Name}.{p.Name}\t{p.PropertyType.FullName}");
+            }
+        }
+    }
+    var outFile = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "sdk-qp-shapes.txt"));
+    File.WriteAllLines(outFile, rows);
+    Console.WriteLine($"Wrote {rows.Count} QP entries to {outFile}");
+    return 0;
+}
+
+// --catalog-crud: enumerate every Post/Put/Patch/Delete-Async method on every *RequestBuilder
+// in the SDK and dump (BuilderFullName, Verb, BodyType, ReturnType, QPs) to sdk-crud-catalog.txt.
+// No network. Used to scope the CRUD test surface before any mutating call is made.
+if (catalogCrud)
+{
+    var sdkAsm = typeof(ServiceClient).Assembly;
+    var rows = new List<string> { "Verb\tBuilderFullName\tMethod\tBodyType\tReturnType\tQpProperties" };
+    var verbs = new[] { "PostAsync", "PutAsync", "PatchAsync", "DeleteAsync" };
+    int methodCount = 0, builderCount = 0;
+    var seenBuilders = new HashSet<string>(StringComparer.Ordinal);
+    foreach (var t in sdkAsm.GetTypes()
+                            .Where(t => t.Name.EndsWith("RequestBuilder", StringComparison.Ordinal)
+                                     && t.Namespace?.StartsWith("Microsoft.PowerPlatform.Management", StringComparison.Ordinal) == true)
+                            .OrderBy(t => t.FullName, StringComparer.Ordinal))
+    {
+        var methods = t.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                       .Where(m => verbs.Contains(m.Name, StringComparer.Ordinal))
+                       .OrderBy(m => m.Name, StringComparer.Ordinal)
+                       .ToArray();
+        if (methods.Length == 0) continue;
+        if (seenBuilders.Add(t.FullName ?? t.Name)) builderCount++;
+
+        // Find this builder's QPs (any nested type ending in QueryParameters, includes Get/Post/etc.)
+        var qpNames = t.GetNestedTypes(System.Reflection.BindingFlags.Public)
+                       .Where(n => n.Name.EndsWith("QueryParameters", StringComparison.Ordinal)
+                                && !n.Name.EndsWith("GetQueryParameters", StringComparison.Ordinal))
+                       .SelectMany(n => n.GetProperties().Where(p => p.CanRead && p.CanWrite).Select(p => p.Name))
+                       .Distinct(StringComparer.Ordinal)
+                       .ToArray();
+        var qpStr = qpNames.Length == 0 ? "-" : string.Join(",", qpNames);
+
+        foreach (var m in methods)
+        {
+            methodCount++;
+            // Skip the cancellation-token / config-action params; the body is the first
+            // parameter that is neither CancellationToken nor a generic Action<>.
+            var bodyParam = m.GetParameters()
+                .FirstOrDefault(p => p.ParameterType != typeof(CancellationToken)
+                                  && !(p.ParameterType.IsGenericType
+                                    && p.ParameterType.GetGenericTypeDefinition() == typeof(Action<>)));
+            var bodyType = bodyParam?.ParameterType.FullName ?? "-";
+            var ret = m.ReturnType.IsGenericType
+                ? $"{m.ReturnType.Name}<{string.Join(",", m.ReturnType.GetGenericArguments().Select(g => g.Name))}>"
+                : m.ReturnType.Name;
+            rows.Add($"{m.Name}\t{t.FullName}\t{m.Name}({string.Join(", ", m.GetParameters().Select(p => $"{p.ParameterType.Name} {p.Name}"))})\t{bodyType}\t{ret}\t{qpStr}");
+        }
+    }
+    var outFile = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "sdk-crud-catalog.txt"));
+    File.WriteAllLines(outFile, rows);
+    Console.WriteLine($"Wrote {methodCount} CRUD methods across {builderCount} builders to {outFile}");
+    // Tally per verb
+    var byVerb = rows.Skip(1).GroupBy(r => r.Split('\t')[0]).OrderBy(g => g.Key);
+    foreach (var g in byVerb) Console.WriteLine($"  {g.Key,-12} {g.Count()}");
+    return 0;
+}
 
 if (string.IsNullOrWhiteSpace(tenantId))
 {
@@ -86,6 +174,7 @@ var handlers = KiotaClientFactory.CreateDefaultHandlers();
 handlers.Insert(0, new Microsoft.PowerPlatform.Management.ApiVersionHandler(ApiVersion));
 handlers.Insert(0, new ErrorBodyCaptureHandler()); // outermost so it sees the final response
 var http     = KiotaClientFactory.Create(handlers);
+http.Timeout = TimeSpan.FromSeconds(150); // global ceiling; per-call shorter timeout via CancellationToken in SweepEngine
 var adapter  = new HttpClientRequestAdapter(authProv, httpClient: http) { BaseUrl = PpacBaseUrl };
 var sc       = new ServiceClient(adapter);
 
@@ -136,6 +225,36 @@ Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 try
 {
     await engine.RunAsync(cts.Token);
+
+    // Optional CRUD pass — only when explicitly requested. Resolves the sandbox env separately
+    // so we never accidentally mutate the GET-pass pinned env.
+    if (runCrud)
+    {
+        Console.WriteLine();
+        Console.WriteLine("=== Resolving CRUD sandbox env ===");
+        string? sandboxEnvId = null, sandboxEnvName = null;
+        try
+        {
+            var envList = await sc.Environmentmanagement.Environments.GetAsync(cancellationToken: cts.Token);
+            var match = envList?.Value?
+                .Where(e => !string.IsNullOrEmpty(e.DisplayName))
+                .FirstOrDefault(e => string.Equals(e.DisplayName, sandboxEnv, StringComparison.OrdinalIgnoreCase));
+            if (match != null) { sandboxEnvId = match.Id; sandboxEnvName = match.DisplayName; }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  WARN: sandbox env resolve failed: {ex.GetType().Name}: {ex.Message}");
+        }
+        if (string.IsNullOrEmpty(sandboxEnvId))
+        {
+            Console.WriteLine($"  ERROR: sandbox env '{sandboxEnv}' not found. Pass --sandbox-env=<DisplayName>.");
+            return 3;
+        }
+        Console.WriteLine($"  sandbox env : {sandboxEnvName}  id={sandboxEnvId}");
+        var crudOut = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "crud-results.json"));
+        var crudEngine = new CrudPassEngine(sc, crudOut, userId, tenantId, sandboxEnvId, sandboxEnvName!);
+        await crudEngine.RunAsync(cts.Token);
+    }
     return 0;
 }
 catch (OperationCanceledException)

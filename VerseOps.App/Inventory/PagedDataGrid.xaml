@@ -1,0 +1,99 @@
+<UserControl x:Class="VerseOps.App.Inventory.PagedDataGrid"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             Background="{DynamicResource TokenSurfaceSubtle}"
+             Foreground="{DynamicResource TokenTextPrimary}"
+             FontFamily="{DynamicResource TokenFontFamilyBase}" FontSize="12">
+    <DockPanel LastChildFill="True">
+        <!-- Pager footer (docked bottom). Renders even when 0 items so the
+             user always sees the count + navigation affordance. Page-size
+             combo on the right; PREV / page text / NEXT on the left so the
+             nav stays where the user looks first when scanning a grid. -->
+        <Border DockPanel.Dock="Bottom" Padding="6,4"
+                Background="{DynamicResource TokenSurfacePrimary}"
+                BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                BorderThickness="0,1,0,0">
+            <DockPanel LastChildFill="False">
+                <ComboBox x:Name="PageSizeCombo" DockPanel.Dock="Right"
+                          Width="64" SelectionChanged="PageSizeCombo_SelectionChanged"
+                          VerticalContentAlignment="Center"
+                          ToolTip="Items per page"
+                          Margin="6,0,0,0">
+                    <ComboBoxItem Content="10" IsSelected="True"/>
+                    <ComboBoxItem Content="25"/>
+                    <ComboBoxItem Content="50"/>
+                    <ComboBoxItem Content="100"/>
+                </ComboBox>
+                <Button x:Name="PrevBtn" DockPanel.Dock="Left" Click="Prev_Click"
+                        Background="Transparent" BorderThickness="0" Padding="6,2" Cursor="Hand"
+                        Foreground="{DynamicResource TokenBrandForeground}"
+                        ToolTip="Previous page">
+                    <ui:SymbolIcon Symbol="ChevronLeft24" FontSize="14"/>
+                </Button>
+                <Button x:Name="NextBtn" DockPanel.Dock="Left" Click="Next_Click"
+                        Background="Transparent" BorderThickness="0" Padding="6,2" Cursor="Hand"
+                        Foreground="{DynamicResource TokenBrandForeground}"
+                        ToolTip="Next page">
+                    <ui:SymbolIcon Symbol="ChevronRight24" FontSize="14"/>
+                </Button>
+                <TextBlock x:Name="PagerText" DockPanel.Dock="Left"
+                           VerticalAlignment="Center"
+                           Margin="8,0,0,0"
+                           Foreground="{DynamicResource TokenTextSecondary}"
+                           FontSize="11"/>
+            </DockPanel>
+        </Border>
+
+        <!-- The inner DataGrid. Columns are forwarded from the outer
+             PagedDataGrid.Columns content collection (set by callers) and
+             each searchable column header is rebuilt in code-behind to add
+             a filter-funnel toggle that opens a Popup with TextBox +
+             Clear / Apply buttons. -->
+        <DataGrid x:Name="InnerGrid"
+                  Background="{DynamicResource TokenSurfaceSubtle}"
+                  RowBackground="{DynamicResource TokenSurfaceSubtle}"
+                  AlternatingRowBackground="{DynamicResource TokenSurfaceSecondary}"
+                  HeadersVisibility="Column"
+                  AutoGenerateColumns="False" IsReadOnly="True"
+                  CanUserAddRows="False" CanUserDeleteRows="False"
+                  GridLinesVisibility="None"
+                  HorizontalScrollBarVisibility="Auto"
+                  VerticalScrollBarVisibility="Auto"
+                  EnableRowVirtualization="True"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling">
+            <DataGrid.ColumnHeaderStyle>
+                <!-- Custom DataGridColumnHeader template that renders Content
+                     via a ContentPresenter (not a TextBlock binding). The
+                     default Fluent (Wpf.Ui) header style binds Content as
+                     text, which would print "System.Windows.Controls.Grid"
+                     when we set Header to a UIElement. ContentPresenter
+                     keeps any UIElement Header rendering correctly while
+                     still adopting the surrounding token brushes. -->
+                <Style TargetType="DataGridColumnHeader">
+                    <Setter Property="Background"          Value="{DynamicResource TokenSurfacePrimary}"/>
+                    <Setter Property="Foreground"          Value="{DynamicResource TokenTextPrimary}"/>
+                    <Setter Property="BorderBrush"         Value="{DynamicResource TokenStrokeSubtle}"/>
+                    <Setter Property="BorderThickness"     Value="0,0,1,1"/>
+                    <Setter Property="Padding"             Value="6,4"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                    <Setter Property="VerticalContentAlignment"   Value="Center"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="DataGridColumnHeader">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </DataGrid.ColumnHeaderStyle>
+        </DataGrid>
+    </DockPanel>
+</UserControl>

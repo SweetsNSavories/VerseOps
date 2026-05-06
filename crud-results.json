@@ -1,0 +1,176 @@
+{
+  "generatedUtc": "2026-05-05T05:39:20.3291547Z",
+  "userId": "2e2cd8c7-d5e2-427a-aff2-f4f434b36b01",
+  "tenantId": "1557f771-4c8e-4dbd-8b80-dd00a88e833e",
+  "sandboxEnvId": "1f3ee7cf-86ab-e69a-9256-928f8095011a",
+  "sandboxEnvName": "nyctest",
+  "ledger": {
+    "EnvironmentGroupsRequestBuilder": [
+      "0389547f-308c-492c-b1a7-d3d43d54fc85"
+    ]
+  },
+  "results": [
+    {
+      "Path": "ServiceClient.Resourcequery.Resources.Query",
+      "Verb": "POST",
+      "Ok": false,
+      "HttpStatus": 400,
+      "Summary": null,
+      "Sample": null,
+      "Error": "ApiException: The server returned an unexpected status code and no error factory is registered for this code: 400 | body: \u0022TableName cannot be null or empty\u0022"
+    },
+    {
+      "Path": "ServiceClient.Governance.CrossTenantConnectionReports",
+      "Verb": "POST",
+      "Ok": true,
+      "HttpStatus": 0,
+      "Summary": "CrossTenantConnectionReport",
+      "Sample": "{\u0022EndDate\u0022:\u00222026-05-05T00:00:00-05:00\u0022,\u0022ReportId\u0022:\u0022d35b0ff3-58c8-4d81-99ba-a546cdcbd1c6\u0022,\u0022RequestDate\u0022:\u00222026-05-05T00:00:00-05:00\u0022,\u0022StartDate\u0022:\u00222026-04-28T00:00:00-05:00\u0022,\u0022Status\u0022:0,\u0022TenantId\u0022:\u00221557f771-4c8e-4dbd-8b80-dd00a88e833e\u0022}",
+      "Error": null
+    },
+    {
+      "Path": "ServiceClient.Powerpages.Environments[1f3ee7cf...].Websites[f83dc639...].Scan.Quick.Execute",
+      "Verb": "POST",
+      "Ok": false,
+      "HttpStatus": 404,
+      "Summary": null,
+      "Sample": null,
+      "Error": "ErrorMessage: Exception of type \u0027Microsoft.PowerPlatform.Management.Models.ErrorMessage\u0027 was thrown. | body: {\u0022Message\u0022:\u0022No HTTP resource was found that matches the request URI \u0027https://10.0.6.65:20007/56f267a4-73d8-4c67-a5d4-33b2a244c983/134219938986576929/powerpages/tenants/1557f771-4c8e-4dbd-8b80-dd00a88e833e/environments/1f3ee7cf-86ab-e69a-9256-928f8095011a/websites/f83dc639-0788-4c50-b416-e1ecbf11e146/scan/quick/execute?api-version=1\u0027.\u0022}"
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.Environments[1f3ee7cf...].Disable (ValidateOnly)",
+      "Verb": "POST",
+      "Ok": false,
+      "HttpStatus": 400,
+      "Summary": null,
+      "Sample": null,
+      "Error": "ValidationResponse: Exception of type \u0027Microsoft.PowerPlatform.Management.Models.ValidationResponse\u0027 was thrown. | body: {\u0022errorDetail\u0022:{\u0022fieldErrors\u0022:{\u0022ValidateOnly\u0022:{\u0022errorMessages\u0022:[\u0022ValidateOnly is not supported yet\u0022]}}}}"
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.Environments[1f3ee7cf...].Enable (ValidateOnly)",
+      "Verb": "POST",
+      "Ok": false,
+      "HttpStatus": 400,
+      "Summary": null,
+      "Sample": null,
+      "Error": "ValidationResponse: Exception of type \u0027Microsoft.PowerPlatform.Management.Models.ValidationResponse\u0027 was thrown. | body: {\u0022errorDetail\u0022:{\u0022fieldErrors\u0022:{\u0022ValidateOnly\u0022:{\u0022errorMessages\u0022:[\u0022ValidateOnly is not supported yet\u0022]}}}}"
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.Environments[1f3ee7cf...].Copy (ValidateOnly)",
+      "Verb": "POST",
+      "Ok": false,
+      "HttpStatus": 500,
+      "Summary": null,
+      "Sample": null,
+      "Error": "ApiException: The server returned an unexpected status code and no error factory is registered for this code: 500"
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.Environments[1f3ee7cf...].Restore (ValidateOnly)",
+      "Verb": "POST",
+      "Ok": false,
+      "HttpStatus": 400,
+      "Summary": null,
+      "Sample": null,
+      "Error": "ValidationResponse: Exception of type \u0027Microsoft.PowerPlatform.Management.Models.ValidationResponse\u0027 was thrown. | body: \u0022Unable to get the detail of environmentRestoreRequest\u0022"
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.Environments[1f3ee7cf...].Recover (ValidateOnly)",
+      "Verb": "POST",
+      "Ok": false,
+      "HttpStatus": 400,
+      "Summary": null,
+      "Sample": null,
+      "Error": "ValidationResponse: Exception of type \u0027Microsoft.PowerPlatform.Management.Models.ValidationResponse\u0027 was thrown. | body: {\u0022errorDetail\u0022:{\u0022fieldErrors\u0022:{\u0022EnvironmentFoundInNonSoftDeletedState\u0022:{\u0022errorMessages\u0022:[\u0022The environment \u00271f3ee7cf-86ab-e69a-9256-928f8095011a\u0027 found in tenant \u00271557f771-4c8e-4dbd-8b80-dd00a88e833e\u0027 could not be recovered because it is not currently in a deleted state.\u0022]}}}}"
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.Environments[1f3ee7cf...].ModifySku (ValidateOnly)",
+      "Verb": "POST",
+      "Ok": false,
+      "HttpStatus": 500,
+      "Summary": null,
+      "Sample": null,
+      "Error": "ApiException: The server returned an unexpected status code and no error factory is registered for this code: 500"
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.Environments[1f3ee7cf...].ForceFailover (ValidateOnly)",
+      "Verb": "POST",
+      "Ok": false,
+      "HttpStatus": 500,
+      "Summary": null,
+      "Sample": null,
+      "Error": "ApiException: The server returned an unexpected status code and no error factory is registered for this code: 500"
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.Environments[1f3ee7cf...].EnableDisasterRecovery (ValidateOnly)",
+      "Verb": "POST",
+      "Ok": false,
+      "HttpStatus": 400,
+      "Summary": null,
+      "Sample": null,
+      "Error": "ApiException: The server returned an unexpected status code and no error factory is registered for this code: 400 | body: {\u0022errorDetail\u0022:{\u0022fieldErrors\u0022:{\u0022InvalidDisasterRecoveryStateInPatchEnvironment\u0022:{\u0022errorMessages\u0022:[\u0022The environment disaster recovery state cannot be updated to \u0027Enabled\u0027.\u0022]}}}}"
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.Environments[1f3ee7cf...].DisableDisasterRecovery (ValidateOnly)",
+      "Verb": "POST",
+      "Ok": true,
+      "HttpStatus": 0,
+      "Summary": "(null)",
+      "Sample": null,
+      "Error": null
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.Environments[1f3ee7cf...].DisasterRecoveryDrill (ValidateOnly)",
+      "Verb": "POST",
+      "Ok": false,
+      "HttpStatus": 400,
+      "Summary": null,
+      "Sample": null,
+      "Error": "ApiException: The server returned an unexpected status code and no error factory is registered for this code: 400 | body: {\u0022errorDetail\u0022:{\u0022fieldErrors\u0022:{\u0022InvalidLifecycleOperationRequest\u0022:{\u0022errorMessages\u0022:[\u0022DisasterRecoveryDrill cannot be performed on environment because it is disabled.\u0022]}}}}"
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.Environments[1f3ee7cf...].Governancesetting.Enablemanaged (ValidateOnly)",
+      "Verb": "POST",
+      "Ok": false,
+      "HttpStatus": 400,
+      "Summary": null,
+      "Sample": null,
+      "Error": "ValidationResponse: Exception of type \u0027Microsoft.PowerPlatform.Management.Models.ValidationResponse\u0027 was thrown. | body: {\u0022errorDetail\u0022:{\u0022fieldErrors\u0022:{\u0022ValidateOnly\u0022:{\u0022errorMessages\u0022:[\u0022ValidateOnly is not supported yet\u0022]}}}}"
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.Environments[1f3ee7cf...].Governancesetting.Disablemanaged (ValidateOnly)",
+      "Verb": "POST",
+      "Ok": false,
+      "HttpStatus": 400,
+      "Summary": null,
+      "Sample": null,
+      "Error": "ValidationResponse: Exception of type \u0027Microsoft.PowerPlatform.Management.Models.ValidationResponse\u0027 was thrown. | body: {\u0022errorDetail\u0022:{\u0022fieldErrors\u0022:{\u0022ValidateOnly\u0022:{\u0022errorMessages\u0022:[\u0022ValidateOnly is not supported yet\u0022]}}}}"
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.Environments[1f3ee7cf...].Delete (env) (ValidateOnly)",
+      "Verb": "DELETE",
+      "Ok": false,
+      "HttpStatus": 400,
+      "Summary": null,
+      "Sample": null,
+      "Error": "ValidationResponse: Exception of type \u0027Microsoft.PowerPlatform.Management.Models.ValidationResponse\u0027 was thrown. | body: {\u0022errorDetail\u0022:{\u0022code\u0022:\u0022OperationNotStartable\u0022,\u0022fieldErrors\u0022:{\u0022OperationNotStartable\u0022:{\u0022errorMessages\u0022:[\u0022This operation cannot be performed because there is an active lifecycle operation on the environment \u00271f3ee7cf-86ab-e69a-9256-928f8095011a\u0027.\u0022]}}}}"
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.EnvironmentGroups (CREATE)",
+      "Verb": "POST",
+      "Ok": true,
+      "HttpStatus": 0,
+      "Summary": "EnvironmentGroup",
+      "Sample": "{\u0022CreatedBy\u0022:{\u0022Id\u0022:\u00222e2cd8c7-d5e2-427a-aff2-f4f434b36b01\u0022,\u0022Type\u0022:\u0022User\u0022},\u0022CreatedTime\u0022:\u00222026-05-05T05:39:19.9929551\u002B00:00\u0022,\u0022Description\u0022:\u0022Created by VerseOps.SdkProbe; will be deleted immediately.\u0022,\u0022DisplayName\u0022:\u0022verseops-probe-639135563594337043\u0022,\u0022Id\u0022:\u00220389547f-308c-492c-b1a7-d3d43d54fc85\u0022}",
+      "Error": null
+    },
+    {
+      "Path": "ServiceClient.Environmentmanagement.EnvironmentGroups[0389547f...] (DELETE)",
+      "Verb": "DELETE",
+      "Ok": true,
+      "HttpStatus": 0,
+      "Summary": "VoidTaskResult",
+      "Sample": "{}",
+      "Error": null
+    }
+  ]
+}

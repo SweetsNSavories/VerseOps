@@ -32,6 +32,17 @@ public sealed class SweepEngine
     private readonly Dictionary<string, List<string>> _idsByParentBuilder = new(StringComparer.Ordinal);
     private readonly HashSet<string> _visitedPaths = new(StringComparer.Ordinal);
 
+    /// <summary>Captured from the first successful CloudFlows list response. Filled into
+    /// QueryParameters.WorkflowId on routes that demand it (e.g. FlowRuns).</summary>
+    private string? _workflowId;
+
+    /// <summary>Per-route timeout overrides keyed by a substring of the path. Default is 15s;
+    /// these routes are known to be slow on the server side.</summary>
+    private static readonly (string PathContains, TimeSpan Timeout)[] SlowRoutes = new[]
+    {
+        ("BusinessContinuityStateFullSnapshot", TimeSpan.FromSeconds(120)),
+    };
+
     public SweepEngine(object serviceClient, string outputPath, string? userId, string? tenantId, string? pinnedEnvId)
     {
         _serviceClient = serviceClient;
@@ -138,9 +149,13 @@ public sealed class SweepEngine
         }).ToArray();
 
         Console.Write($"  GET {path,-90} ");
-        // Per-call timeout (15s) so a single hung route doesn't burn 100s on the default HttpClient.
+        // Per-call timeout (15s default; longer for known-slow routes) so a single hung
+        // route doesn't burn 100s on the default HttpClient.
+        var timeout = TimeSpan.FromSeconds(15);
+        foreach (var (frag, t2) in SlowRoutes)
+            if (path.Contains(frag, StringComparison.Ordinal)) { timeout = t2; break; }
         using var perCall = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        perCall.CancelAfter(TimeSpan.FromSeconds(15));
+        perCall.CancelAfter(timeout);
         var perCallArgs = (object?[])args.Clone();
         for (int i = 0; i < perCallArgs.Length; i++)
             if (perCallArgs[i] is CancellationToken) perCallArgs[i] = perCall.Token;
@@ -185,8 +200,23 @@ public sealed class SweepEngine
 
     // ------------------------------------------------------------------ request config (userId/tenantId/envId)
 
-    /// <summary>Builds an Action&lt;TConfig&gt; that sets QueryParameters.UserId/TenantId/EnvironmentId
-    /// when those properties exist. Reflective so we don't have to know the per-route types.</summary>
+    /// <summary>Builds an Action&lt;TConfig&gt; that fills QueryParameters with values the server
+    /// commonly demands. We only ever set properties that the SDK already exposes â€” we don't
+    /// add unknown query keys, we don't hand-craft URLs. Reflective so we cover all routes
+    /// without per-namespace code. Discovered QP shapes are in sdk-qp-shapes.txt
+    /// (regenerate via `--inspect-qps`).
+    ///
+    /// Filled (when the SDK actually exposes a settable property of the matching type):
+    ///   - Path-style ids as String or Guid?: "UserId", "TenantId", "EnvironmentId",
+    ///     "Environment", "EnvironmentName", "WorkflowId", "FlowId".
+    ///   - Bool? "IncludeRuleSetCounts" = false  (RuleBasedPolicies.Assignments).
+    ///   - DateTime/DateTimeOffset "StartDate"/"EndDate" = (UtcNow-7d, UtcNow)  (UserPerFlow).
+    ///   - String "Filter" = "environment eq '&lt;pinnedEnvId&gt;'"  (Connectors $filter
+    ///     server-side requirement).
+    /// We intentionally do NOT inject OwnerId / CreatedBy / ResourceId â€” those are
+    /// filter-style QPs that, when set, can return an empty list (e.g. flows the current
+    /// user doesn't own) and break downstream id harvesting.
+    /// </summary>
     private object? BuildRequestConfigAction(Type actionGenericType)
     {
         // actionGenericType = Action<TRequestConfiguration>
@@ -195,33 +225,98 @@ public sealed class SweepEngine
         if (qpProp is null) return null;
         var qpType = qpProp.PropertyType;
 
-        // Map common query-param property names to the value we want to inject.
-        var setters = new List<(string Name, string Value)>();
-        void AddIfHas(string propName, string? value)
-        {
-            if (string.IsNullOrEmpty(value)) return;
-            var p = qpType.GetProperty(propName, BindingFlags.Public | BindingFlags.Instance);
-            if (p == null || !p.CanWrite || p.PropertyType != typeof(string)) return;
-            setters.Add((propName, value));
-        }
-        AddIfHas("UserId", _userId);
-        AddIfHas("TenantId", _tenantId);
-        AddIfHas("EnvironmentId", _pinnedEnvId);
+        var startDate = DateTime.UtcNow.AddDays(-7);
+        var endDate   = DateTime.UtcNow;
 
-        if (setters.Count == 0) return null;
-
-        // Build a dynamic Action<TConfig> via expression trees.
-        var pCfg  = System.Linq.Expressions.Expression.Parameter(configType, "cfg");
-        var pQp   = System.Linq.Expressions.Expression.Property(pCfg, qpProp);
-        var body  = new List<System.Linq.Expressions.Expression>();
-        foreach (var (name, value) in setters)
+        // Candidate (PropertyName, StringValue) â€” we'll try this value as either string or Guid?
+        // depending on what the SDK exposes. Order matters; first match wins per property name.
+        // We deliberately do NOT include OwnerId / CreatedBy / ResourceId here: those are
+        // filter-style QPs and setting them on list endpoints (e.g. CloudFlows) returns an
+        // empty result if the current user happens not to own anything, which then breaks
+        // downstream id harvesting.
+        var idCandidates = new (string Name, string? Value)[]
         {
-            var prop = System.Linq.Expressions.Expression.Property(pQp, name);
-            var assign = System.Linq.Expressions.Expression.Assign(prop, System.Linq.Expressions.Expression.Constant(value, typeof(string)));
-            body.Add(assign);
+            ("UserId", _userId),
+            ("TenantId", _tenantId),
+            ("EnvironmentId", _pinnedEnvId),
+            ("Environment", _pinnedEnvId),       // some SDK QPs use this name
+            ("EnvironmentName", _pinnedEnvId),
+            ("WorkflowId", _workflowId),
+            ("FlowId", _workflowId),
+        };
+        var boolCandidates = new (string Name, bool Value)[]
+        {
+            ("IncludeRuleSetCounts", false),
+        };
+
+        // Build OData $filter for routes that demand it (e.g. Connectors's "MissingEnvironmentFilter").
+        var filterValue = !string.IsNullOrEmpty(_pinnedEnvId)
+            ? $"environment eq '{_pinnedEnvId}'"
+            : null;
+
+        var assigns = new List<System.Linq.Expressions.Expression>();
+        var pCfg = System.Linq.Expressions.Expression.Parameter(configType, "cfg");
+        var pQp  = System.Linq.Expressions.Expression.Property(pCfg, qpProp);
+
+        void AddAssign(PropertyInfo p, object value, Type valueType)
+        {
+            var prop   = System.Linq.Expressions.Expression.Property(pQp, p);
+            var konst  = System.Linq.Expressions.Expression.Constant(value, valueType);
+            System.Linq.Expressions.Expression rhs = konst;
+            if (p.PropertyType != valueType)
+                rhs = System.Linq.Expressions.Expression.Convert(konst, p.PropertyType);
+            assigns.Add(System.Linq.Expressions.Expression.Assign(prop, rhs));
         }
+
+        // ---- id candidates: try string, fall back to Guid? if the SDK uses Nullable<Guid>
+        foreach (var (name, value) in idCandidates)
+        {
+            if (string.IsNullOrEmpty(value)) continue;
+            var p = qpType.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+            if (p == null || !p.CanWrite) continue;
+            var nonNullable = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
+            if (nonNullable == typeof(string))
+            {
+                AddAssign(p, value, typeof(string));
+            }
+            else if (nonNullable == typeof(Guid) && Guid.TryParse(value, out var g))
+            {
+                AddAssign(p, g, typeof(Guid));
+            }
+        }
+        // ---- $filter (OData) for routes that need an env filter even when env is in the path
+        if (filterValue != null)
+        {
+            var pf = qpType.GetProperty("Filter", BindingFlags.Public | BindingFlags.Instance);
+            if (pf != null && pf.CanWrite && pf.PropertyType == typeof(string))
+                AddAssign(pf, filterValue, typeof(string));
+        }
+        // ---- bool / bool? properties
+        foreach (var (name, value) in boolCandidates)
+        {
+            var p = qpType.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+            if (p == null || !p.CanWrite) continue;
+            var nonNullable = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
+            if (nonNullable != typeof(bool)) continue;
+            AddAssign(p, value, typeof(bool));
+        }
+        // ---- DateTime / DateTimeOffset / nullable variants for date range filters
+        foreach (var (name, value) in new (string Name, DateTime Value)[] { ("StartDate", startDate), ("EndDate", endDate) })
+        {
+            var p = qpType.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+            if (p == null || !p.CanWrite) continue;
+            var nonNullable = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
+            if (nonNullable == typeof(DateTime))
+                AddAssign(p, value, typeof(DateTime));
+            else if (nonNullable == typeof(DateTimeOffset))
+                AddAssign(p, new DateTimeOffset(value, TimeSpan.Zero), typeof(DateTimeOffset));
+            else if (nonNullable == typeof(string))
+                AddAssign(p, value.ToString("yyyy-MM-ddTHH:mm:ssZ"), typeof(string));
+        }
+
+        if (assigns.Count == 0) return null;
         var lambda = System.Linq.Expressions.Expression.Lambda(actionGenericType,
-            System.Linq.Expressions.Expression.Block(body), pCfg);
+            System.Linq.Expressions.Expression.Block(assigns), pCfg);
         return lambda.Compile();
     }
 
@@ -313,21 +408,51 @@ public sealed class SweepEngine
             if (item is null) continue;
             var idLike = ExtractPrimaryId(item);
             if (idLike != null && !pool.Contains(idLike)) pool.Add(idLike);
+            // Capture a workflow id (Guid) from the cloud-flows list so FlowRuns can satisfy
+            // its "WorkflowId is a required filter" demand using the SDK's own QP property.
+            // CloudFlow items expose both Name (display) and WorkflowId (Guid) â€” we must
+            // grab the Guid explicitly, since ExtractPrimaryId picks Name first.
+            if (_workflowId is null && parentBuilderTypeName == "CloudFlowsRequestBuilder")
+            {
+                var wfProp = item.GetType().GetProperty("WorkflowId", BindingFlags.Public | BindingFlags.Instance);
+                if (wfProp != null)
+                {
+                    var nn = Nullable.GetUnderlyingType(wfProp.PropertyType) ?? wfProp.PropertyType;
+                    var v  = wfProp.GetValue(item);
+                    if (nn == typeof(Guid) && v is Guid g && g != Guid.Empty) _workflowId = g.ToString();
+                    else if (nn == typeof(string) && v is string s && Guid.TryParse(s, out var g2)) _workflowId = g2.ToString();
+                }
+            }
             if (++taken >= 5) break; // 5 per collection is plenty
         }
     }
 
     /// <summary>Pick the most appropriate identifier from an item: prefer "Id" (most PPAC item
-    /// routes use it as the path key), then "Name", then typed *Id properties.</summary>
+    /// routes use it as the path key), then "Name", then typed *Id properties.
+    /// "WorkflowId" is included so CloudFlow harvest yields a guid (CloudFlow items don't
+    /// expose Id/Name; their primary id is WorkflowId).</summary>
     private static string? ExtractPrimaryId(object item)
     {
         var t = item.GetType();
-        string[] preferred = { "Id", "Name", "EnvironmentId", "GroupId", "PolicyId", "BillingPolicyId", "WebsiteId", "OperationId" };
+        string[] preferred = { "Id", "Name", "WorkflowId", "EnvironmentId", "GroupId", "PolicyId", "BillingPolicyId", "WebsiteId", "OperationId" };
         foreach (var name in preferred)
         {
             var p = t.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
-            if (p == null || p.PropertyType != typeof(string)) continue;
-            if (p.GetValue(item) is string s && !string.IsNullOrWhiteSpace(s)) return s;
+            if (p == null) continue;
+            // Accept either string or Guid? â€” the SDK uses both.
+            if (p.PropertyType == typeof(string))
+            {
+                if (p.GetValue(item) is string s && !string.IsNullOrWhiteSpace(s)) return s;
+            }
+            else
+            {
+                var nn = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
+                if (nn == typeof(Guid))
+                {
+                    var v = p.GetValue(item);
+                    if (v is Guid g && g != Guid.Empty) return g.ToString();
+                }
+            }
         }
         return null;
     }

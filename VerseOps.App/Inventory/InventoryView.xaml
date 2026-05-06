@@ -1,0 +1,1383 @@
+﻿<UserControl x:Class="VerseOps.App.Inventory.InventoryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:local="clr-namespace:VerseOps.App.Inventory"
+             mc:Ignorable="d"
+             Background="{DynamicResource TokenSurfaceCanvas}"
+             Foreground="{DynamicResource TokenTextPrimary}"
+             FontFamily="{DynamicResource TokenFontFamilyBase}" FontSize="12"
+             d:DesignHeight="700" d:DesignWidth="1400">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <local:StringToVisibilityConverter x:Key="StringToVisibility"/>
+        <local:SubtractDoubleConverter x:Key="SubtractDouble"/>
+
+        <!-- Hero KPI tile chrome (Fluent card surface) -->
+        <Style x:Key="TileBorder" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource TokenSurfacePrimary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource TokenStrokeSubtle}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="Margin" Value="4"/>
+        </Style>
+        <Style x:Key="TileLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TokenBrandForeground}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+        <Style x:Key="TileValue" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TokenTextPrimary}"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+
+        <!-- Toolbar (top action bar) primary action -->
+        <Style x:Key="ToolbarButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{DynamicResource TokenBrandBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TokenTextOnAccent}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource TokenBrandBackground}"/>
+            <Setter Property="Padding" Value="14,6"/>
+        </Style>
+
+        <!-- Hero KPI tile: whole card is a button so clicks open the drawer. -->
+        <Style x:Key="HeroTileButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <ContentPresenter/>
+                            <Border x:Name="hover" Background="#10FFFFFF" CornerRadius="6"
+                                    Opacity="0" IsHitTestVisible="False"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="hover" Property="Opacity" Value="1"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Status pill badge used in hero tiles and drawer items. -->
+        <Style x:Key="StatusBadge" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource TokenInfoBackground}"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="8,2"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="StatusBadgeText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TokenInfoForeground}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <!-- Reusable asset list-item template (single AssetRow). Used by the
+             Apps / Flows / Agents sub-lists nested inside each Solution
+             expander in the env row-details template. -->
+        <DataTemplate x:Key="AssetListItemTemplate">
+            <Border Padding="6,4" Margin="0,1">
+                <StackPanel>
+                    <TextBlock Text="{Binding DisplayName}"
+                               Foreground="{DynamicResource TokenTextPrimary}"
+                               FontSize="12" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Foreground="{DynamicResource TokenTextTertiary}" FontSize="10">
+                        <Run Text="{Binding TypeDisplay, Mode=OneWay}"/>
+                        <Run Text=" â€¢ "/>
+                        <Run Text="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}, Mode=OneWay, TargetNullValue=â€”}"/>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- Sub-section header used inside a Solution expander
+             (APPS / FLOWS / AGENTS labels). -->
+        <Style x:Key="AssetSectionLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TokenBrandForeground}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+
+        <!-- Solution row Expander style: card-like container that opens to
+             reveal the nested apps / flows / agents lists. -->
+        <Style x:Key="SolutionExpander" TargetType="Expander" BasedOn="{StaticResource {x:Type Expander}}">
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+            <Setter Property="IsExpanded" Value="False"/>
+        </Style>
+
+        <!-- Compact icon-button style used for the per-row {} (inspect raw
+             JSON) and â–¶ (open in maker portal) actions in every grid. -->
+        <Style x:Key="RowIconButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource TokenStrokeSubtle}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource TokenBrandForeground}"/>
+            <Setter Property="FontFamily" Value="{DynamicResource TokenFontFamilyMono}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="MinWidth" Value="26"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource TokenBrandBackground}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TokenTextOnAccent}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Derivative styles that pre-bake the official Fluent System Icon for
+             the two repeating row actions (open in maker portal / inspect raw
+             metadata JSON). Using ContentTemplate so each button gets its own
+             SymbolIcon instance — sharing one UIElement across many buttons
+             would throw "Element is already the child of another element". -->
+        <Style x:Key="OpenInMakerIconButton" TargetType="Button" BasedOn="{StaticResource RowIconButton}">
+            <Setter Property="ToolTip" Value="Open in maker portal"/>
+            <Setter Property="Content" Value=" "/>
+            <Setter Property="ContentTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <ui:SymbolIcon Symbol="Open24" FontSize="13"/>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="InspectJsonIconButton" TargetType="Button" BasedOn="{StaticResource RowIconButton}">
+            <Setter Property="ToolTip" Value="Show raw metadata JSON"/>
+            <Setter Property="Content" Value=" "/>
+            <Setter Property="ContentTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <ui:SymbolIcon Symbol="Code24" FontSize="13"/>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Section header label inside a SectionExpander. Pre-baked so each
+             collapsed section shows a consistent brand-blue caption. -->
+        <Style x:Key="SectionExpanderLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TokenBrandForeground}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="SectionExpanderCount" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TokenTextTertiary}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="14,0,0,0"/>
+        </Style>
+
+        <!-- Collapsible per-section frame used inside each env row's details
+             panel (Solutions/Apps/Flows/Agents/PowerPages/Users). Collapsed
+             by default so the panel stays compact and the user opens only
+             the sections they care about — fixes the "elongated middle
+             scrollbar" problem when every section was always rendered. -->
+        <Style x:Key="SectionExpander" TargetType="Expander">
+            <Setter Property="Background"      Value="{DynamicResource TokenSurfaceSecondary}"/>
+            <Setter Property="BorderBrush"     Value="{DynamicResource TokenStrokeSubtle}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"         Value="10,4,10,10"/>
+            <Setter Property="Margin"          Value="0,0,0,6"/>
+            <Setter Property="IsExpanded"      Value="False"/>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Outer Grid hosts the dashboard content + the slide-in right drawer overlay. -->
+    <Grid>
+        <Grid Margin="6">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Branded header: logo tile + product wordmark + search + refresh.
+                 Inspired by the PCF "Inventory Sentinel â€” ECOSYSTEM GOVERNANCE" header. -->
+            <Border Grid.Row="0" CornerRadius="8" Margin="4,4,4,8" Padding="14,10">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#0B1B2C" Offset="0"/>
+                        <GradientStop Color="#10283F" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Logo tile + wordmark -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="44" Height="44" CornerRadius="6"
+                                Background="#1E6FD9" Margin="0,0,12,0">
+                            <TextBlock Text="V" Foreground="White" FontSize="22" FontWeight="Bold"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="VerseOps Inventory" Foreground="#FFFFFF"
+                                       FontSize="18" FontWeight="Bold"/>
+                            <TextBlock Text="ECOSYSTEM GOVERNANCE" Foreground="{DynamicResource TokenBrandForeground}"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       Margin="0,2,0,0" Opacity="0.85"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Refresh button -->
+                    <Button Grid.Column="2" Style="{StaticResource ToolbarButton}"
+                            Content="â†» Refresh"
+                            Command="{Binding RefreshCommand}"
+                            Background="#15314D" BorderBrush="#1F4A75"
+                            Padding="18,6" FontSize="13" FontWeight="SemiBold"
+                            ToolTip="Pull all environments + capacity via PPAC SDK and BAP capacity route, then replace the local catalog."/>
+                </Grid>
+            </Border>
+
+            <!-- Hero KPI tiles (now clickable buttons that open the right drawer). -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0" Style="{StaticResource HeroTileButton}"
+                        Command="{Binding OpenDrawerCommand}" CommandParameter="environments"
+                        Margin="4">
+                    <Border Style="{StaticResource TileBorder}">
+                        <Grid>
+                            <StackPanel>
+                                <TextBlock Text="ENVIRONMENTS" Style="{StaticResource TileLabel}"/>
+                                <TextBlock Text="{Binding EnvironmentCount}" Style="{StaticResource TileValue}"/>
+                            </StackPanel>
+                            <Border Style="{StaticResource StatusBadge}" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                <TextBlock Text="SYNCED" Style="{StaticResource StatusBadgeText}"/>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </Button>
+
+                <Button Grid.Column="1" Style="{StaticResource HeroTileButton}"
+                        Command="{Binding OpenDrawerCommand}" CommandParameter="storage"
+                        Margin="4">
+                    <Border Style="{StaticResource TileBorder}">
+                        <Grid>
+                            <StackPanel>
+                                <TextBlock Text="TENANT DATABASE" Style="{StaticResource TileLabel}"/>
+                                <TextBlock Text="{Binding DatabaseGbDisplay}" Style="{StaticResource TileValue}"
+                                           ToolTip="Tenant-wide Dataverse database storage (consumed / max). Click for per-env breakdown."/>
+                            </StackPanel>
+                            <Border Style="{StaticResource StatusBadge}" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                <TextBlock Text="HEALTHY" Style="{StaticResource StatusBadgeText}"/>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </Button>
+
+                <Button Grid.Column="2" Style="{StaticResource HeroTileButton}"
+                        Command="{Binding OpenDrawerCommand}" CommandParameter="storage"
+                        Margin="4">
+                    <Border Style="{StaticResource TileBorder}">
+                        <Grid>
+                            <StackPanel>
+                                <TextBlock Text="TENANT FILE" Style="{StaticResource TileLabel}"/>
+                                <TextBlock Text="{Binding FileGbDisplay}" Style="{StaticResource TileValue}"
+                                           ToolTip="Tenant-wide Dataverse file storage (consumed / max). Click for per-env breakdown."/>
+                            </StackPanel>
+                            <Border Style="{StaticResource StatusBadge}" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                <TextBlock Text="HEALTHY" Style="{StaticResource StatusBadgeText}"/>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </Button>
+
+                <Button Grid.Column="3" Style="{StaticResource HeroTileButton}"
+                        Command="{Binding OpenDrawerCommand}" CommandParameter="assets"
+                        Margin="4">
+                    <Border Style="{StaticResource TileBorder}" Background="#2A1F3D" BorderBrush="#4B3A6E">
+                        <Grid>
+                            <StackPanel>
+                                <TextBlock Text="TOTAL ASSETS" Style="{StaticResource TileLabel}"
+                                           Foreground="#C5B0F0"/>
+                                <TextBlock Text="{Binding AssetCountDisplay}" Style="{StaticResource TileValue}"
+                                           ToolTip="Tenant-wide assets (apps + flows + agents) from the Power Platform Inventory API. Click for breakdown by type."/>
+                            </StackPanel>
+                            <Border Style="{StaticResource StatusBadge}" Background="#3D2D5C"
+                                    HorizontalAlignment="Right" VerticalAlignment="Top">
+                                <TextBlock Text="LIVE" Style="{StaticResource StatusBadgeText}" Foreground="#C5B0F0"/>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </Button>
+
+                <!-- Tenant-wide license consumption rollup. Lights up after the
+                     first env row-details load triggers the Graph fetch (or
+                     when the user clicks the tile, which kicks off the fetch
+                     directly). Click opens a drawer broken down by SKU. -->
+                <Button Grid.Column="4" Style="{StaticResource HeroTileButton}"
+                        Command="{Binding OpenDrawerCommand}" CommandParameter="licenses"
+                        Margin="4">
+                    <Border Style="{StaticResource TileBorder}" Background="#1F2D3D" BorderBrush="#3A547A">
+                        <Grid>
+                            <StackPanel>
+                                <TextBlock Text="LICENSED USERS" Style="{StaticResource TileLabel}"
+                                           Foreground="#9CC2F5"/>
+                                <TextBlock Text="{Binding LicensedUserCountDisplay}" Style="{StaticResource TileValue}"
+                                           ToolTip="Distinct users with at least one Microsoft 365 / Power Platform license assigned (Microsoft Graph). Click for the SKU breakdown."/>
+                            </StackPanel>
+                            <Border Style="{StaticResource StatusBadge}" Background="#2A4569"
+                                    HorizontalAlignment="Right" VerticalAlignment="Top">
+                                <TextBlock Text="GRAPH" Style="{StaticResource StatusBadgeText}" Foreground="#9CC2F5"/>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </Button>
+            </Grid>
+
+            <!-- Toolbar -->
+            <Border Grid.Row="2" Background="{DynamicResource TokenSurfacePrimary}" BorderBrush="{DynamicResource TokenStrokeSubtle}" BorderThickness="1" CornerRadius="3" Padding="6" Margin="4,2">
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Reload from cache" Style="{StaticResource ToolbarButton}"
+                            Command="{Binding ReloadCommand}"
+                            Background="#3A3A3D" BorderBrush="#555"
+                            ToolTip="Re-read the local SQLite catalog without calling PPAC."/>
+                    <Button Content="Open trace log" Style="{StaticResource ToolbarButton}"
+                            Command="{Binding OpenTraceLogCommand}"
+                            Background="#3A3A3D" BorderBrush="#555"
+                            ToolTip="Open %LOCALAPPDATA%\VerseOps\inventory-trace.log (every HTTP request/response from the last refresh)."/>
+                    <!-- Toggle: filter the env grid to envs the signed-in user is a Dataverse member of.
+                         The first time this is checked we kick off a parallel WhoAmI probe per env;
+                         envs are revealed as their probe succeeds, so the list grows monotonically. -->
+                    <CheckBox Margin="14,0,0,0" VerticalAlignment="Center"
+                              Foreground="{DynamicResource TokenTextPrimary}"
+                              IsChecked="{Binding ShowOnlyMyEnvironments, Mode=TwoWay}"
+                              Content="Only my environments"
+                              ToolTip="Filter to environments where you have a Dataverse user record (issues a WhoAmI to each env on first toggle)."/>
+                    <TextBlock Text="{Binding LastRefreshedDisplay}"
+                               VerticalAlignment="Center" Margin="14,0,0,0"
+                               Foreground="{DynamicResource TokenBrandForeground}"/>
+                    <ProgressBar Width="120" Height="6" Margin="14,0,0,0"
+                                 VerticalAlignment="Center" IsIndeterminate="True"
+                                 Background="{DynamicResource TokenSurfaceTertiary}" Foreground="{DynamicResource TokenBrandForeground}" BorderBrush="{DynamicResource TokenBrandBackground}"
+                                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Environments grid -->
+            <DataGrid x:Name="EnvGrid" Grid.Row="3" Margin="4,2"
+                      ItemsSource="{Binding EnvironmentsView}"
+                      RowDetailsVisibilityMode="Visible"
+                      SelectionChanged="EnvGrid_SelectionChanged"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                      ScrollViewer.CanContentScroll="True"
+                      EnableRowVirtualization="True"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling">
+                <!-- Row visibility note: RowDetailsVisibilityMode is "Visible" so
+                     the per-row details slot is *always* in the visual tree.
+                     The actual content (the ScrollViewer in RowDetailsTemplate)
+                     is only rendered when EnvironmentRow.IsExpanded is true.
+                     Setting RowDetailsVisibilityMode="Collapsed" instead would
+                     write a *local* DetailsVisibility=Collapsed on every row,
+                     which beats any Style.Trigger we'd write (DependencyProperty
+                     precedence: local > style trigger), so triggers wouldn't
+                     win. Wrapping the inner ScrollViewer instead avoids that
+                     trap entirely. -->
+                <DataGrid.Columns>
+                    <!-- Chevron toggle: collapses/expands the row-details panel.
+                         Click also fires the per-env Dataverse drill-down on
+                         first expansion (see EnvExpandToggle_Click). The icon
+                         flips between right-facing (collapsed) and down-facing
+                         (expanded) using a DataTrigger on IsExpanded. -->
+                    <DataGridTemplateColumn Width="36" CanUserResize="False" CanUserSort="False">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Click="EnvExpandToggle_Click"
+                                        Background="Transparent" BorderThickness="0"
+                                        Padding="6,4" Cursor="Hand"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        Focusable="False"
+                                        ToolTip="Show / hide environment details">
+                                    <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TokenBrandForeground}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <!-- Fluent-icon glyphs: ChevronRight = U+E76C, ChevronDown = U+E70D.
+                                                     Both ship in Segoe Fluent Icons (Win 11) and Segoe MDL2 Assets
+                                                     (Win 10), so the icon always renders without depending on a
+                                                     third-party font dictionary. -->
+                                                <Setter Property="Text" Value="&#xE76C;"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                        <Setter Property="Text" Value="&#xE70D;"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Button>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTextColumn Header="Name"     Binding="{Binding DisplayName}"        Width="260"/>
+                    <DataGridTextColumn Header="SKU"      Binding="{Binding Sku}"                Width="110"/>
+                    <DataGridTextColumn Header="Status"   Binding="{Binding ProvisioningState}"  Width="110"/>
+                    <DataGridTextColumn Header="Region"   Binding="{Binding Region}"             Width="110"/>
+                    <DataGridTextColumn Header="Version"  Binding="{Binding Version}"            Width="120"/>
+
+                    <!-- Default: tenant-default env (the open-to-everyone env every
+                         tenant has by default; only one per tenant). The PPAC SDK
+                         exposes this as Type=="Default" — it is *not* the same as
+                         "managed env" or "the one I'm working in". -->
+                    <DataGridTemplateColumn Header="Default" Width="60" SortMemberPath="IsDefault">
+                        <DataGridTemplateColumn.HeaderStyle>
+                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                <Setter Property="ToolTip" Value="The tenant's default Power Platform environment (Type=Default). Every tenant has exactly one — open to all licensed users without a security group."/>
+                            </Style>
+                        </DataGridTemplateColumn.HeaderStyle>
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <CheckBox IsChecked="{Binding IsDefault, Mode=OneWay}" IsEnabled="False"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          ToolTip="True = this is the tenant's default env (open to all licensed users)."/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Managed Environment (premium governance). PPAC ProtectionLevel
+                         == "Standard" means the env has Managed Environments turned on
+                         (DLP enforced, sharing limits, request-access workflows, etc.). -->
+                    <DataGridTemplateColumn Header="Managed" Width="70" SortMemberPath="IsManagedEnvironment">
+                        <DataGridTemplateColumn.HeaderStyle>
+                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                <Setter Property="ToolTip" Value="Power Platform 'Managed Environments' premium governance. Standard = on, Basic = off. Toggled per-env in the admin center."/>
+                            </Style>
+                        </DataGridTemplateColumn.HeaderStyle>
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border Padding="6,1" CornerRadius="3" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        Background="{DynamicResource TokenSuccessBackground}"
+                                        Visibility="{Binding IsManagedEnvironment, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="MANAGED" Foreground="{DynamicResource TokenTextOnAccent}"
+                                               FontSize="9" FontWeight="SemiBold"/>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTextColumn Header="Created"  Binding="{Binding CreatedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                    <DataGridTextColumn Header="DB GB"    Binding="{Binding DatabaseGb, StringFormat={}{0:N2}}" Width="80"/>
+                    <DataGridTextColumn Header="File GB"  Binding="{Binding FileGb,     StringFormat={}{0:N2}}" Width="80"/>
+                    <DataGridTextColumn Header="Log GB"   Binding="{Binding LogGb,      StringFormat={}{0:N2}}" Width="80"/>
+                    <DataGridTextColumn Header="Apps"     Binding="{Binding AppCount}"           Width="60"/>
+                    <DataGridTextColumn Header="Flows"    Binding="{Binding FlowCount}"          Width="60"/>
+                    <DataGridTextColumn Header="Agents"   Binding="{Binding AgentCount}"         Width="60"/>
+
+                    <!-- Instance URL: copyable monospace text + browser launch.
+                         Buttons collapse for envs without Dataverse (no URL).
+                         Fixed width sized to fit a typical "https://orgxxxxx.crm.dynamics.com/"
+                         (~36 chars) plus the two action icons; longer URLs scroll
+                         inside the read-only TextBox via Ctrl+arrow / mouse drag. -->
+                    <DataGridTemplateColumn Header="Instance URL" Width="320" SortMemberPath="InstanceUrl">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <DockPanel LastChildFill="True" Margin="2,0">
+                                    <Button DockPanel.Dock="Right" Padding="4,0" Margin="2,0,0,0"
+                                            Background="Transparent" BorderThickness="0"
+                                            Cursor="Hand"
+                                            Foreground="{DynamicResource TokenBrandForeground}"
+                                            ToolTip="Open instance URL in browser"
+                                            Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                            CommandParameter="{Binding InstanceUrl}"
+                                            Visibility="{Binding InstanceUrl, Converter={StaticResource StringToVisibility}}">
+                                        <ui:SymbolIcon Symbol="Open24" FontSize="14"/>
+                                    </Button>
+                                    <Button DockPanel.Dock="Right" Padding="4,0" Margin="2,0,0,0"
+                                            Background="Transparent" BorderThickness="0"
+                                            Cursor="Hand"
+                                            Foreground="{DynamicResource TokenTextSecondary}"
+                                            ToolTip="Copy instance URL"
+                                            Command="{Binding DataContext.CopyTextCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                            CommandParameter="{Binding InstanceUrl}"
+                                            Visibility="{Binding InstanceUrl, Converter={StaticResource StringToVisibility}}">
+                                        <ui:SymbolIcon Symbol="Copy24" FontSize="13"/>
+                                    </Button>
+                                    <TextBox Text="{Binding InstanceUrl, Mode=OneWay}" IsReadOnly="True"
+                                             Background="Transparent" BorderThickness="0"
+                                             Foreground="{DynamicResource TokenTextPrimary}"
+                                             FontFamily="Cascadia Mono, Consolas" FontSize="11"
+                                             ToolTip="Click to select; Ctrl+C to copy"
+                                             VerticalAlignment="Center"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Env ID: copyable monospace + open-in-maker (env home).
+                         The Open icon launches make.powerapps.com/environments/{id}/home;
+                         the Copy icon copies the GUID. -->
+                    <DataGridTemplateColumn Header="Env ID" Width="280" SortMemberPath="EnvId">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <DockPanel LastChildFill="True" Margin="2,0">
+                                    <Button DockPanel.Dock="Right" Padding="4,0" Margin="2,0,0,0"
+                                            Background="Transparent" BorderThickness="0"
+                                            Cursor="Hand"
+                                            Foreground="{DynamicResource TokenBrandForeground}"
+                                            ToolTip="Open in maker portal (env home)"
+                                            Command="{Binding DataContext.OpenEnvCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                            CommandParameter="{Binding}">
+                                        <ui:SymbolIcon Symbol="Open24" FontSize="14"/>
+                                    </Button>
+                                    <Button DockPanel.Dock="Right" Padding="4,0" Margin="2,0,0,0"
+                                            Background="Transparent" BorderThickness="0"
+                                            Cursor="Hand"
+                                            Foreground="{DynamicResource TokenTextSecondary}"
+                                            ToolTip="Copy env id"
+                                            Command="{Binding DataContext.CopyTextCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                            CommandParameter="{Binding EnvId}">
+                                        <ui:SymbolIcon Symbol="Copy24" FontSize="13"/>
+                                    </Button>
+                                    <TextBox Text="{Binding EnvId, Mode=OneWay}" IsReadOnly="True"
+                                             Background="Transparent" BorderThickness="0"
+                                             Foreground="{DynamicResource TokenTextPrimary}"
+                                             FontFamily="Cascadia Mono, Consolas" FontSize="11"
+                                             ToolTip="Click to select; Ctrl+C to copy"
+                                             VerticalAlignment="Center"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+
+                <!-- ==========================================================
+                     Per-env row-details template. Sections (vertical stack):
+                       1.  Loading / error banner â€” only visible while the
+                           Dataverse drill-down is in flight, or when it failed.
+                       2.  Solutions parent â€” Expander rows; each solution
+                           opens to reveal three multi-column DataGrids
+                           (Apps / Flows / Agents). Lazy-loaded from the
+                           Dataverse Web API on first row expand.
+                       3.  Power Pages â€” sibling DataGrid showing every
+                           mspp_website (or legacy adx_website) in this env.
+                       4.  Users &amp; Groups â€” sibling DataGrid showing
+                           non-disabled systemusers from Dataverse.
+                     ========================================================== -->
+                <DataGrid.RowDetailsTemplate>
+                    <DataTemplate>
+                        <!-- Bounded ScrollViewer so an expanded env's deep-dive
+                             content (Solutions / Power Pages / Users sub-grids,
+                             which can be large) doesn't push the rest of the
+                             env grid rows below the fold. The user can still
+                             see the env list AND scroll through the details.
+                             Visibility is bound to EnvironmentRow.IsExpanded
+                             (toggled by the chevron in the leading column);
+                             when collapsed the ScrollViewer takes zero height
+                             so the row footprint matches a non-expanded row.
+
+                             Width is pinned to the DataGrid's visible viewport
+                             via the ScrollContentPresenter ancestor. Without
+                             this, the row-details panel inherits the *full row
+                             width* (sum of every env-grid column ≈ 2000px), so
+                             every nested sub-grid stretched past the visible
+                             viewport — the user was forced to horizontally
+                             scroll the ENTIRE env grid just to see the right
+                             half of an Apps/Flows/Agents grid. With the cap,
+                             each inner DataGrid honours its own
+                             HorizontalScrollBarVisibility="Auto" and scrolls
+                             independently. HorizontalAlignment="Left" anchors
+                             the panel to the left edge so it doesn't drift as
+                             the env grid scrolls horizontally for *its* own
+                             columns. -->
+                        <!-- Width AND MaxHeight are both pinned to the env
+                             DataGrid's visible viewport (ScrollContentPresenter
+                             ancestor). The width pin keeps inner sub-grids
+                             from inheriting the full row width (sum of every
+                             env-grid column ≈ 2000px), and the height pin
+                             lets the row-details panel grow to fill all the
+                             vertical real estate that focus mode just freed
+                             up by hiding the other env rows. The 36 px
+                             subtraction reserves space for the env row
+                             header that sits above the details panel so the
+                             panel doesn't push past the visible viewport.
+                             We use ScrollContentPresenter (not the
+                             DataGrid itself) so the binding survives the
+                             outer page ScrollViewer wrapping the InventoryView. -->
+                        <ScrollViewer MaxHeight="{Binding ActualHeight, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type ScrollContentPresenter}}, Converter={StaticResource SubtractDouble}, ConverterParameter=36}"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      HorizontalAlignment="Left"
+                                      Width="{Binding ActualWidth, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type ScrollContentPresenter}}}"
+                                      Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}"
+                                      PreviewMouseWheel="DetailsScrollViewer_PreviewMouseWheel">
+                            <!-- Visual frame for the expanded row-details panel:
+                                 thick brand-blue left accent bar + distinct
+                                 surface tint + bold top/bottom rules so the
+                                 user can clearly see where the env's drill-
+                                 down begins and ends amongst the surrounding
+                                 env rows. The chevron in the leading column
+                                 visually "anchors" to this frame. -->
+                            <Border Background="{DynamicResource TokenSurfaceSecondary}"
+                                    BorderBrush="{DynamicResource TokenBrandBackground}"
+                                    BorderThickness="4,2,1,2"
+                                    Padding="14,12" Margin="0,2,0,6"
+                                    CornerRadius="0,4,4,0">
+                                <StackPanel>
+                                <!-- Header: env totals summary line -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                    <TextBlock Text="ENV ASSETS" Foreground="{DynamicResource TokenBrandForeground}"
+                                               FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    <TextBlock Text="â€¢" Foreground="{DynamicResource TokenStrokeSubtle}" Margin="8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Foreground="{DynamicResource TokenBrandForeground}" FontSize="11" VerticalAlignment="Center">
+                                        <Run Text="{Binding AppCount, Mode=OneWay}"/><Run Text=" Apps "/>
+                                        <Run Text="â€¢" Foreground="{DynamicResource TokenStrokeSubtle}"/>
+                                        <Run Text=" "/><Run Text="{Binding FlowCount, Mode=OneWay}"/><Run Text=" Flows "/>
+                                        <Run Text="â€¢" Foreground="{DynamicResource TokenStrokeSubtle}"/>
+                                        <Run Text=" "/><Run Text="{Binding AgentCount, Mode=OneWay}"/><Run Text=" Agents"/>
+                                    </TextBlock>
+                                </StackPanel>
+
+                                <!-- Loading banner: visible while we fetch Dataverse details -->
+                                <Border Background="{DynamicResource TokenInfoBackground}" BorderBrush="{DynamicResource TokenBrandBackground}" BorderThickness="1"
+                                        CornerRadius="3" Padding="10,8" Margin="0,0,0,10"
+                                        Visibility="{Binding IsLoadingDetails, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ProgressBar Width="120" Height="6" IsIndeterminate="True"
+                                                     Background="{DynamicResource TokenSurfaceTertiary}" Foreground="{DynamicResource TokenBrandForeground}"
+                                                     BorderBrush="{DynamicResource TokenBrandBackground}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Loading per-env details from Dataverse (solutions, Power Pages, users)â€¦"
+                                                   Foreground="{DynamicResource TokenBrandForeground}" FontSize="11" Margin="10,0,0,0"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Error banner: visible if Dataverse fetch failed -->
+                                <Border Background="{DynamicResource TokenDangerBackground}" BorderBrush="{DynamicResource TokenDangerBackground}" BorderThickness="1"
+                                        CornerRadius="3" Padding="10,8" Margin="0,0,0,10"
+                                        Visibility="{Binding HasDetailsError, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel>
+                                        <TextBlock Text="Could not load per-env details" Foreground="{DynamicResource TokenDangerForeground}"
+                                                   FontWeight="SemiBold" FontSize="11"/>
+                                        <TextBlock Text="{Binding DetailsError}" Foreground="{DynamicResource TokenDangerForeground}"
+                                                   FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- ============================================
+                                     View-mode toggle. The user picks how
+                                     this env's apps / flows / agents are
+                                     organized inside the row-details panel:
+                                       â€¢ Group by Solution â€” Solutions
+                                         Expander (default).
+                                       â€¢ Flat â€” three sibling DataGrids
+                                         (Apps / Flows / Agents) showing
+                                         every asset in the env, ungrouped.
+                                     Power Pages and Users sections are
+                                     always shown below regardless of mode.
+                                     ============================================ -->
+                                <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                                        BorderThickness="1" CornerRadius="4"
+                                        Padding="8,6" Margin="0,0,0,10">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="VIEW" Foreground="{DynamicResource TokenBrandForeground}" FontSize="10"
+                                                   FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   Margin="2,0,12,0"/>
+                                        <RadioButton Content="Group by Solution"
+                                                     IsChecked="{Binding IsSolutionsView, Mode=OneWay}"
+                                                     Foreground="{DynamicResource TokenTextPrimary}" FontSize="11"
+                                                     VerticalAlignment="Center" Margin="0,0,18,0"
+                                                     Cursor="Hand"
+                                                     Tag="solutions"
+                                                     Click="ViewModeRadio_Click"
+                                                     ToolTip="Show Apps / Flows / Agents grouped under their owning Dataverse solution."/>
+                                        <RadioButton Content="Flat â€” Apps / Flows / Agents"
+                                                     IsChecked="{Binding IsFlatView, Mode=OneWay}"
+                                                     Foreground="{DynamicResource TokenTextPrimary}" FontSize="11"
+                                                     VerticalAlignment="Center"
+                                                     Cursor="Hand"
+                                                     Tag="flat"
+                                                     Click="ViewModeRadio_Click"
+                                                     ToolTip="Show every asset in this env in three flat sibling grids, ignoring solution membership."/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- ============================================
+                                     SECTION 1 â€” Solutions (parent grid).
+                                     Each solution row is an Expander whose
+                                     content is the nested Apps / Flows /
+                                     Agents DataGrids for that solution.
+                                     ============================================ -->
+                                <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                                        BorderThickness="1" CornerRadius="4"
+                                        Padding="10" Margin="0,0,0,10"
+                                        Visibility="{Binding IsSolutionsView, Converter={StaticResource BoolToVisibility}}">
+                                    <DockPanel>
+                                        <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="SOLUTIONS"
+                                                       Foreground="{DynamicResource TokenBrandForeground}" FontWeight="SemiBold" FontSize="10"
+                                                       VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" HorizontalAlignment="Right"
+                                                       Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
+                                                       Text="{Binding SolutionCount, StringFormat={}{0} solution(s) â€” Dataverse}"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{Binding Solutions}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Expander Style="{StaticResource SolutionExpander}">
+                                                        <Expander.Header>
+                                                            <Grid Width="900" HorizontalAlignment="Stretch">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                                                    <TextBlock Text="{Binding Name}" Foreground="{DynamicResource TokenTextPrimary}"
+                                                                               FontWeight="SemiBold" FontSize="13"
+                                                                               VerticalAlignment="Center"/>
+                                                                    <TextBlock Text="{Binding Publisher}"
+                                                                               Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
+                                                                               Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                                                    <Border Background="#3F2A4F" CornerRadius="8"
+                                                                            Padding="6,1" Margin="8,0,0,0"
+                                                                            VerticalAlignment="Center"
+                                                                            Visibility="{Binding IsManaged, Converter={StaticResource BoolToVisibility}}">
+                                                                        <TextBlock Text="MANAGED" Foreground="#D0B0FF"
+                                                                                   FontSize="9" FontWeight="SemiBold"/>
+                                                                    </Border>
+                                                                    <TextBlock Text="{Binding Version}"
+                                                                               Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
+                                                                               Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                                                </StackPanel>
+                                                                <Border Grid.Column="1" Background="#1F3F5F" CornerRadius="10"
+                                                                        Padding="10,2" VerticalAlignment="Center" Margin="0,0,8,0">
+                                                                    <TextBlock Text="{Binding Summary}"
+                                                                               Foreground="{DynamicResource TokenBrandForeground}" FontSize="10"
+                                                                               FontWeight="SemiBold"/>
+                                                                </Border>
+                                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                    <Button Style="{StaticResource OpenInMakerIconButton}"                                                                                                                                                        Command="{Binding DataContext.OpenInMakerCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                    <Button Style="{StaticResource InspectJsonIconButton}"                                                                                                                                                        Command="{Binding DataContext.InspectJsonCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                </StackPanel>
+                                                            </Grid>
+                                                        </Expander.Header>
+
+                                                        <!-- Nested Apps / Flows / Agents grids stacked vertically -->
+                                                        <StackPanel Margin="6,8,0,4">
+                                                            <!-- Apps grid -->
+                                                            <Border Background="{DynamicResource TokenSurfaceSubtle}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                                                                    BorderThickness="1" CornerRadius="3"
+                                                                    Padding="8" Margin="0,0,0,6">
+                                                                <DockPanel>
+                                                                    <Grid DockPanel.Dock="Top" Margin="0,0,0,4">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="Auto"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Grid.Column="0" Text="APPS"
+                                                                                   Style="{StaticResource AssetSectionLabel}"/>
+                                                                        <TextBlock Grid.Column="1" HorizontalAlignment="Right"
+                                                                                   Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
+                                                                                   Text="{Binding AppCount, StringFormat={}{0} item(s)}"/>
+                                                                    </Grid>
+                                                                    <DataGrid ItemsSource="{Binding Apps}"
+                                                                              Background="{DynamicResource TokenSurfaceSubtle}" RowBackground="{DynamicResource TokenSurfaceSubtle}"
+                                                                              AlternatingRowBackground="{DynamicResource TokenSurfaceSecondary}"
+                                                                              HeadersVisibility="Column"
+                                                                              AutoGenerateColumns="False" IsReadOnly="True"
+                                                                              CanUserAddRows="False" CanUserDeleteRows="False"
+                                                                              GridLinesVisibility="None"
+                                                                              HorizontalScrollBarVisibility="Auto"
+                                                                              MaxHeight="200">
+                                                                        <DataGrid.Columns>
+                                                                            <DataGridTextColumn Header="Name"        Binding="{Binding DisplayName}" Width="260"/>
+                                                                            <DataGridTextColumn Header="Type"        Binding="{Binding TypeDisplay}" Width="110"/>
+                                                                            <DataGridTextColumn Header="Owner"       Binding="{Binding OwnerDisplay}"     Width="180"/>
+                                                                            <DataGridTextColumn Header="Created"     Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                                            <DataGridTextColumn Header="Modified"    Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                                            <DataGridCheckBoxColumn Header="Quarantined" Binding="{Binding IsQuarantined}" Width="80"/>
+                                                                            <DataGridTextColumn Header="Region"      Binding="{Binding Region}"      Width="100"/>
+                                                                            <DataGridTemplateColumn Header="Actions" Width="90">
+                                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                                    <DataTemplate>
+                                                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                                            <Button Style="{StaticResource OpenInMakerIconButton}"                                                                                                                                                                                                        Command="{Binding DataContext.OpenInMakerCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                                                    CommandParameter="{Binding}"/>
+                                                                                            <Button Style="{StaticResource InspectJsonIconButton}"                                                                                                                                                                                                        Command="{Binding DataContext.InspectJsonCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                                                    CommandParameter="{Binding}"/>
+                                                                                        </StackPanel>
+                                                                                    </DataTemplate>
+                                                                                </DataGridTemplateColumn.CellTemplate>
+                                                                            </DataGridTemplateColumn>
+                                                                        </DataGrid.Columns>
+                                                                    </DataGrid>
+                                                                </DockPanel>
+                                                            </Border>
+
+                                                            <!-- Flows grid -->
+                                                            <Border Background="{DynamicResource TokenSurfaceSubtle}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                                                                    BorderThickness="1" CornerRadius="3"
+                                                                    Padding="8" Margin="0,0,0,6">
+                                                                <DockPanel>
+                                                                    <Grid DockPanel.Dock="Top" Margin="0,0,0,4">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="Auto"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Grid.Column="0" Text="FLOWS"
+                                                                                   Style="{StaticResource AssetSectionLabel}"/>
+                                                                        <TextBlock Grid.Column="1" HorizontalAlignment="Right"
+                                                                                   Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
+                                                                                   Text="{Binding FlowCount, StringFormat={}{0} item(s)}"/>
+                                                                    </Grid>
+                                                                    <DataGrid ItemsSource="{Binding Flows}"
+                                                                              Background="{DynamicResource TokenSurfaceSubtle}" RowBackground="{DynamicResource TokenSurfaceSubtle}"
+                                                                              AlternatingRowBackground="{DynamicResource TokenSurfaceSecondary}"
+                                                                              HeadersVisibility="Column"
+                                                                              AutoGenerateColumns="False" IsReadOnly="True"
+                                                                              CanUserAddRows="False" CanUserDeleteRows="False"
+                                                                              GridLinesVisibility="None"
+                                                                              HorizontalScrollBarVisibility="Auto"
+                                                                              MaxHeight="200">
+                                                                        <DataGrid.Columns>
+                                                                            <DataGridTextColumn Header="Name"     Binding="{Binding DisplayName}" Width="260"/>
+                                                                            <DataGridTextColumn Header="Type"     Binding="{Binding TypeDisplay}" Width="110"/>
+                                                                            <DataGridTextColumn Header="Owner"    Binding="{Binding OwnerDisplay}"     Width="180"/>
+                                                                            <DataGridTextColumn Header="Created"  Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                                            <DataGridTextColumn Header="Modified" Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                                            <DataGridTextColumn Header="Region"   Binding="{Binding Region}"      Width="100"/>
+                                                                            <DataGridTemplateColumn Header="Actions" Width="90">
+                                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                                    <DataTemplate>
+                                                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                                            <Button Style="{StaticResource OpenInMakerIconButton}"                                                                                                                                                                                                        Command="{Binding DataContext.OpenInMakerCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                                                    CommandParameter="{Binding}"/>
+                                                                                            <Button Style="{StaticResource InspectJsonIconButton}"                                                                                                                                                                                                        Command="{Binding DataContext.InspectJsonCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                                                    CommandParameter="{Binding}"/>
+                                                                                        </StackPanel>
+                                                                                    </DataTemplate>
+                                                                                </DataGridTemplateColumn.CellTemplate>
+                                                                            </DataGridTemplateColumn>
+                                                                        </DataGrid.Columns>
+                                                                    </DataGrid>
+                                                                </DockPanel>
+                                                            </Border>
+
+                                                            <!-- Agents grid -->
+                                                            <Border Background="{DynamicResource TokenSurfaceSubtle}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                                                                    BorderThickness="1" CornerRadius="3"
+                                                                    Padding="8">
+                                                                <DockPanel>
+                                                                    <Grid DockPanel.Dock="Top" Margin="0,0,0,4">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="Auto"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Grid.Column="0" Text="AGENTS"
+                                                                                   Style="{StaticResource AssetSectionLabel}"/>
+                                                                        <TextBlock Grid.Column="1" HorizontalAlignment="Right"
+                                                                                   Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
+                                                                                   Text="{Binding AgentCount, StringFormat={}{0} item(s)}"/>
+                                                                    </Grid>
+                                                                    <DataGrid ItemsSource="{Binding Agents}"
+                                                                              Background="{DynamicResource TokenSurfaceSubtle}" RowBackground="{DynamicResource TokenSurfaceSubtle}"
+                                                                              AlternatingRowBackground="{DynamicResource TokenSurfaceSecondary}"
+                                                                              HeadersVisibility="Column"
+                                                                              AutoGenerateColumns="False" IsReadOnly="True"
+                                                                              CanUserAddRows="False" CanUserDeleteRows="False"
+                                                                              GridLinesVisibility="None"
+                                                                              HorizontalScrollBarVisibility="Auto"
+                                                                              MaxHeight="200">
+                                                                        <DataGrid.Columns>
+                                                                            <DataGridTextColumn Header="Name"     Binding="{Binding DisplayName}" Width="260"/>
+                                                                            <DataGridTextColumn Header="Owner"    Binding="{Binding OwnerDisplay}"     Width="180"/>
+                                                                            <DataGridTextColumn Header="Created"  Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                                            <DataGridTextColumn Header="Modified" Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                                            <DataGridTextColumn Header="Region"   Binding="{Binding Region}"      Width="100"/>
+                                                                            <DataGridTemplateColumn Header="Actions" Width="90">
+                                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                                    <DataTemplate>
+                                                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                                            <Button Style="{StaticResource OpenInMakerIconButton}"                                                                                                                                                                                                        Command="{Binding DataContext.OpenInMakerCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                                                    CommandParameter="{Binding}"/>
+                                                                                            <Button Style="{StaticResource InspectJsonIconButton}"                                                                                                                                                                                                        Command="{Binding DataContext.InspectJsonCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                                                    CommandParameter="{Binding}"/>
+                                                                                        </StackPanel>
+                                                                                    </DataTemplate>
+                                                                                </DataGridTemplateColumn.CellTemplate>
+                                                                            </DataGridTemplateColumn>
+                                                                        </DataGrid.Columns>
+                                                                    </DataGrid>
+                                                                </DockPanel>
+                                                            </Border>
+                                                        </StackPanel>
+                                                    </Expander>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </DockPanel>
+                                </Border>
+
+                                <!-- ============================================
+                                     SECTION 1b â€” FLAT view. Four sibling
+                                     DataGrids (Solutions / Apps / Flows /
+                                     Agents) bound to the env's full asset
+                                     list, ignoring solution-component
+                                     membership. Visible only when the user
+                                     picked "Flat" in the toggle.
+                                     ============================================ -->
+                                <StackPanel Visibility="{Binding IsFlatView, Converter={StaticResource BoolToVisibility}}">
+                                    <!-- Solutions (flat) -->
+                                    <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                                            BorderThickness="1" CornerRadius="4"
+                                            Padding="10" Margin="0,0,0,10">
+                                        <DockPanel>
+                                            <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="SOLUTIONS" Foreground="{DynamicResource TokenBrandForeground}"
+                                                           FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" HorizontalAlignment="Right"
+                                                           Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
+                                                           Text="{Binding SolutionCount, StringFormat={}{0} solution(s) â€” visible Dataverse solutions only}"
+                                                           VerticalAlignment="Center"/>
+                                            </Grid>
+                                            <local:PagedDataGrid ItemsSource="{Binding Solutions}" PageSize="10" MaxHeight="280">
+<DataGridTextColumn Header="Display Name" Binding="{Binding Name}"        Width="260"/>
+                                                    <DataGridTextColumn Header="Unique Name"  Binding="{Binding UniqueName}"  Width="200"/>
+                                                    <DataGridTextColumn Header="Publisher"    Binding="{Binding Publisher}"   Width="160"/>
+                                                    <DataGridTextColumn Header="Version"      Binding="{Binding Version}"     Width="90"/>
+                                                    <DataGridCheckBoxColumn Header="Managed"  Binding="{Binding IsManaged}"   Width="70"/>
+                                                    <DataGridTextColumn Header="Components"   Binding="{Binding TotalCount}"  Width="90"/>
+                                                    <DataGridTextColumn Header="Created"      Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                    <DataGridTextColumn Header="Modified"     Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                    <DataGridTemplateColumn Header="Actions" Width="90">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                    <Button Style="{StaticResource OpenInMakerIconButton}"                                                                                                                                                        Command="{Binding DataContext.OpenInMakerCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                    <Button Style="{StaticResource InspectJsonIconButton}"                                                                                                                                                        Command="{Binding DataContext.InspectJsonCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+</local:PagedDataGrid>
+                                        </DockPanel>
+                                    </Border>
+
+                                    <!-- Apps (flat) -->
+                                    <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                                            BorderThickness="1" CornerRadius="4"
+                                            Padding="10" Margin="0,0,0,10">
+                                        <DockPanel>
+                                            <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="APPS" Foreground="{DynamicResource TokenBrandForeground}"
+                                                           FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" HorizontalAlignment="Right"
+                                                           Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
+                                                           Text="{Binding AppCount, StringFormat={}{0} app(s) â€” every canvas / model-driven / code app}"
+                                                           VerticalAlignment="Center"/>
+                                            </Grid>
+                                            <local:PagedDataGrid ItemsSource="{Binding AllApps}" PageSize="10" MaxHeight="280">
+<DataGridTextColumn Header="Name"        Binding="{Binding DisplayName}" Width="260"/>
+                                                    <DataGridTextColumn Header="Type"        Binding="{Binding TypeDisplay}" Width="130"/>
+                                                    <DataGridTextColumn Header="Solution" Binding="{Binding SolutionName, TargetNullValue=(none)}" Width="160"/>
+                                                    <DataGridTextColumn Header="Owner"       Binding="{Binding OwnerDisplay}"     Width="200"/>
+                                                    <DataGridTextColumn Header="Created"     Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                    <DataGridTextColumn Header="Modified"    Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                    <DataGridCheckBoxColumn Header="Quarantined" Binding="{Binding IsQuarantined}" Width="80"/>
+                                                    <DataGridTextColumn Header="Region"      Binding="{Binding Region}"      Width="100"/>
+                                                    <DataGridTemplateColumn Header="Actions" Width="90">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                    <Button Style="{StaticResource OpenInMakerIconButton}"                                                                                                                                                        Command="{Binding DataContext.OpenInMakerCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                    <Button Style="{StaticResource InspectJsonIconButton}"                                                                                                                                                        Command="{Binding DataContext.InspectJsonCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+</local:PagedDataGrid>
+                                        </DockPanel>
+                                    </Border>
+
+                                    <!-- Flows (flat) -->
+                                    <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                                            BorderThickness="1" CornerRadius="4"
+                                            Padding="10" Margin="0,0,0,10">
+                                        <DockPanel>
+                                            <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="FLOWS" Foreground="{DynamicResource TokenBrandForeground}"
+                                                           FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" HorizontalAlignment="Right"
+                                                           Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
+                                                           Text="{Binding FlowCount, StringFormat={}{0} flow(s) â€” cloud / agent / M365 agent flows}"
+                                                           VerticalAlignment="Center"/>
+                                            </Grid>
+                                            <local:PagedDataGrid ItemsSource="{Binding AllFlows}" PageSize="10" MaxHeight="280">
+<DataGridTextColumn Header="Name"     Binding="{Binding DisplayName}" Width="260"/>
+                                                    <DataGridTextColumn Header="Type"     Binding="{Binding TypeDisplay}" Width="130"/>
+                                                    <DataGridTextColumn Header="Solution" Binding="{Binding SolutionName, TargetNullValue=(none)}" Width="160"/>
+                                                    <DataGridTextColumn Header="Owner"    Binding="{Binding OwnerDisplay}"     Width="200"/>
+                                                    <DataGridTextColumn Header="Created"  Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                    <DataGridTextColumn Header="Modified" Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                    <DataGridTextColumn Header="Region"   Binding="{Binding Region}"      Width="100"/>
+                                                    <DataGridTemplateColumn Header="Actions" Width="90">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                    <Button Style="{StaticResource OpenInMakerIconButton}"                                                                                                                                                        Command="{Binding DataContext.OpenInMakerCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                    <Button Style="{StaticResource InspectJsonIconButton}"                                                                                                                                                        Command="{Binding DataContext.InspectJsonCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+</local:PagedDataGrid>
+                                        </DockPanel>
+                                    </Border>
+
+                                    <!-- Agents (flat) -->
+                                    <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                                            BorderThickness="1" CornerRadius="4"
+                                            Padding="10" Margin="0,0,0,10">
+                                        <DockPanel>
+                                            <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="AGENTS" Foreground="{DynamicResource TokenBrandForeground}"
+                                                           FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" HorizontalAlignment="Right"
+                                                           Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
+                                                           Text="{Binding AgentCount, StringFormat={}{0} agent(s) â€” Copilot Studio agents}"
+                                                           VerticalAlignment="Center"/>
+                                            </Grid>
+                                            <local:PagedDataGrid ItemsSource="{Binding AllAgents}" PageSize="10" MaxHeight="280">
+<DataGridTextColumn Header="Name"     Binding="{Binding DisplayName}" Width="260"/>
+                                                    <DataGridTextColumn Header="Solution" Binding="{Binding SolutionName, TargetNullValue=(none)}" Width="160"/>
+                                                    <DataGridTextColumn Header="Owner"    Binding="{Binding OwnerDisplay}"     Width="200"/>
+                                                    <DataGridTextColumn Header="Created"  Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                    <DataGridTextColumn Header="Modified" Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                    <DataGridTextColumn Header="Region"   Binding="{Binding Region}"      Width="100"/>
+                                                    <DataGridTemplateColumn Header="Actions" Width="90">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                    <Button Style="{StaticResource OpenInMakerIconButton}"                                                                                                                                                        Command="{Binding DataContext.OpenInMakerCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                    <Button Style="{StaticResource InspectJsonIconButton}"                                                                                                                                                        Command="{Binding DataContext.InspectJsonCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+</local:PagedDataGrid>
+                                        </DockPanel>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- ============================================
+                                     SECTION 2 â€” Power Pages (mspp_website / adx_website).
+                                     ============================================ -->
+                                <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                                        BorderThickness="1" CornerRadius="4"
+                                        Padding="10" Margin="0,0,0,10">
+                                    <DockPanel>
+                                        <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="POWER PAGES"
+                                                       Foreground="{DynamicResource TokenBrandForeground}" FontWeight="SemiBold" FontSize="10"
+                                                       VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" HorizontalAlignment="Right"
+                                                       Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
+                                                       Text="{Binding PowerPageCount, StringFormat={}{0} site(s) â€” Dataverse mspp_website}"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <local:PagedDataGrid ItemsSource="{Binding PowerPages}" PageSize="10" MaxHeight="200">
+<DataGridTextColumn Header="Name"           Binding="{Binding Name}"          Width="240"/>
+                                                <DataGridTextColumn Header="Site URL"       Binding="{Binding SiteUrl}"       Width="260"/>
+                                                <DataGridTextColumn Header="Type"           Binding="{Binding WebsiteType}"   Width="140"/>
+                                                <DataGridTextColumn Header="Status"         Binding="{Binding Status}"        Width="100"/>
+                                                <DataGridTextColumn Header="Created"        Binding="{Binding CreatedUtc,  StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                <DataGridTextColumn Header="Modified"       Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                <DataGridTemplateColumn Header="Actions" Width="90">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                <Button Style="{StaticResource OpenInMakerIconButton}"                                                                                                                                                Command="{Binding DataContext.OpenInMakerCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                        CommandParameter="{Binding}"/>
+                                                                <Button Style="{StaticResource InspectJsonIconButton}"                                                                                                                                                Command="{Binding DataContext.InspectJsonCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                        CommandParameter="{Binding}"/>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+</local:PagedDataGrid>
+                                    </DockPanel>
+                                </Border>
+
+                                <!-- ============================================
+                                     SECTION 3 â€” Users & Groups (Dataverse systemusers).
+                                     ============================================ -->
+                                <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                                        BorderThickness="1" CornerRadius="4"
+                                        Padding="10">
+                                    <DockPanel>
+                                        <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="USERS &amp; GROUPS"
+                                                       Foreground="{DynamicResource TokenBrandForeground}" FontWeight="SemiBold" FontSize="10"
+                                                       VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" HorizontalAlignment="Right"
+                                                       Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
+                                                       Text="{Binding UserCount, StringFormat={}{0} user(s) â€” Dataverse systemusers}"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <local:PagedDataGrid ItemsSource="{Binding UsersAndGroups}" PageSize="10" MaxHeight="240">
+<DataGridTextColumn Header="Display Name"    Binding="{Binding DisplayName}" Width="220"/>
+
+                                                <!-- Identity: hover for the Microsoft Graph license breakdown
+                                                     (asynchronously enriched after the Dataverse user load — tooltip
+                                                     stays empty for users not found in the directory pull). -->
+                                                <DataGridTemplateColumn Header="Identity" Width="240" SortMemberPath="Identity">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding Identity}"
+                                                                       VerticalAlignment="Center" Padding="2,0"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       ToolTip="{Binding LicenseDetails}"/>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+
+                                                <!-- Compact license summary ("ENTERPRISEPACK +2"). Empty until
+                                                     Graph enrichment completes. Hover the Identity column for the
+                                                     full newline-separated SKU list. -->
+                                                <DataGridTextColumn Header="License" Binding="{Binding License}" Width="180"/>
+
+                                                <DataGridTextColumn Header="Security Access" Binding="{Binding SecurityAccess}"  Width="140"/>
+                                                <DataGridTextColumn Header="Admin Status"    Binding="{Binding AdminStatus}"     Width="110"/>
+                                                <DataGridTextColumn Header="Created"         Binding="{Binding CreatedUtc, StringFormat={}{0:yyyy-MM-dd}}"  Width="100"/>
+                                                <DataGridTextColumn Header="Modified"        Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
+                                                <DataGridTemplateColumn Header="Actions" Width="90">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                <Button Style="{StaticResource OpenInMakerIconButton}"                                                                                                                                                Command="{Binding DataContext.OpenInMakerCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                        CommandParameter="{Binding}"/>
+                                                                <Button Style="{StaticResource InspectJsonIconButton}"                                                                                                                                                Command="{Binding DataContext.InspectJsonCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                        CommandParameter="{Binding}"/>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+</local:PagedDataGrid>
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                        </ScrollViewer>
+                    </DataTemplate>
+                </DataGrid.RowDetailsTemplate>
+            </DataGrid>
+
+            <!-- Status bar -->
+            <Border Grid.Row="4" Background="{DynamicResource TokenBrandBackground}" Padding="6,3" Margin="4,2,4,0">
+                <TextBlock Foreground="White" VerticalAlignment="Center"
+                           Text="{Binding StatusText}"/>
+            </Border>
+
+            <!-- Error panel (collapsed when no error) -->
+            <Border Grid.Row="5" Margin="4,4,4,0" Padding="8" CornerRadius="3"
+                    Background="{DynamicResource TokenDangerBackground}" BorderBrush="{DynamicResource TokenDangerBackground}" BorderThickness="1"
+                    Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Last error" Foreground="{DynamicResource TokenDangerForeground}"
+                                   FontWeight="Bold" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button Content="Copy"
+                                    Command="{Binding CopyErrorCommand}"
+                                    Background="{DynamicResource TokenDangerBackground}" BorderBrush="{DynamicResource TokenDangerBackground}" Foreground="White"
+                                    Padding="10,2" Margin="2,0" Cursor="Hand"
+                                    ToolTip="Copy the full error text (exception chain + HTTP body) to the clipboard."/>
+                            <Button Content="Open trace log"
+                                    Command="{Binding OpenTraceLogCommand}"
+                                    Background="#3A3A3D" BorderBrush="#555" Foreground="White"
+                                    Padding="10,2" Margin="2,0" Cursor="Hand"
+                                    ToolTip="Open the full request/response trace file."/>
+                        </StackPanel>
+                    </Grid>
+                    <TextBox Text="{Binding LastError, Mode=OneWay}"
+                             IsReadOnly="True" Background="Transparent"
+                             Foreground="{DynamicResource TokenDangerForeground}" BorderThickness="0"
+                             FontFamily="Cascadia Mono, Consolas" FontSize="11"
+                             TextWrapping="Wrap" AcceptsReturn="True"
+                             MaxHeight="220"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto"/>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- ==================================================================
+             RIGHT-SIDE SLIDE-IN DRAWER (PCF "DLP Policies" pattern).
+             Click any hero KPI tile to open. Click the dim overlay or Ã— to close.
+             ================================================================== -->
+        <Grid Visibility="{Binding IsDrawerOpen, Converter={StaticResource BoolToVisibility}}">
+            <!-- Dim overlay (tap-to-close) -->
+            <Button Background="#80000000" BorderThickness="0"
+                    Command="{Binding CloseDrawerCommand}" Cursor="Arrow"
+                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <!-- Drawer panel -->
+            <Border HorizontalAlignment="Right" Width="460"
+                    Background="{DynamicResource TokenSurfacePrimary}" BorderBrush="{DynamicResource TokenStrokeSubtle}" BorderThickness="1,0,0,0">
+                <DockPanel>
+                    <!-- Drawer header -->
+                    <Border DockPanel.Dock="Top" Padding="18,14" Background="{DynamicResource TokenSurfaceSubtle}"
+                            BorderBrush="{DynamicResource TokenStrokeSubtle}" BorderThickness="0,0,0,1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="{Binding DrawerTitle}" Foreground="White"
+                                           FontSize="16" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding DrawerSubtitle}" Foreground="{DynamicResource TokenTextSecondary}"
+                                           FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Ã—"
+                                    Command="{Binding CloseDrawerCommand}"
+                                    Background="Transparent" BorderThickness="0"
+                                    Foreground="{DynamicResource TokenTextSecondary}" FontSize="20" Padding="8,0"
+                                    Cursor="Hand" VerticalAlignment="Top"
+                                    ToolTip="Close (Esc)"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Drawer item list -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="12">
+                        <ItemsControl ItemsSource="{Binding DrawerItems}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}" BorderThickness="1"
+                                            CornerRadius="4" Padding="12,10" Margin="0,0,0,8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="{Binding Title}" Foreground="White"
+                                                           FontWeight="SemiBold" FontSize="13"/>
+                                                <TextBlock Text="{Binding Subtitle}" Foreground="{DynamicResource TokenTextSecondary}"
+                                                           FontSize="11" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                            <Border Grid.Column="1" Background="#1F5A40"
+                                                    CornerRadius="10" Padding="8,2" VerticalAlignment="Center">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Badge}" Value="">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="{Binding Badge}"
+                                                           Style="{StaticResource StatusBadgeText}"
+                                                           Foreground="#7DD9A6"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

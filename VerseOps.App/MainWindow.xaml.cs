@@ -4,19 +4,29 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using VerseOps.App.Api;
 using VerseOps.App.Auth;
+using VerseOps.App.Inventory;
+using VerseOps.App.Inventory.Services;
 using VerseOps.App.Sdk;
+// Bring in just the FluentWindow type — a `using Wpf.Ui.Controls;` would
+// collide with System.Windows.Controls.TextBox / TreeViewItem etc.
+using FluentWindow = Wpf.Ui.Controls.FluentWindow;
 
 namespace VerseOps.App;
 
-public partial class MainWindow : Window
+// Inherits from Wpf.Ui.Controls.FluentWindow so the OS chrome is replaced
+// with a Fluent v2 title bar and the window can host a Mica/Acrylic backdrop
+// (configured in MainWindow.xaml via WindowBackdropType="Mica").
+public partial class MainWindow : FluentWindow
 {
     private readonly AuthService _auth = new();
     private readonly ApiExecutor _executor;
     private readonly SdkExecutor _sdkExecutor;
+    private readonly InventoryViewModel _inventoryVm;
     private ApiOperation? _selected;
     private SdkOp? _selectedSdk;
     private CancellationTokenSource? _cts;
@@ -28,6 +38,20 @@ public partial class MainWindow : Window
         InitializeComponent();
         _executor = new ApiExecutor(_auth);
         _sdkExecutor = new SdkExecutor(_auth);
+
+        // Inventory dashboard wiring (PPAC SDK-only; SQLite-cached).
+        var sqliteCatalog = new SqliteCatalog();
+        var inventoryService = new PpacInventoryService(_auth, sqliteCatalog);
+        _inventoryVm = new InventoryViewModel(inventoryService);
+        InventoryDashboard.DataContext = _inventoryVm;
+
+        // Wire WAM broker to the host window so the consent prompt is parented correctly.
+        _auth.WindowHandleProvider = () =>
+        {
+            try { return new WindowInteropHelper(this).EnsureHandle(); }
+            catch { return IntPtr.Zero; }
+        };
+
         CbMethod.SelectedIndex = 0;
         BuildOperationsTree();
         if (TxtSurfaceNotice != null) TxtSurfaceNotice.Text = PpacNotice;
@@ -263,7 +287,18 @@ public partial class MainWindow : Window
         var mode = RbUser.IsChecked == true ? "User" : "App-only";
         var who = _auth.LastSignedInUser ?? "(not signed in yet)";
         TxtAuthState.Text = $"Mode: {mode}   Identity: {who}";
+
+        // Once we have a signed-in identity, auto-collapse the (rarely-edited)
+        // auth panel to give the dashboard the full vertical space below the
+        // title bar. Only collapses on the *first* sign-in transition so the
+        // user can still re-open it manually after that.
+        if (!_authCollapsedOnce && _auth.LastSignedInUser != null && AuthExpander != null)
+        {
+            AuthExpander.IsExpanded = false;
+            _authCollapsedOnce = true;
+        }
     }
+    private bool _authCollapsedOnce;
 
     private void OnOperationSelected(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
@@ -281,6 +316,7 @@ public partial class MainWindow : Window
             TbDescription.Text = DescribeSdkOp(sop);
             TxtStatus.Text = $"SDK: {sop.PathText}.{sop.Method.Name}";
             BuildSdkForm(sop);
+            BuildReturnTypeTree(sop, populatedJson: null);
             return;
         }
         if (e.NewValue is TreeViewItem { Tag: ApiOperation op })
@@ -298,6 +334,91 @@ public partial class MainWindow : Window
             TxtStatus.Text = $"Loaded template: {op.Category} / {op.Name}";
             BuildForm(op);
         }
+    }
+
+    /// <summary>
+    /// Renders the method's return type as a TreeView (property name : type), and when
+    /// a JSON response is supplied, attaches the actual values to each leaf so users see
+    /// "DisplayName : string  =  Contoso Sandbox" instead of just the schema.
+    /// </summary>
+    private void BuildReturnTypeTree(SdkOp op, string? populatedJson)
+    {
+        TvReturn.Items.Clear();
+        var ret = UnwrapTask(op.Method.ReturnType);
+        TxtReturnTypeHeader.Text = $"{op.Method.Name}() -> {FriendlyName(ret)}"
+            + (populatedJson == null ? "  (schema only \u2014 press Send to populate values)" : "  (with response values)");
+        if (ret == typeof(void)) return;
+        JsonElement? root = null;
+        if (!string.IsNullOrWhiteSpace(populatedJson))
+        {
+            try { root = JsonDocument.Parse(populatedJson).RootElement.Clone(); } catch { }
+        }
+        var node = BuildReturnNode("(return)", ret, root, depth: 0, maxDepth: 4, visited: new HashSet<Type>());
+        TvReturn.Items.Add(node);
+        node.IsExpanded = true;
+    }
+
+    private static TreeViewItem BuildReturnNode(string name, Type t, JsonElement? value, int depth, int maxDepth, HashSet<Type> visited)
+    {
+        var typeText = FriendlyName(t);
+        string valueText = "";
+        if (value.HasValue)
+        {
+            valueText = value.Value.ValueKind switch
+            {
+                JsonValueKind.String => $"  =  \"{value.Value.GetString()}\"",
+                JsonValueKind.Number => $"  =  {value.Value.GetRawText()}",
+                JsonValueKind.True or JsonValueKind.False => $"  =  {value.Value.GetRawText()}",
+                JsonValueKind.Null => "  =  null",
+                JsonValueKind.Array => $"  =  [{value.Value.GetArrayLength()} items]",
+                JsonValueKind.Object => "",
+                _ => ""
+            };
+        }
+        var tvi = new TreeViewItem { Header = $"{name} : {typeText}{valueText}" };
+        if (depth >= maxDepth) return tvi;
+        // Recurse for collections + complex SDK types
+        var elemType = t;
+        bool isCollection = false;
+        if (t.IsGenericType)
+        {
+            var gd = t.GetGenericTypeDefinition();
+            if (gd == typeof(List<>) || gd == typeof(IList<>) || gd == typeof(IEnumerable<>) || gd == typeof(ICollection<>))
+            { elemType = t.GetGenericArguments()[0]; isCollection = true; }
+        }
+        if (isCollection && value?.ValueKind == JsonValueKind.Array)
+        {
+            int i = 0;
+            foreach (var v in value.Value.EnumerateArray().Take(5))
+                tvi.Items.Add(BuildReturnNode($"[{i++}]", elemType, v, depth + 1, maxDepth, visited));
+            if (value.Value.GetArrayLength() > 5)
+                tvi.Items.Add(new TreeViewItem { Header = $"\u2026 ({value.Value.GetArrayLength() - 5} more)" });
+            return tvi;
+        }
+        if (isCollection)
+        {
+            // schema only \u2014 show element type once
+            tvi.Items.Add(BuildReturnNode("[item]", elemType, null, depth + 1, maxDepth, visited));
+            return tvi;
+        }
+        if (t.IsPrimitive || t == typeof(string) || t == typeof(Guid) || t == typeof(DateTime) || t == typeof(DateTimeOffset) || t.IsEnum) return tvi;
+        if (!visited.Add(t)) return tvi;
+        var props = t.GetProperties(BindingFlags.Public | BindingFlags.Instance).Take(60).ToList();
+        foreach (var p in props)
+        {
+            JsonElement? childVal = null;
+            if (value?.ValueKind == JsonValueKind.Object)
+            {
+                // Match case-insensitively (Kiota emits lowerCamelCase, .NET props are PascalCase).
+                foreach (var kv in value.Value.EnumerateObject())
+                {
+                    if (string.Equals(kv.Name, p.Name, StringComparison.OrdinalIgnoreCase))
+                    { childVal = kv.Value; break; }
+                }
+            }
+            tvi.Items.Add(BuildReturnNode(p.Name, p.PropertyType, childVal, depth + 1, maxDepth, visited));
+        }
+        return tvi;
     }
 
     private static string DescribeSdkOp(SdkOp op)
