@@ -275,6 +275,81 @@ public sealed class GraphLicenseClient
     }
 
     /// <summary>
+    /// Resolves AAD group ids to their <c>displayName</c> via Microsoft Graph
+    /// <c>POST /v1.0/directoryObjects/getByIds</c>. Used by the env grid to
+    /// label the "Security Group" column with a human-readable name instead
+    /// of a raw GUID. One round-trip per chunk of 1000 ids (Graph cap), so
+    /// even a tenant with hundreds of envs typically resolves in a single
+    /// call. Failures are non-fatal — missing names just mean the column
+    /// falls back to the GUID prefix.
+    /// </summary>
+    public async Task<Dictionary<string, string>> ResolveGroupNamesAsync(
+        IEnumerable<string> groupIds,
+        CancellationToken ct = default)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var distinct = groupIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (distinct.Count == 0) return result;
+
+        try
+        {
+            var token = await _auth.GetTokenAsync(GraphScope, ct).ConfigureAwait(false);
+            using var http = new HttpClient(new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All })
+            {
+                BaseAddress = new Uri(GraphBaseUrl),
+                Timeout = TimeSpan.FromSeconds(30)
+            };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            // getByIds caps at 1000 ids per request; chunk defensively.
+            const int Chunk = 1000;
+            for (int i = 0; i < distinct.Count; i += Chunk)
+            {
+                ct.ThrowIfCancellationRequested();
+                var slice = distinct.Skip(i).Take(Chunk).ToList();
+                // The "types" hint lets Graph short-circuit other directory-
+                // object lookups so the call is faster and limits the result
+                // set to security/Microsoft 365 groups.
+                var body = new { ids = slice, types = new[] { "group" } };
+                var json = JsonSerializer.Serialize(body);
+                using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+                using var resp = await http.PostAsync("directoryObjects/getByIds", content, ct).ConfigureAwait(false);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Warning = $"Graph getByIds returned {(int)resp.StatusCode} — security-group names degraded.";
+                    return result;
+                }
+                var respJson = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                using var doc = JsonDocument.Parse(respJson);
+                if (doc.RootElement.TryGetProperty("value", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var el in arr.EnumerateArray())
+                    {
+                        if (!el.TryGetProperty("id", out var idEl)) continue;
+                        var id = idEl.GetString();
+                        if (string.IsNullOrEmpty(id)) continue;
+                        var name = el.TryGetProperty("displayName", out var nameEl) && nameEl.ValueKind == JsonValueKind.String
+                            ? nameEl.GetString()
+                            : null;
+                        if (!string.IsNullOrEmpty(name))
+                            result[id] = name!;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Warning = $"Graph getByIds failed ({ex.GetType().Name}: {ex.Message}).";
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Tenant-wide license consumption rollup, derived from the cached
     /// <see cref="LicensesByUpn"/> map (so this is free after
     /// <see cref="LoadAsync"/> has run). The result is sorted descending

@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
+using System.Windows;
 using System.Windows.Data;
 using System.Windows.Input;
 using VerseOps.App.Inventory.Models;
@@ -22,6 +24,21 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
     private DateTime? _lastRefreshedUtc;
     private bool _showOnlyMyEnvironments;
     private bool _membershipProbeStarted;
+
+    /// <summary>
+    /// One-shot latch for the security-group name resolution. Independent
+    /// of <see cref="_membershipProbeStarted"/> because we want to populate
+    /// the env grid's "Security Group" column on every refresh, regardless
+    /// of whether the user has flipped the "Only my envs" toggle on.
+    /// </summary>
+    private bool _groupNamesResolveStarted;
+
+    /// <summary>
+    /// Backs the Cancel button on the toolbar. Created fresh per-refresh so a
+    /// cancelled refresh doesn't poison the next one. Disposed in
+    /// <see cref="RefreshAsync"/>'s finally / next-refresh start.
+    /// </summary>
+    private CancellationTokenSource? _refreshCts;
 
     /// <summary>
     /// True when at least one EnvironmentRow has IsExpanded==true. Drives
@@ -72,6 +89,7 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
         };
 
         RefreshCommand = new RelayCommand(async _ => await RefreshAsync(), _ => !IsBusy);
+        CancelRefreshCommand = new RelayCommand(_ => _refreshCts?.Cancel(), _ => IsBusy);
         ReloadCommand = new RelayCommand(_ => ReloadFromCatalog(), _ => !IsBusy);
         OpenTraceLogCommand = new RelayCommand(_ => OpenTraceLog());
         CopyErrorCommand = new RelayCommand(_ => CopyError(), _ => HasError);
@@ -82,6 +100,10 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
         OpenEnvCommand = new RelayCommand(p => OpenEnv(p as EnvironmentRow));
         CopyTextCommand = new RelayCommand(p => CopyText(p as string));
         OpenUrlCommand = new RelayCommand(p => OpenUrl(p as string));
+        RevokeAdminCommand = new RelayCommand(async p => await RevokeAdminAsync(p as UserGroupRow),
+                                              p => p is UserGroupRow u && u.IsAdmin && !IsBusy);
+        ClearEnvSearchCommand = new RelayCommand(_ => EnvSearchText = string.Empty,
+                                                 _ => HasEnvSearch);
         ReloadFromCatalog();
     }
 
@@ -110,6 +132,17 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
     public ICommand CopyErrorCommand { get; }
     public ICommand OpenDrawerCommand { get; }
     public ICommand CloseDrawerCommand { get; }
+
+    /// <summary>Cancels the in-flight refresh (if any).</summary>
+    public ICommand CancelRefreshCommand { get; }
+
+    /// <summary>
+    /// Removes System Administrator from the bound <see cref="UserGroupRow"/>
+    /// on its owning env (Dataverse Web API). Modal-confirms before the
+    /// DELETE; flips <c>AdminStatus</c> on success so the row's chrome
+    /// updates immediately.
+    /// </summary>
+    public ICommand RevokeAdminCommand { get; }
 
     /// <summary>Pop the Metadata Inspector dialog showing the row's raw JSON.</summary>
     public ICommand InspectJsonCommand { get; }
@@ -147,6 +180,138 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
             if (value) _ = EnsureMembershipProbeAsync();
         }
     }
+
+    private string _envSearchText = string.Empty;
+    /// <summary>
+    /// Free-text filter for the env grid. Matched case-insensitively against
+    /// every column the header surfaces (Name, SKU, Status, Region, Version,
+    /// Security Group, all capacity displays, Instance URL, Env ID).
+    /// Multiple whitespace-separated tokens are AND-ed so the user can type
+    /// e.g. <c>"prod uat eastus"</c> to narrow progressively. Empty string
+    /// passes everything.
+    /// </summary>
+    public string EnvSearchText
+    {
+        get => _envSearchText;
+        set
+        {
+            value ??= string.Empty;
+            if (_envSearchText == value) return;
+            _envSearchText = value;
+            // Cache the lowercased token list once per keystroke so the
+            // per-row filter predicate doesn't re-tokenize for every env.
+            _envSearchTokens = string.IsNullOrWhiteSpace(value)
+                ? Array.Empty<string>()
+                : value.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                       .Select(t => t.ToLowerInvariant())
+                       .ToArray();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasEnvSearch));
+            EnvironmentsView.Refresh();
+        }
+    }
+    private string[] _envSearchTokens = Array.Empty<string>();
+
+    /// <summary>True when the env search box has any non-whitespace text — drives the clear-button visibility.</summary>
+    public bool HasEnvSearch => _envSearchTokens.Length > 0;
+
+    /// <summary>Clears <see cref="EnvSearchText"/> from the toolbar X button.</summary>
+    public ICommand ClearEnvSearchCommand { get; }
+
+    // -----------------------------------------------------------------------
+    // Per-column filters (Sentinel-style funnel popups in each header). Each
+    // setter triggers EnvironmentsView.Refresh so the grid live-filters as
+    // the user types. Empty string means "no filter on this column" — checked
+    // upfront in FilterEnvironment so filter-free columns short-circuit out.
+    // Hosted XAML in Inventory/ColumnFilterHeader.xaml; bindings use
+    // RelativeSource AncestorType=DataGrid because DataGrid column headers
+    // are not in the visual tree (so a plain {Binding FilterName} won't
+    // resolve the VM).
+    // -----------------------------------------------------------------------
+    private string _filterName = string.Empty;
+    private string _filterSku = string.Empty;
+    private string _filterStatus = string.Empty;
+    private string _filterRegion = string.Empty;
+    private string _filterVersion = string.Empty;
+    private string _filterCreated = string.Empty;
+    private string _filterSecurityGroup = string.Empty;
+    private string _filterDatabase = string.Empty;
+    private string _filterFile = string.Empty;
+    private string _filterLog = string.Empty;
+    private string _filterFinOpsDb = string.Empty;
+    private string _filterFinOpsFile = string.Empty;
+    private string _filterInstanceUrl = string.Empty;
+
+    /// <summary>Per-column filter — Name. Substring match, case-insensitive.</summary>
+    public string FilterName        { get => _filterName;          set => SetColumnFilter(ref _filterName,        value); }
+    public string FilterSku         { get => _filterSku;           set => SetColumnFilter(ref _filterSku,         value); }
+    public string FilterStatus      { get => _filterStatus;        set => SetColumnFilter(ref _filterStatus,      value); }
+    public string FilterRegion      { get => _filterRegion;        set => SetColumnFilter(ref _filterRegion,      value); }
+    public string FilterVersion     { get => _filterVersion;       set => SetColumnFilter(ref _filterVersion,     value); }
+    public string FilterCreated     { get => _filterCreated;       set => SetColumnFilter(ref _filterCreated,     value); }
+    public string FilterSecurityGroup { get => _filterSecurityGroup; set => SetColumnFilter(ref _filterSecurityGroup, value); }
+    public string FilterDatabase    { get => _filterDatabase;      set => SetColumnFilter(ref _filterDatabase,    value); }
+    public string FilterFile        { get => _filterFile;          set => SetColumnFilter(ref _filterFile,        value); }
+    public string FilterLog         { get => _filterLog;           set => SetColumnFilter(ref _filterLog,         value); }
+    public string FilterFinOpsDb    { get => _filterFinOpsDb;      set => SetColumnFilter(ref _filterFinOpsDb,    value); }
+    public string FilterFinOpsFile  { get => _filterFinOpsFile;    set => SetColumnFilter(ref _filterFinOpsFile,  value); }
+    public string FilterInstanceUrl { get => _filterInstanceUrl;   set => SetColumnFilter(ref _filterInstanceUrl, value); }
+
+    /// <summary>
+    /// True if any per-column filter is non-empty. Used to drive the
+    /// "Clear column filters" toolbar button visibility.
+    /// </summary>
+    public bool HasAnyColumnFilter =>
+        !string.IsNullOrWhiteSpace(_filterName) ||
+        !string.IsNullOrWhiteSpace(_filterSku) ||
+        !string.IsNullOrWhiteSpace(_filterStatus) ||
+        !string.IsNullOrWhiteSpace(_filterRegion) ||
+        !string.IsNullOrWhiteSpace(_filterVersion) ||
+        !string.IsNullOrWhiteSpace(_filterCreated) ||
+        !string.IsNullOrWhiteSpace(_filterSecurityGroup) ||
+        !string.IsNullOrWhiteSpace(_filterDatabase) ||
+        !string.IsNullOrWhiteSpace(_filterFile) ||
+        !string.IsNullOrWhiteSpace(_filterLog) ||
+        !string.IsNullOrWhiteSpace(_filterFinOpsDb) ||
+        !string.IsNullOrWhiteSpace(_filterFinOpsFile) ||
+        !string.IsNullOrWhiteSpace(_filterInstanceUrl);
+
+    /// <summary>
+    /// Helper used by every per-column filter setter — normalises null→"",
+    /// short-circuits no-op assignments, raises INPC for the property +
+    /// HasAnyColumnFilter, then refreshes the env CollectionView.
+    /// </summary>
+    private void SetColumnFilter(ref string field, string? value, [CallerMemberName] string? name = null)
+    {
+        value ??= string.Empty;
+        if (field == value) return;
+        field = value;
+        OnPropertyChanged(name);
+        OnPropertyChanged(nameof(HasAnyColumnFilter));
+        EnvironmentsView.Refresh();
+    }
+
+    /// <summary>
+    /// Clear every per-column env-grid filter at once. Wired to a "Clear
+    /// column filters" button on the toolbar that only appears when at least
+    /// one filter is set (HasAnyColumnFilter).
+    /// </summary>
+    public ICommand ClearColumnFiltersCommand => _clearColumnFiltersCommand ??= new RelayCommand(_ =>
+    {
+        _filterName = _filterSku = _filterStatus = _filterRegion = _filterVersion =
+            _filterCreated = _filterSecurityGroup = _filterDatabase = _filterFile =
+            _filterLog = _filterFinOpsDb = _filterFinOpsFile = _filterInstanceUrl = string.Empty;
+        OnPropertyChanged(nameof(FilterName)); OnPropertyChanged(nameof(FilterSku));
+        OnPropertyChanged(nameof(FilterStatus)); OnPropertyChanged(nameof(FilterRegion));
+        OnPropertyChanged(nameof(FilterVersion)); OnPropertyChanged(nameof(FilterCreated));
+        OnPropertyChanged(nameof(FilterSecurityGroup)); OnPropertyChanged(nameof(FilterDatabase));
+        OnPropertyChanged(nameof(FilterFile)); OnPropertyChanged(nameof(FilterLog));
+        OnPropertyChanged(nameof(FilterFinOpsDb)); OnPropertyChanged(nameof(FilterFinOpsFile));
+        OnPropertyChanged(nameof(FilterInstanceUrl));
+        OnPropertyChanged(nameof(HasAnyColumnFilter));
+        EnvironmentsView.Refresh();
+    }, _ => HasAnyColumnFilter);
+    private RelayCommand? _clearColumnFiltersCommand;
 
     /// <summary>
     /// CollectionView predicate. When the toggle is off everything passes;
@@ -211,7 +376,76 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
         // (well, all expanded rows — supports multi-expand) stays visible.
         if (_anyRowExpanded && !row.IsExpanded) return false;
 
+        // Per-column filters (Sentinel-style header funnels). Each is an
+        // independent substring match on the column's display value; ANDed
+        // together so multiple filters narrow progressively. Empty string
+        // short-circuits — most columns have no filter on most refreshes,
+        // so this is essentially free in the common case.
+        if (!ColumnContains(_filterName,           row.DisplayName)) return false;
+        if (!ColumnContains(_filterSku,            row.Sku)) return false;
+        if (!ColumnContains(_filterStatus,         row.ProvisioningState)) return false;
+        if (!ColumnContains(_filterRegion,         row.Region)) return false;
+        if (!ColumnContains(_filterVersion,        row.Version)) return false;
+        if (!ColumnContains(_filterCreated,        row.CreatedUtc?.ToString("yyyy-MM-dd"))) return false;
+        if (!ColumnContains(_filterSecurityGroup,  row.SecurityGroupSummary)) return false;
+        if (!ColumnContains(_filterDatabase,       row.DatabaseGbDisplay)) return false;
+        if (!ColumnContains(_filterFile,           row.FileGbDisplay)) return false;
+        if (!ColumnContains(_filterLog,            row.LogGbDisplay)) return false;
+        if (!ColumnContains(_filterFinOpsDb,       row.FinOpsDatabaseGbDisplay)) return false;
+        if (!ColumnContains(_filterFinOpsFile,     row.FinOpsFileGbDisplay)) return false;
+        if (!ColumnContains(_filterInstanceUrl,    row.InstanceUrl)) return false;
+
+        // Free-text search across every column the env grid header surfaces.
+        // Tokens are AND-ed: each whitespace-separated token must appear in
+        // at least one column. Done last so the cheaper toggles short-circuit
+        // first when the user is just toggling membership / focus mode.
+        if (_envSearchTokens.Length > 0)
+        {
+            // Single concatenated haystack so we don't allocate per-token
+            // per-column. Includes everything visible in the header row plus
+            // ids that are useful for paste-and-find debugging.
+            var haystack = string.Join('\u001f', new[]
+            {
+                row.DisplayName,
+                row.Sku,
+                row.ProvisioningState,
+                row.Region,
+                row.Version,
+                row.IsDefault ? "default" : null,
+                row.IsManagedEnvironment ? "managed" : null,
+                row.CreatedUtc?.ToString("yyyy-MM-dd"),
+                row.SecurityGroupSummary,
+                row.SecurityGroupId,
+                row.DatabaseGbDisplay,
+                row.FileGbDisplay,
+                row.LogGbDisplay,
+                row.FinOpsDatabaseGbDisplay,
+                row.FinOpsFileGbDisplay,
+                row.InstanceUrl,
+                row.EnvId
+            }.Where(s => !string.IsNullOrEmpty(s))).ToLowerInvariant();
+
+            for (int i = 0; i < _envSearchTokens.Length; i++)
+            {
+                if (haystack.IndexOf(_envSearchTokens[i], StringComparison.Ordinal) < 0)
+                    return false;
+            }
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// Per-column-filter helper: empty filter passes; otherwise case-insensitive
+    /// substring match against the cell's display value. Null / empty cell text
+    /// fails any non-empty filter (so the user gets only rows where the column
+    /// has a value matching the typed substring).
+    /// </summary>
+    private static bool ColumnContains(string filter, string? cellValue)
+    {
+        if (string.IsNullOrWhiteSpace(filter)) return true;
+        if (string.IsNullOrEmpty(cellValue)) return false;
+        return cellValue.Contains(filter, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -271,6 +505,94 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
             StatusText = $"Security-group membership check failed: {ex.Message}";
             // Allow a future retry by clearing the latch.
             _membershipProbeStarted = false;
+        }
+    }
+
+    /// <summary>
+    /// Resolves AAD security-group display names via Microsoft Graph and
+    /// stamps each <see cref="EnvironmentRow.SecurityGroupDisplayName"/>.
+    /// Runs at most once per session — independent of the "Only my envs"
+    /// toggle so the env grid's "Security Group" column always shows
+    /// human-readable names. Silent on failure (the column falls back to
+    /// the GUID prefix automatically).
+    /// </summary>
+    private async Task EnsureSecurityGroupNamesAsync()
+    {
+        if (_groupNamesResolveStarted) return;
+        _groupNamesResolveStarted = true;
+        try
+        {
+            var groupIds = Environments
+                .Select(e => e.SecurityGroupId)
+                .Where(id => !string.IsNullOrEmpty(id))
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (groupIds.Count == 0) return;
+
+            var names = await _service.ResolveSecurityGroupNamesAsync(groupIds).ConfigureAwait(false);
+            if (names.Count == 0) return;
+
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                foreach (var row in Environments)
+                {
+                    if (string.IsNullOrEmpty(row.SecurityGroupId)) continue;
+                    if (names.TryGetValue(row.SecurityGroupId, out var name) && !string.IsNullOrEmpty(name))
+                        row.SecurityGroupDisplayName = name;
+                }
+            });
+        }
+        catch
+        {
+            // Best-effort. Allow a future retry on next refresh.
+            _groupNamesResolveStarted = false;
+        }
+    }
+
+    /// <summary>
+    /// Yes/No-confirmed Revoke System Admin call against the Users sub-grid.
+    /// Looks up the System Administrator role on the env and disassociates
+    /// it from the row's <see cref="UserGroupRow.SystemUserId"/>. On 204
+    /// flips the row's <c>AdminStatus</c> so the grid + button visibility
+    /// re-render immediately. On failure surfaces the response body in
+    /// <see cref="LastError"/> so the admin can act on the error.
+    /// </summary>
+    private async Task RevokeAdminAsync(UserGroupRow? user)
+    {
+        if (user is null) { StatusText = "Revoke Admin: no user selected."; return; }
+        if (string.IsNullOrEmpty(user.SystemUserId) || string.IsNullOrEmpty(user.InstanceUrl))
+        {
+            StatusText = "Revoke Admin: row is missing systemuserid or instance URL.";
+            return;
+        }
+        if (!user.IsAdmin)
+        {
+            StatusText = $"Revoke Admin: {user.DisplayName} is not currently an admin.";
+            return;
+        }
+
+        var confirm = System.Windows.MessageBox.Show(
+            $"Remove the System Administrator role from\n  {user.DisplayName} ({user.Identity})\n\n" +
+            $"on environment {user.EnvId}?\n\n" +
+            "This calls Dataverse Web API and is auditable. You must hold System Administrator on the target env.",
+            "Revoke System Administrator?",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning,
+            System.Windows.MessageBoxResult.No);
+        if (confirm != System.Windows.MessageBoxResult.Yes) return;
+
+        try
+        {
+            StatusText = $"Revoking admin for {user.DisplayName}...";
+            await _service.RevokeSystemAdminAsync(user.InstanceUrl!, user.SystemUserId!).ConfigureAwait(true);
+            user.AdminStatus = "Non-Admin";
+            StatusText = $"Revoked System Administrator from {user.DisplayName}.";
+        }
+        catch (Exception ex)
+        {
+            LastError = $"Revoke admin failed for {user.DisplayName}: {ex.Message}";
+            StatusText = "Revoke admin failed.";
         }
     }
 
@@ -363,10 +685,21 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
                             .OrderByDescending(e => e.DatabaseGb!.Value)
                             .Take(50))
                 {
-                    DrawerItems.Add(new DrawerItem(
-                        row.DisplayName ?? row.EnvId,
-                        $"DB: {row.DatabaseGb:N2} GB   File: {row.FileGb:N2} GB   Log: {row.LogGb:N3} GB",
-                        row.Sku ?? string.Empty));
+                    var subtitle = $"DB: {row.DatabaseGbDisplay}   File: {row.FileGbDisplay}   Log: {row.LogGbDisplay}";
+                    if (row.HasFinOps)
+                    {
+                        // FinOps-licensed envs (Dynamics 365 F&O) have a
+                        // separate accounting bucket; tack it on so admins
+                        // see Dataverse + FinOps side-by-side.
+                        subtitle += $"   FinOps DB: {row.FinOpsDatabaseGbDisplay}   FinOps File: {row.FinOpsFileGbDisplay}";
+                    }
+                    var badge = row.DatabaseStatus switch
+                    {
+                        "over" => "OVER",
+                        "warn" => "NEAR",
+                        _      => row.Sku ?? string.Empty
+                    };
+                    DrawerItems.Add(new DrawerItem(row.DisplayName ?? row.EnvId, subtitle, badge));
                 }
                 if (DrawerItems.Count == 0)
                     DrawerItems.Add(new DrawerItem("No capacity data yet", "Click Refresh to pull from BAP.", string.Empty));
@@ -441,6 +774,7 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             (RefreshCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (ReloadCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (CancelRefreshCommand as RelayCommand)?.RaiseCanExecuteChanged();
         }
     }
 
@@ -605,6 +939,13 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
             StatusText = $"Loaded {Environments.Count} envs + {TenantCapacity.Count} tenant capacity rows + {Assets.Count} assets from local catalog.";
             LastError = null;
             RaiseAggregates();
+
+            // Fire-and-forget: backfill the env grid's Security Group column
+            // with display names from Microsoft Graph. Independent of the
+            // "Only my envs" toggle (which kicks the membership probe). Safe
+            // to call repeatedly — internal latch ensures the Graph call
+            // happens at most once per session.
+            _ = EnsureSecurityGroupNamesAsync();
         }
         catch (Exception ex)
         {
@@ -632,10 +973,28 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
         LastError = null;
         StatusText = "Starting refresh...";
 
+        // Fresh CTS for this refresh; CancelRefreshCommand fires .Cancel().
+        _refreshCts?.Dispose();
+        _refreshCts = new CancellationTokenSource();
+        var ct = _refreshCts.Token;
+        (CancelRefreshCommand as RelayCommand)?.RaiseCanExecuteChanged();
+
         var progress = new Progress<string>(msg => StatusText = msg);
+
+        // Per-phase callback: as soon as a phase lands in SQLite, marshal to
+        // the UI thread and rebuild the bound collections so the user sees
+        // env grid + tiles populate incrementally instead of waiting for the
+        // slowest phase (Inventory API) to finish.
+        Func<RefreshPhase, Task> onPhase = phase =>
+        {
+            return Application.Current?.Dispatcher is { } d
+                ? d.InvokeAsync(() => ReloadFromCatalog()).Task
+                : Task.CompletedTask;
+        };
+
         try
         {
-            var result = await Task.Run(() => _service.RefreshAsync(progress)).ConfigureAwait(true);
+            var result = await Task.Run(() => _service.RefreshAsync(progress, onPhase, ct), ct).ConfigureAwait(true);
             ReloadFromCatalog();
             StatusText = $"Refresh complete: {result.EnvironmentCount} envs, " +
                          $"{result.CapacityRows} capacity rows, " +
@@ -654,6 +1013,7 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
         finally
         {
             IsBusy = false;
+            (CancelRefreshCommand as RelayCommand)?.RaiseCanExecuteChanged();
         }
     }
 

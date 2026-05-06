@@ -34,6 +34,18 @@ public interface IInventoryService
     Task<RefreshResult> RefreshAsync(IProgress<string>? progress = null, CancellationToken ct = default);
 
     /// <summary>
+    /// Same as <see cref="RefreshAsync"/> but invokes <paramref name="onPhaseReady"/>
+    /// after each independent phase completes and lands in SQLite, so the UI
+    /// can re-hydrate incrementally instead of waiting for the slowest phase.
+    /// Phases run in parallel where they're independent (env list, BAP
+    /// capacity, tenant capacity, Inventory API assets).
+    /// </summary>
+    Task<RefreshResult> RefreshAsync(
+        IProgress<string>? progress,
+        Func<RefreshPhase, Task>? onPhaseReady,
+        CancellationToken ct);
+
+    /// <summary>
     /// Lazy-load per-env Dataverse details (real solutions / Power Pages /
     /// users) for one environment. Results are cached on the
     /// <see cref="EnvironmentRow"/> instance so re-selecting the row is
@@ -74,6 +86,46 @@ public interface IInventoryService
     Task<HashSet<string>> CheckSecurityGroupMembershipAsync(
         IEnumerable<string> groupIds,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Resolves AAD security-group ids to their display names via Microsoft
+    /// Graph. Used by the env grid's "Security Group" column so admins see
+    /// "Finance Admins" instead of <c>0fa9...3d</c>. Failures return an
+    /// empty dictionary (the column then falls back to the GUID prefix).
+    /// </summary>
+    Task<IReadOnlyDictionary<string, string>> ResolveSecurityGroupNamesAsync(
+        IEnumerable<string> groupIds,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Removes the System Administrator role from a Dataverse <c>systemuser</c>
+    /// on the specified environment. Implements "Revoke Admin" from the
+    /// Users sub-grid: looks up the role id, then issues
+    /// <c>DELETE systemusers({id})/systemuserroles_association/$ref</c>.
+    /// Throws <see cref="HttpRequestException"/> on a non-204 response so
+    /// the caller can surface the body in the error pane.
+    /// The signed-in user must themselves hold System Administrator on the
+    /// target env, otherwise Dataverse returns 403.
+    /// </summary>
+    Task RevokeSystemAdminAsync(
+        string instanceUrl,
+        string systemUserId,
+        CancellationToken ct = default);
 }
 
 public sealed record RefreshResult(int EnvironmentCount, int CapacityRows, int AssetRows, TimeSpan Duration);
+
+/// <summary>
+/// Per-phase notification for the incremental refresh path. Fired the
+/// moment a phase has landed in SQLite, so the view-model can reload
+/// the relevant slice without waiting for slower phases to finish.
+/// </summary>
+public enum RefreshPhase
+{
+    /// <summary>Environments + per-env capacity rows just landed.</summary>
+    EnvironmentsAndCapacity,
+    /// <summary>Tenant-wide capacity rollup just landed.</summary>
+    TenantCapacity,
+    /// <summary>Inventory API asset catalog just landed.</summary>
+    Assets
+}
