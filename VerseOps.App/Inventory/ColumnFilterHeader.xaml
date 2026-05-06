@@ -1,0 +1,85 @@
+<UserControl x:Class="VerseOps.App.Inventory.ColumnFilterHeader"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             mc:Ignorable="d"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             x:Name="Root">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+    </UserControl.Resources>
+    <DockPanel LastChildFill="False">
+        <!-- Column label (left). -->
+        <TextBlock DockPanel.Dock="Left"
+                   Text="{Binding Label, ElementName=Root}"
+                   VerticalAlignment="Center"
+                   Foreground="{DynamicResource TokenTextPrimary}"
+                   FontWeight="SemiBold"/>
+
+        <!-- Funnel button (right). Tints when a filter is active so the user can
+             tell at a glance which columns are filtering. -->
+        <ToggleButton x:Name="FunnelButton" DockPanel.Dock="Right"
+                      Width="18" Height="18" Padding="0" Margin="6,0,0,0"
+                      Background="Transparent" BorderThickness="0"
+                      Cursor="Hand" Focusable="False"
+                      ToolTip="Filter this column">
+            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                       FontSize="11"
+                       VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <!-- Filter glyph (E71C in Segoe Fluent Icons). -->
+                        <Setter Property="Text" Value="&#xE71C;"/>
+                        <Setter Property="Foreground" Value="{DynamicResource TokenTextSecondary}"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasFilter, ElementName=Root}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource TokenBrandForeground}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </ToggleButton>
+
+        <!-- Popup: TextBox + Clear. Opens on funnel toggle, closes on lost focus. -->
+        <Popup PlacementTarget="{Binding ElementName=FunnelButton}"
+               Placement="Bottom"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               IsOpen="{Binding IsChecked, ElementName=FunnelButton, Mode=TwoWay}">
+            <Border Background="{DynamicResource TokenSurfacePrimary}"
+                    BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                    BorderThickness="1" CornerRadius="3"
+                    Padding="8" Margin="0,2,0,0"
+                    SnapsToDevicePixels="True">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.35"/>
+                </Border.Effect>
+                <StackPanel Orientation="Vertical" MinWidth="180">
+                    <TextBlock Text="{Binding Label, ElementName=Root, StringFormat='Filter by {0}'}"
+                               Foreground="{DynamicResource TokenTextSecondary}"
+                               FontSize="10" Margin="0,0,0,4"/>
+                    <TextBox x:Name="FilterBox"
+                             Text="{Binding FilterText, ElementName=Root, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"
+                             Padding="4,2"
+                             Background="{DynamicResource TokenSurfaceTertiary}"
+                             Foreground="{DynamicResource TokenTextPrimary}"
+                             BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                             ToolTip="Substring match; case-insensitive."/>
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0" HorizontalAlignment="Right">
+                        <Button Content="Clear" Padding="8,2" Margin="0,0,4,0"
+                                Click="ClearButton_Click"
+                                Background="{DynamicResource TokenSurfaceTertiary}"
+                                Foreground="{DynamicResource TokenTextPrimary}"
+                                BorderBrush="{DynamicResource TokenStrokeSubtle}"/>
+                        <Button Content="Done" Padding="8,2"
+                                Click="DoneButton_Click"
+                                Background="{DynamicResource TokenBrandBackground}"
+                                Foreground="{DynamicResource TokenTextOnAccent}"
+                                BorderBrush="{DynamicResource TokenBrandBackground}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
+    </DockPanel>
+</UserControl>

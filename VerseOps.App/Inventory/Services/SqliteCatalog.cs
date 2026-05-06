@@ -83,157 +83,227 @@ public sealed class SqliteCatalog
             ExecNonQuery(conn, tx, "DELETE FROM gov_asset");
         ExecNonQuery(conn, tx, "DELETE FROM gov_environment");
 
-        using (var insertEnv = conn.CreateCommand())
-        {
-            insertEnv.Transaction = tx;
-            insertEnv.CommandText = @"
-                INSERT INTO gov_environment
-                    (env_id, display_name, sku, region, provisioning_state, version,
-                     instance_url, is_default, created_utc, last_synced_utc, raw_json,
-                     security_group_id, is_managed_environment)
-                VALUES (@env_id, @display_name, @sku, @region, @provisioning_state, @version,
-                        @instance_url, @is_default, @created_utc, @last_synced_utc, @raw_json,
-                        @security_group_id, @is_managed_environment);";
-            var pEnv = insertEnv.Parameters;
-            pEnv.Add("@env_id", SqliteType.Text);
-            pEnv.Add("@display_name", SqliteType.Text);
-            pEnv.Add("@sku", SqliteType.Text);
-            pEnv.Add("@region", SqliteType.Text);
-            pEnv.Add("@provisioning_state", SqliteType.Text);
-            pEnv.Add("@version", SqliteType.Text);
-            pEnv.Add("@instance_url", SqliteType.Text);
-            pEnv.Add("@is_default", SqliteType.Integer);
-            pEnv.Add("@created_utc", SqliteType.Text);
-            pEnv.Add("@last_synced_utc", SqliteType.Text);
-            pEnv.Add("@raw_json", SqliteType.Text);
-            pEnv.Add("@security_group_id", SqliteType.Text);
-            pEnv.Add("@is_managed_environment", SqliteType.Integer);
-
-            foreach (var e in envs)
-            {
-                pEnv["@env_id"].Value = e.EnvId;
-                pEnv["@display_name"].Value = (object?)e.DisplayName ?? DBNull.Value;
-                pEnv["@sku"].Value = (object?)e.Sku ?? DBNull.Value;
-                pEnv["@region"].Value = (object?)e.Region ?? DBNull.Value;
-                pEnv["@provisioning_state"].Value = (object?)e.ProvisioningState ?? DBNull.Value;
-                pEnv["@version"].Value = (object?)e.Version ?? DBNull.Value;
-                pEnv["@instance_url"].Value = (object?)e.InstanceUrl ?? DBNull.Value;
-                pEnv["@is_default"].Value = e.IsDefault ? 1 : 0;
-                pEnv["@created_utc"].Value = e.CreatedUtc.HasValue
-                    ? e.CreatedUtc.Value.ToString("o", CultureInfo.InvariantCulture)
-                    : (object)DBNull.Value;
-                pEnv["@last_synced_utc"].Value = e.LastSyncedUtc.ToString("o", CultureInfo.InvariantCulture);
-                pEnv["@raw_json"].Value = DBNull.Value;
-                pEnv["@security_group_id"].Value = (object?)e.SecurityGroupId ?? DBNull.Value;
-                pEnv["@is_managed_environment"].Value = e.IsManagedEnvironment ? 1 : 0;
-                insertEnv.ExecuteNonQuery();
-            }
-        }
-
-        using (var insertCap = conn.CreateCommand())
-        {
-            insertCap.Transaction = tx;
-            insertCap.CommandText = @"
-                INSERT INTO gov_capacity
-                    (env_id, capacity_type, actual, rated, total, last_synced_utc)
-                VALUES (@env_id, @capacity_type, @actual, @rated, @total, @last_synced_utc);";
-            var pCap = insertCap.Parameters;
-            pCap.Add("@env_id", SqliteType.Text);
-            pCap.Add("@capacity_type", SqliteType.Text);
-            pCap.Add("@actual", SqliteType.Real);
-            pCap.Add("@rated", SqliteType.Real);
-            pCap.Add("@total", SqliteType.Real);
-            pCap.Add("@last_synced_utc", SqliteType.Text);
-
-            foreach (var c in capacities)
-            {
-                pCap["@env_id"].Value = c.EnvId;
-                pCap["@capacity_type"].Value = c.CapacityType;
-                pCap["@actual"].Value = (object?)c.Actual ?? DBNull.Value;
-                pCap["@rated"].Value = (object?)c.Rated ?? DBNull.Value;
-                pCap["@total"].Value = (object?)c.Total ?? DBNull.Value;
-                pCap["@last_synced_utc"].Value = c.LastSyncedUtc.ToString("o", CultureInfo.InvariantCulture);
-                insertCap.ExecuteNonQuery();
-            }
-        }
-
+        InsertEnvironments(conn, tx, envs);
+        InsertCapacity(conn, tx, capacities);
         if (tenantCapacities is { Count: > 0 })
-        {
-            using var insertTenant = conn.CreateCommand();
-            insertTenant.Transaction = tx;
-            insertTenant.CommandText = @"
-                INSERT INTO gov_tenant_capacity
-                    (capacity_type, units, max_capacity, total_capacity, consumed, status, last_synced_utc)
-                VALUES (@capacity_type, @units, @max_capacity, @total_capacity, @consumed, @status, @last_synced_utc);";
-            var p = insertTenant.Parameters;
-            p.Add("@capacity_type", SqliteType.Text);
-            p.Add("@units", SqliteType.Text);
-            p.Add("@max_capacity", SqliteType.Real);
-            p.Add("@total_capacity", SqliteType.Real);
-            p.Add("@consumed", SqliteType.Real);
-            p.Add("@status", SqliteType.Text);
-            p.Add("@last_synced_utc", SqliteType.Text);
-
-            foreach (var t in tenantCapacities)
-            {
-                p["@capacity_type"].Value = t.CapacityType;
-                p["@units"].Value = (object?)t.Units ?? DBNull.Value;
-                p["@max_capacity"].Value = (object?)t.MaxCapacity ?? DBNull.Value;
-                p["@total_capacity"].Value = (object?)t.TotalCapacity ?? DBNull.Value;
-                p["@consumed"].Value = (object?)t.Consumed ?? DBNull.Value;
-                p["@status"].Value = (object?)t.Status ?? DBNull.Value;
-                p["@last_synced_utc"].Value = t.LastSyncedUtc.ToString("o", CultureInfo.InvariantCulture);
-                insertTenant.ExecuteNonQuery();
-            }
-        }
-
+            InsertTenantCapacity(conn, tx, tenantCapacities);
         if (assets is { Count: > 0 })
-        {
-            using var insertAsset = conn.CreateCommand();
-            insertAsset.Transaction = tx;
-            insertAsset.CommandText = @"
-                INSERT OR REPLACE INTO gov_asset
-                    (asset_type, asset_id, env_id, display_name, owner_id, created_by,
-                     region, created_utc, modified_utc, is_quarantined, last_synced_utc)
-                VALUES (@asset_type, @asset_id, @env_id, @display_name, @owner_id, @created_by,
-                        @region, @created_utc, @modified_utc, @is_quarantined, @last_synced_utc);";
-            var p = insertAsset.Parameters;
-            p.Add("@asset_type", SqliteType.Text);
-            p.Add("@asset_id", SqliteType.Text);
-            p.Add("@env_id", SqliteType.Text);
-            p.Add("@display_name", SqliteType.Text);
-            p.Add("@owner_id", SqliteType.Text);
-            p.Add("@created_by", SqliteType.Text);
-            p.Add("@region", SqliteType.Text);
-            p.Add("@created_utc", SqliteType.Text);
-            p.Add("@modified_utc", SqliteType.Text);
-            p.Add("@is_quarantined", SqliteType.Integer);
-            p.Add("@last_synced_utc", SqliteType.Text);
-
-            foreach (var a in assets)
-            {
-                p["@asset_type"].Value = a.AssetType;
-                p["@asset_id"].Value = a.AssetId;
-                p["@env_id"].Value = (object?)a.EnvId ?? DBNull.Value;
-                p["@display_name"].Value = (object?)a.DisplayName ?? DBNull.Value;
-                p["@owner_id"].Value = (object?)a.OwnerId ?? DBNull.Value;
-                p["@created_by"].Value = (object?)a.CreatedBy ?? DBNull.Value;
-                p["@region"].Value = (object?)a.Region ?? DBNull.Value;
-                p["@created_utc"].Value = a.CreatedUtc.HasValue
-                    ? a.CreatedUtc.Value.ToString("o", CultureInfo.InvariantCulture)
-                    : (object)DBNull.Value;
-                p["@modified_utc"].Value = a.ModifiedUtc.HasValue
-                    ? a.ModifiedUtc.Value.ToString("o", CultureInfo.InvariantCulture)
-                    : (object)DBNull.Value;
-                p["@is_quarantined"].Value = a.IsQuarantined.HasValue
-                    ? (a.IsQuarantined.Value ? 1 : 0)
-                    : (object)DBNull.Value;
-                p["@last_synced_utc"].Value = a.LastSyncedUtc.ToString("o", CultureInfo.InvariantCulture);
-                insertAsset.ExecuteNonQuery();
-            }
-        }
+            InsertAssets(conn, tx, assets);
 
         tx.Commit();
+    }
+
+    // ------------------------------------------------------------------
+    // Per-phase scoped writers. Used by the parallel/incremental refresh
+    // path so each phase can land in SQLite the moment its data is ready,
+    // without waiting for the slowest phase (Inventory API) to finish.
+    // Each is its own transaction.
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Replace just the environments table. Capacity / tenant capacity /
+    /// asset rows are left untouched.
+    /// </summary>
+    public void ReplaceEnvironments(IReadOnlyList<EnvironmentRow> envs)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+        ExecNonQuery(conn, tx, "DELETE FROM gov_environment");
+        InsertEnvironments(conn, tx, envs);
+        tx.Commit();
+    }
+
+    /// <summary>Replace just the per-env capacity rows.</summary>
+    public void ReplaceCapacity(IReadOnlyList<CapacityEntry> capacities)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+        ExecNonQuery(conn, tx, "DELETE FROM gov_capacity");
+        InsertCapacity(conn, tx, capacities);
+        tx.Commit();
+    }
+
+    /// <summary>Replace just the tenant-wide capacity rollup rows.</summary>
+    public void ReplaceTenantCapacity(IReadOnlyList<TenantCapacityEntry> tenantCapacities)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+        ExecNonQuery(conn, tx, "DELETE FROM gov_tenant_capacity");
+        InsertTenantCapacity(conn, tx, tenantCapacities);
+        tx.Commit();
+    }
+
+    /// <summary>Replace just the asset rows.</summary>
+    public void ReplaceAssets(IReadOnlyList<AssetRow> assets)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+        ExecNonQuery(conn, tx, "DELETE FROM gov_asset");
+        InsertAssets(conn, tx, assets);
+        tx.Commit();
+    }
+
+    // ------------------------------------------------------------------
+    // Insert helpers — extracted from ReplaceAll so the per-phase writers
+    // above and the legacy ReplaceAll can share the same parameter binding.
+    // ------------------------------------------------------------------
+
+    private static void InsertEnvironments(SqliteConnection conn, SqliteTransaction tx, IReadOnlyList<EnvironmentRow> envs)
+    {
+        using var insertEnv = conn.CreateCommand();
+        insertEnv.Transaction = tx;
+        insertEnv.CommandText = @"
+            INSERT INTO gov_environment
+                (env_id, display_name, sku, region, provisioning_state, version,
+                 instance_url, is_default, created_utc, last_synced_utc, raw_json,
+                 security_group_id, is_managed_environment)
+            VALUES (@env_id, @display_name, @sku, @region, @provisioning_state, @version,
+                    @instance_url, @is_default, @created_utc, @last_synced_utc, @raw_json,
+                    @security_group_id, @is_managed_environment);";
+        var pEnv = insertEnv.Parameters;
+        pEnv.Add("@env_id", SqliteType.Text);
+        pEnv.Add("@display_name", SqliteType.Text);
+        pEnv.Add("@sku", SqliteType.Text);
+        pEnv.Add("@region", SqliteType.Text);
+        pEnv.Add("@provisioning_state", SqliteType.Text);
+        pEnv.Add("@version", SqliteType.Text);
+        pEnv.Add("@instance_url", SqliteType.Text);
+        pEnv.Add("@is_default", SqliteType.Integer);
+        pEnv.Add("@created_utc", SqliteType.Text);
+        pEnv.Add("@last_synced_utc", SqliteType.Text);
+        pEnv.Add("@raw_json", SqliteType.Text);
+        pEnv.Add("@security_group_id", SqliteType.Text);
+        pEnv.Add("@is_managed_environment", SqliteType.Integer);
+
+        foreach (var e in envs)
+        {
+            pEnv["@env_id"].Value = e.EnvId;
+            pEnv["@display_name"].Value = (object?)e.DisplayName ?? DBNull.Value;
+            pEnv["@sku"].Value = (object?)e.Sku ?? DBNull.Value;
+            pEnv["@region"].Value = (object?)e.Region ?? DBNull.Value;
+            pEnv["@provisioning_state"].Value = (object?)e.ProvisioningState ?? DBNull.Value;
+            pEnv["@version"].Value = (object?)e.Version ?? DBNull.Value;
+            pEnv["@instance_url"].Value = (object?)e.InstanceUrl ?? DBNull.Value;
+            pEnv["@is_default"].Value = e.IsDefault ? 1 : 0;
+            pEnv["@created_utc"].Value = e.CreatedUtc.HasValue
+                ? e.CreatedUtc.Value.ToString("o", CultureInfo.InvariantCulture)
+                : (object)DBNull.Value;
+            pEnv["@last_synced_utc"].Value = e.LastSyncedUtc.ToString("o", CultureInfo.InvariantCulture);
+            pEnv["@raw_json"].Value = DBNull.Value;
+            pEnv["@security_group_id"].Value = (object?)e.SecurityGroupId ?? DBNull.Value;
+            pEnv["@is_managed_environment"].Value = e.IsManagedEnvironment ? 1 : 0;
+            insertEnv.ExecuteNonQuery();
+        }
+    }
+
+    private static void InsertCapacity(SqliteConnection conn, SqliteTransaction tx, IReadOnlyList<CapacityEntry> capacities)
+    {
+        using var insertCap = conn.CreateCommand();
+        insertCap.Transaction = tx;
+        insertCap.CommandText = @"
+            INSERT INTO gov_capacity
+                (env_id, capacity_type, actual, rated, total, last_synced_utc)
+            VALUES (@env_id, @capacity_type, @actual, @rated, @total, @last_synced_utc);";
+        var pCap = insertCap.Parameters;
+        pCap.Add("@env_id", SqliteType.Text);
+        pCap.Add("@capacity_type", SqliteType.Text);
+        pCap.Add("@actual", SqliteType.Real);
+        pCap.Add("@rated", SqliteType.Real);
+        pCap.Add("@total", SqliteType.Real);
+        pCap.Add("@last_synced_utc", SqliteType.Text);
+
+        foreach (var c in capacities)
+        {
+            pCap["@env_id"].Value = c.EnvId;
+            pCap["@capacity_type"].Value = c.CapacityType;
+            pCap["@actual"].Value = (object?)c.Actual ?? DBNull.Value;
+            pCap["@rated"].Value = (object?)c.Rated ?? DBNull.Value;
+            pCap["@total"].Value = (object?)c.Total ?? DBNull.Value;
+            pCap["@last_synced_utc"].Value = c.LastSyncedUtc.ToString("o", CultureInfo.InvariantCulture);
+            insertCap.ExecuteNonQuery();
+        }
+    }
+
+    private static void InsertTenantCapacity(SqliteConnection conn, SqliteTransaction tx, IReadOnlyList<TenantCapacityEntry> tenantCapacities)
+    {
+        if (tenantCapacities.Count == 0) return;
+        using var insertTenant = conn.CreateCommand();
+        insertTenant.Transaction = tx;
+        insertTenant.CommandText = @"
+            INSERT INTO gov_tenant_capacity
+                (capacity_type, units, max_capacity, total_capacity, consumed, status, last_synced_utc)
+            VALUES (@capacity_type, @units, @max_capacity, @total_capacity, @consumed, @status, @last_synced_utc);";
+        var p = insertTenant.Parameters;
+        p.Add("@capacity_type", SqliteType.Text);
+        p.Add("@units", SqliteType.Text);
+        p.Add("@max_capacity", SqliteType.Real);
+        p.Add("@total_capacity", SqliteType.Real);
+        p.Add("@consumed", SqliteType.Real);
+        p.Add("@status", SqliteType.Text);
+        p.Add("@last_synced_utc", SqliteType.Text);
+
+        foreach (var t in tenantCapacities)
+        {
+            p["@capacity_type"].Value = t.CapacityType;
+            p["@units"].Value = (object?)t.Units ?? DBNull.Value;
+            p["@max_capacity"].Value = (object?)t.MaxCapacity ?? DBNull.Value;
+            p["@total_capacity"].Value = (object?)t.TotalCapacity ?? DBNull.Value;
+            p["@consumed"].Value = (object?)t.Consumed ?? DBNull.Value;
+            p["@status"].Value = (object?)t.Status ?? DBNull.Value;
+            p["@last_synced_utc"].Value = t.LastSyncedUtc.ToString("o", CultureInfo.InvariantCulture);
+            insertTenant.ExecuteNonQuery();
+        }
+    }
+
+    private static void InsertAssets(SqliteConnection conn, SqliteTransaction tx, IReadOnlyList<AssetRow> assets)
+    {
+        if (assets.Count == 0) return;
+        using var insertAsset = conn.CreateCommand();
+        insertAsset.Transaction = tx;
+        insertAsset.CommandText = @"
+            INSERT OR REPLACE INTO gov_asset
+                (asset_type, asset_id, env_id, display_name, owner_id, created_by,
+                 region, created_utc, modified_utc, is_quarantined, last_synced_utc)
+            VALUES (@asset_type, @asset_id, @env_id, @display_name, @owner_id, @created_by,
+                    @region, @created_utc, @modified_utc, @is_quarantined, @last_synced_utc);";
+        var p = insertAsset.Parameters;
+        p.Add("@asset_type", SqliteType.Text);
+        p.Add("@asset_id", SqliteType.Text);
+        p.Add("@env_id", SqliteType.Text);
+        p.Add("@display_name", SqliteType.Text);
+        p.Add("@owner_id", SqliteType.Text);
+        p.Add("@created_by", SqliteType.Text);
+        p.Add("@region", SqliteType.Text);
+        p.Add("@created_utc", SqliteType.Text);
+        p.Add("@modified_utc", SqliteType.Text);
+        p.Add("@is_quarantined", SqliteType.Integer);
+        p.Add("@last_synced_utc", SqliteType.Text);
+
+        foreach (var a in assets)
+        {
+            p["@asset_type"].Value = a.AssetType;
+            p["@asset_id"].Value = a.AssetId;
+            p["@env_id"].Value = (object?)a.EnvId ?? DBNull.Value;
+            p["@display_name"].Value = (object?)a.DisplayName ?? DBNull.Value;
+            p["@owner_id"].Value = (object?)a.OwnerId ?? DBNull.Value;
+            p["@created_by"].Value = (object?)a.CreatedBy ?? DBNull.Value;
+            p["@region"].Value = (object?)a.Region ?? DBNull.Value;
+            p["@created_utc"].Value = a.CreatedUtc.HasValue
+                ? a.CreatedUtc.Value.ToString("o", CultureInfo.InvariantCulture)
+                : (object)DBNull.Value;
+            p["@modified_utc"].Value = a.ModifiedUtc.HasValue
+                ? a.ModifiedUtc.Value.ToString("o", CultureInfo.InvariantCulture)
+                : (object)DBNull.Value;
+            p["@is_quarantined"].Value = a.IsQuarantined.HasValue
+                ? (a.IsQuarantined.Value ? 1 : 0)
+                : (object)DBNull.Value;
+            p["@last_synced_utc"].Value = a.LastSyncedUtc.ToString("o", CultureInfo.InvariantCulture);
+            insertAsset.ExecuteNonQuery();
+        }
     }
 
     /// <summary>
@@ -283,22 +353,24 @@ public sealed class SqliteCatalog
         using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = @"
-                SELECT env_id, capacity_type, actual
+                SELECT env_id, capacity_type, actual, rated
                 FROM   gov_capacity
-                WHERE  capacity_type IN ('Database','File','Log');";
+                WHERE  capacity_type IN ('Database','File','Log','FinOpsDatabase','FinOpsFile');";
             using var rdr = cmd.ExecuteReader();
             while (rdr.Read())
             {
                 if (!byId.TryGetValue(rdr.GetString(0), out var row)) continue;
-                if (rdr.IsDBNull(2)) continue;
                 // BAP reports per-env capacity in MB (same unit PPAC uses for
                 // tenant capacity). Convert to GB for the dashboard columns.
-                var gb = rdr.GetDouble(2) / 1024.0;
+                double? actualGb = rdr.IsDBNull(2) ? (double?)null : rdr.GetDouble(2) / 1024.0;
+                double? ratedGb  = rdr.IsDBNull(3) ? (double?)null : rdr.GetDouble(3) / 1024.0;
                 switch (rdr.GetString(1))
                 {
-                    case "Database": row.DatabaseGb = gb; break;
-                    case "File":     row.FileGb     = gb; break;
-                    case "Log":      row.LogGb      = gb; break;
+                    case "Database":       row.DatabaseGb       = actualGb; row.DatabaseLimitGb       = ratedGb; break;
+                    case "File":           row.FileGb           = actualGb; row.FileLimitGb           = ratedGb; break;
+                    case "Log":            row.LogGb            = actualGb; row.LogLimitGb            = ratedGb; break;
+                    case "FinOpsDatabase": row.FinOpsDatabaseGb = actualGb; row.FinOpsDatabaseLimitGb = ratedGb; break;
+                    case "FinOpsFile":     row.FinOpsFileGb     = actualGb; row.FinOpsFileLimitGb     = ratedGb; break;
                 }
             }
         }

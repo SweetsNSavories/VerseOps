@@ -38,6 +38,44 @@ public sealed class EnvironmentRow : INotifyPropertyChanged
     public string? SecurityGroupId { get; set; }
 
     /// <summary>
+    /// Display name of the AAD security group, resolved lazily via
+    /// Microsoft Graph <c>POST /directoryObjects/getByIds</c> after the
+    /// env list lands. INPC because the resolution races with grid render —
+    /// rows are bound first, then names backfill in. Null when the env
+    /// has no security group; non-null but empty after a Graph error.
+    /// </summary>
+    private string? _securityGroupDisplayName;
+    public string? SecurityGroupDisplayName
+    {
+        get => _securityGroupDisplayName;
+        set { _securityGroupDisplayName = value; OnPropertyChanged(); OnPropertyChanged(nameof(SecurityGroupSummary)); }
+    }
+
+    /// <summary>
+    /// User-facing single-cell summary for the env grid's "Security Group"
+    /// column. Combines name + membership badge + open-to-all marker so the
+    /// admin can see at a glance who controls access to the env. Order of
+    /// precedence:
+    ///   1. No group → "Open to all" (default env / no gating).
+    ///   2. Group with name + member → "Group Name ★".
+    ///   3. Group with name only → "Group Name".
+    ///   4. Group ID only (Graph not yet resolved or failed) → first 8 chars
+    ///      of the GUID + "…" so the cell shows *something* and a tooltip
+    ///      can carry the full id.
+    /// </summary>
+    public string SecurityGroupSummary
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(SecurityGroupId)) return "Open to all";
+            var name = string.IsNullOrEmpty(_securityGroupDisplayName)
+                ? SecurityGroupId.Substring(0, Math.Min(8, SecurityGroupId.Length)) + "…"
+                : _securityGroupDisplayName!;
+            return _isCurrentUserInSecurityGroup == true ? $"{name} ★" : name;
+        }
+    }
+
+    /// <summary>
     /// True when the env has the Power Platform "Managed Environments"
     /// premium governance turned on. Derived from PPAC <c>ProtectionLevel</c>:
     /// <c>"Standard"</c> = Managed, anything else (typically <c>"Basic"</c>)
@@ -47,9 +85,65 @@ public sealed class EnvironmentRow : INotifyPropertyChanged
     public bool IsManagedEnvironment { get; set; }
 
     // Capacity values (top-line) from gov_capacity, joined for grid rendering.
+    // Both the Actual (consumed) and the Rated (limit) sides are read so the
+    // grid can render "12.4 / 100.0 GB" with an over-limit indicator.
     public double? DatabaseGb { get; set; }
     public double? FileGb { get; set; }
     public double? LogGb { get; set; }
+    public double? DatabaseLimitGb { get; set; }
+    public double? FileLimitGb { get; set; }
+    public double? LogLimitGb { get; set; }
+
+    // FinOps-side capacity (Dynamics 365 Finance & Operations envs only —
+    // null on standard Dataverse envs). BAP returns these as the
+    // "FinOpsDatabase" / "FinOpsFile" capacity types.
+    public double? FinOpsDatabaseGb { get; set; }
+    public double? FinOpsFileGb { get; set; }
+    public double? FinOpsDatabaseLimitGb { get; set; }
+    public double? FinOpsFileLimitGb { get; set; }
+
+    /// <summary>True if any FinOps capacity row was returned for this env.</summary>
+    public bool HasFinOps =>
+        (FinOpsDatabaseGb ?? 0) > 0 || (FinOpsFileGb ?? 0) > 0 ||
+        (FinOpsDatabaseLimitGb ?? 0) > 0 || (FinOpsFileLimitGb ?? 0) > 0;
+
+    // ------------------------------------------------------------------
+    // Display formatters used by the env grid. Each returns "12.4 / 100 GB"
+    // when both sides are known, "12.4 GB" when only consumption is known,
+    // and "—" when no data at all. Paired with a *Status property below
+    // that drives the cell background colour (ok/warn/over).
+    // ------------------------------------------------------------------
+    public string DatabaseGbDisplay      => FormatGb(DatabaseGb,      DatabaseLimitGb);
+    public string FileGbDisplay          => FormatGb(FileGb,          FileLimitGb);
+    public string LogGbDisplay           => FormatGb(LogGb,           LogLimitGb,      logUnits: true);
+    public string FinOpsDatabaseGbDisplay => FormatGb(FinOpsDatabaseGb, FinOpsDatabaseLimitGb);
+    public string FinOpsFileGbDisplay     => FormatGb(FinOpsFileGb,     FinOpsFileLimitGb);
+
+    /// <summary>"ok" / "warn" / "over" / "" — drives the cell foreground/background colour via DataTriggers.</summary>
+    public string DatabaseStatus       => UsageStatus(DatabaseGb,       DatabaseLimitGb);
+    public string FileStatus           => UsageStatus(FileGb,           FileLimitGb);
+    public string LogStatus            => UsageStatus(LogGb,            LogLimitGb);
+    public string FinOpsDatabaseStatus => UsageStatus(FinOpsDatabaseGb, FinOpsDatabaseLimitGb);
+    public string FinOpsFileStatus     => UsageStatus(FinOpsFileGb,     FinOpsFileLimitGb);
+
+    private static string FormatGb(double? actual, double? limit, bool logUnits = false)
+    {
+        if (!actual.HasValue && !limit.HasValue) return "—";
+        var fmt = logUnits ? "N3" : "N2";
+        if (actual.HasValue && limit.HasValue && limit.Value > 0)
+            return $"{actual.Value.ToString(fmt)} / {limit.Value:N0} GB";
+        if (actual.HasValue) return $"{actual.Value.ToString(fmt)} GB";
+        return $"limit {limit!.Value:N0} GB";
+    }
+
+    private static string UsageStatus(double? actual, double? limit)
+    {
+        if (!actual.HasValue || !limit.HasValue || limit.Value <= 0) return "";
+        var ratio = actual.Value / limit.Value;
+        if (ratio >= 1.0)  return "over";   // hard breach — red.
+        if (ratio >= 0.80) return "warn";   // approaching — amber.
+        return "ok";
+    }
 
     // Asset counts joined in from gov_asset (Power Platform Inventory API).
     // Populated by the view-model after the catalog is loaded so the env grid

@@ -49,6 +49,9 @@ secrets.json
 # OS
 Thumbs.db
 .DS_Store
+
+# Playwright MCP browser session captures (may contain tenant URLs / tokens in headers)
+.playwright-mcp/
 ppac-pdf*.txt
 ppac-ops*.txt
 ppac-toc*.json

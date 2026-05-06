@@ -223,6 +223,25 @@
                 <Setter Property="Background" Value="{DynamicResource TokenSurfacePrimary}"/>
                 <Setter Property="Foreground" Value="{DynamicResource TokenTextPrimary}"/>
                 <Setter Property="Padding" Value="8,4"/>
+                <!-- Default WPF ComboBoxItem template uses SystemColors.HighlightTextBrush
+                     on selection / hover, which is white. On our brand-tinted highlight
+                     that renders as white-on-light-blue and the value disappears. Pin
+                     the foreground to TokenTextPrimary in every visual state so the
+                     selected page-size (and any other ComboBox) stays readable. -->
+                <Style.Triggers>
+                    <Trigger Property="IsHighlighted" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource TokenBrandBackground}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource TokenTextOnAccent}"/>
+                    </Trigger>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource TokenBrandBackground}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource TokenTextOnAccent}"/>
+                    </Trigger>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource TokenSurfaceSecondary}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource TokenTextPrimary}"/>
+                    </Trigger>
+                </Style.Triggers>
             </Style>
 
             <Style TargetType="RadioButton">

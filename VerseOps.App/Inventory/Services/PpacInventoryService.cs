@@ -121,116 +121,210 @@ public sealed class PpacInventoryService : IInventoryService
         return await client.CheckSecurityGroupMembershipAsync(groupIds, ct).ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyDictionary<string, string>> ResolveSecurityGroupNamesAsync(
+        IEnumerable<string> groupIds,
+        CancellationToken ct = default)
+    {
+        // Same pattern — share the cached client when present.
+        var client = _graphLicenses ?? new GraphLicenseClient(_auth);
+        return await client.ResolveGroupNamesAsync(groupIds, ct).ConfigureAwait(false);
+    }
+
+    public async Task RevokeSystemAdminAsync(
+        string instanceUrl,
+        string systemUserId,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(instanceUrl))
+            throw new InvalidOperationException("Cannot revoke admin — environment has no Dataverse instance URL.");
+        if (string.IsNullOrWhiteSpace(systemUserId))
+            throw new InvalidOperationException("Cannot revoke admin — systemuserid is required.");
+
+        // Token is per-env — Dataverse uses the env origin as the audience.
+        var origin = new Uri(instanceUrl).GetLeftPart(UriPartial.Authority);
+        var scope  = origin + "/.default";
+        var token  = await _auth.GetTokenAsync(scope, ct).ConfigureAwait(false);
+
+        var inner = new System.Net.Http.SocketsHttpHandler
+        {
+            AutomaticDecompression = System.Net.DecompressionMethods.All
+        };
+        using var http = new HttpClient(inner, disposeHandler: true)
+        {
+            BaseAddress = new Uri(origin + "/api/data/v9.2/"),
+            Timeout = TimeSpan.FromSeconds(30)
+        };
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        http.DefaultRequestHeaders.Accept.Add(
+            new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+        http.DefaultRequestHeaders.Add("OData-MaxVersion", "4.0");
+        http.DefaultRequestHeaders.Add("OData-Version", "4.0");
+
+        // 1. Resolve the System Administrator role id on this env. Roles are
+        //    per-env in Dataverse so we cannot cache the id across orgs.
+        using var roleResp = await http.GetAsync(
+            "roles?$select=roleid&$top=1&$filter=name eq 'System Administrator'", ct).ConfigureAwait(false);
+        if (!roleResp.IsSuccessStatusCode)
+        {
+            var body = await roleResp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            throw new HttpRequestException(
+                $"Could not resolve System Administrator role id ({(int)roleResp.StatusCode} {roleResp.ReasonPhrase}). Body: {body}");
+        }
+        string? roleId = null;
+        using (var roleDoc = System.Text.Json.JsonDocument.Parse(
+            await roleResp.Content.ReadAsStringAsync(ct).ConfigureAwait(false)))
+        {
+            if (roleDoc.RootElement.TryGetProperty("value", out var arr) &&
+                arr.ValueKind == System.Text.Json.JsonValueKind.Array &&
+                arr.GetArrayLength() > 0 &&
+                arr[0].TryGetProperty("roleid", out var idEl))
+            {
+                roleId = idEl.GetString();
+            }
+        }
+        if (string.IsNullOrEmpty(roleId))
+            throw new InvalidOperationException("System Administrator role not found on this environment.");
+
+        // 2. Disassociate the role from the user. Dataverse expects the full
+        //    URI of the related role record in $id.
+        var deleteUrl =
+            $"systemusers({systemUserId})/systemuserroles_association/$ref" +
+            $"?$id={origin}/api/data/v9.2/roles({roleId})";
+        using var deleteResp = await http.DeleteAsync(deleteUrl, ct).ConfigureAwait(false);
+        if (!deleteResp.IsSuccessStatusCode)
+        {
+            var body = await deleteResp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            throw new HttpRequestException(
+                $"Revoke admin failed ({(int)deleteResp.StatusCode} {deleteResp.ReasonPhrase}). Body: {body}");
+        }
+    }
+
     public async Task<RefreshResult> RefreshAsync(
         IProgress<string>? progress = null,
         CancellationToken ct = default)
+        => await RefreshAsync(progress, onPhaseReady: null, ct).ConfigureAwait(false);
+
+    public async Task<RefreshResult> RefreshAsync(
+        IProgress<string>? progress,
+        Func<RefreshPhase, Task>? onPhaseReady,
+        CancellationToken ct)
     {
         var sw = Stopwatch.StartNew();
         _diagnostics.ResetLog();
         progress?.Report($"Trace log: {_diagnostics.LogPath}");
-        progress?.Report("Acquiring PPAC token...");
+
+        // Pre-warm both audiences in parallel so the first request of each
+        // phase doesn't sit on a cold MSAL silent acquire. PPAC scope is also
+        // used by the Inventory API; BAP is its own audience.
+        progress?.Report("Acquiring tokens (PPAC + BAP)...");
+        var ppacTokenTask = _auth.GetTokenAsync(PpacScope, ct);
+        var bapTokenTask  = _auth.GetTokenAsync("https://service.powerapps.com/.default", ct);
+        try { await Task.WhenAll(ppacTokenTask, bapTokenTask).ConfigureAwait(false); }
+        catch { /* one may fail; let the per-phase code surface the real error */ }
 
         var sc = await BuildClientAsync(ct).ConfigureAwait(false);
-
-        progress?.Report("Listing environments...");
-        var envList = await sc.Environmentmanagement.Environments.GetAsync(cancellationToken: ct)
-            .ConfigureAwait(false);
-
         var now = DateTime.UtcNow;
-        var envRows = new List<EnvironmentRow>();
-        var capRows = new List<CapacityEntry>();
 
-        var rawEnvs = ExtractList(envList);
-        progress?.Report($"Mapping {rawEnvs.Count} environments...");
-
-        foreach (var raw in rawEnvs)
+        // Phase A: environments + per-env BAP capacity. These are joined on
+        // env_id, so we resolve them together and persist as a unit. Note we
+        // start the BAP call concurrently with the env list — they don't
+        // depend on each other.
+        var envPhase = Task.Run(async () =>
         {
-            ct.ThrowIfCancellationRequested();
-            var row = MapEnvironment(raw, now);
-            if (row is null) continue;
-            envRows.Add(row);
-        }
-
-        // Per-env capacity. PPAC SDK has no per-env capacity surface today
-        // (Licensing.Environments[id].Allocations returns license currencies
-        // — AI / AppPass / PowerAutomate units — not Database/File/Log GB).
-        // The single official source for that is the BAP route the
-        // Get-AdminPowerAppEnvironment -Capacity cmdlet wraps:
-        //
-        //   GET /providers/Microsoft.BusinessAppPlatform/scopes/admin/environments
-        //       ?$expand=properties/capacity&api-version=2020-10-01
-        //
-        // One HTTP call returns all envs + their capacity in one payload.
-        // This is the *only* BAP route the inventory dashboard uses; everything
-        // else is on api.powerplatform.com via the PPAC SDK. When MS surfaces
-        // per-env capacity on the new API, BapCapacityClient is the swap point.
-        progress?.Report("Fetching per-env capacity from BAP (one call)...");
-        int envsWithCapacity = 0;
-        try
-        {
-            var bap = new BapCapacityClient(_auth, _diagnostics);
-            var byEnv = await bap.GetCapacityByEnvAsync(now, progress, ct).ConfigureAwait(false);
-
-            foreach (var row in envRows)
+            progress?.Report("Listing environments (PPAC)...");
+            var envListTask = sc.Environmentmanagement.Environments.GetAsync(cancellationToken: ct);
+            var bapTask = Task.Run<IReadOnlyDictionary<string, IReadOnlyList<CapacityEntry>>>(async () =>
             {
-                if (byEnv.TryGetValue(row.EnvId, out var rows) && rows.Count > 0)
+                try
                 {
-                    capRows.AddRange(rows);
-                    envsWithCapacity++;
+                    var bap = new BapCapacityClient(_auth, _diagnostics);
+                    return await bap.GetCapacityByEnvAsync(now, progress, ct).ConfigureAwait(false);
                 }
+                catch (Exception ex)
+                {
+                    progress?.Report($"  (BAP capacity failed: {ex.GetType().Name}: {ex.Message}) — continuing without it.");
+                    return new Dictionary<string, IReadOnlyList<CapacityEntry>>(StringComparer.OrdinalIgnoreCase);
+                }
+            }, ct);
+
+            var envList = await envListTask.ConfigureAwait(false);
+            var rawEnvs = ExtractList(envList);
+            var envRows = new List<EnvironmentRow>();
+            foreach (var raw in rawEnvs)
+            {
+                ct.ThrowIfCancellationRequested();
+                var row = MapEnvironment(raw, now);
+                if (row is not null) envRows.Add(row);
             }
-            progress?.Report($"BAP capacity: {envsWithCapacity}/{envRows.Count} envs reported capacity rows.");
-        }
-        catch (Exception ex)
-        {
-            progress?.Report($"  (BAP capacity failed: {ex.GetType().Name}: {ex.Message}) — falling back to env list only.");
-        }
+            progress?.Report($"PPAC: {envRows.Count} environments mapped.");
 
-        // Tenant-wide storage / API capacity (Database / File / Log / FinOpsDatabase
-        // / ApiCallCount / etc.). PPAC reports storage in MB; UI converts to GB.
-        progress?.Report("Fetching tenant-wide capacity totals...");
-        var tenantRows = new List<TenantCapacityEntry>();
-        try
-        {
-            var tenantCap = await sc.Licensing.TenantCapacity.GetAsync(cancellationToken: ct).ConfigureAwait(false);
-            foreach (var entry in MapTenantCapacity(tenantCap, now))
-                tenantRows.Add(entry);
-        }
-        catch (Exception ex)
-        {
-            progress?.Report($"  (tenant capacity failed: {ex.GetType().Name}: {ex.Message})");
-        }
+            var byEnv = await bapTask.ConfigureAwait(false);
+            var capRows = new List<CapacityEntry>();
+            foreach (var row in envRows)
+                if (byEnv.TryGetValue(row.EnvId, out var rows) && rows.Count > 0)
+                    capRows.AddRange(rows);
+            progress?.Report($"BAP capacity: {byEnv.Count}/{envRows.Count} envs reported capacity.");
 
-        // Tenant-wide asset catalog (Canvas / Model-driven / Code apps,
-        // Cloud / Agent flows, Copilot Studio agents) via the new Power
-        // Platform Inventory API:
-        //   POST https://api.powerplatform.com/resourcequery/resources/query
-        //        ?api-version=2024-10-01
-        // ONE call replaces what would otherwise be 6+ per-env round-trips
-        // (apps + flows + agents) × N envs. The API is GA as of 2024-10
-        // and uses the same PPAC scope we already hold.
-        progress?.Report("Fetching tenant-wide assets (Power Platform Inventory API)...");
-        var assetRows = new List<AssetRow>();
-        try
-        {
-            var inv = new InventoryApiClient(_auth, _diagnostics);
-            var pulled = await inv.GetAllAssetsAsync(now, progress, ct).ConfigureAwait(false);
-            assetRows.AddRange(pulled);
-            progress?.Report($"Inventory API: {assetRows.Count} assets pulled tenant-wide.");
-        }
-        catch (Exception ex)
-        {
-            progress?.Report($"  (Inventory API failed: {ex.GetType().Name}: {ex.Message}) — continuing without asset catalog.");
-        }
+            // Land env + capacity together so the grid can show storage GBs
+            // alongside the env names on first paint.
+            _catalog.ReplaceEnvironments(envRows);
+            _catalog.ReplaceCapacity(capRows);
+            if (onPhaseReady is not null)
+                await onPhaseReady(RefreshPhase.EnvironmentsAndCapacity).ConfigureAwait(false);
 
-        progress?.Report(
-            $"Persisting {envRows.Count} environments + {capRows.Count} capacity rows + " +
-            $"{tenantRows.Count} tenant capacity rows + {assetRows.Count} assets...");
-        _catalog.ReplaceAll(envRows, capRows, tenantRows, assetRows);
+            return (envRows.Count, capRows.Count);
+        }, ct);
+
+        // Phase B: tenant-wide capacity rollup. Independent of envs.
+        var tenantPhase = Task.Run(async () =>
+        {
+            try
+            {
+                progress?.Report("Fetching tenant-wide capacity...");
+                var tenantCap = await sc.Licensing.TenantCapacity.GetAsync(cancellationToken: ct).ConfigureAwait(false);
+                var rows = MapTenantCapacity(tenantCap, now).ToList();
+                _catalog.ReplaceTenantCapacity(rows);
+                if (onPhaseReady is not null)
+                    await onPhaseReady(RefreshPhase.TenantCapacity).ConfigureAwait(false);
+                return rows.Count;
+            }
+            catch (Exception ex)
+            {
+                progress?.Report($"  (tenant capacity failed: {ex.GetType().Name}: {ex.Message})");
+                return 0;
+            }
+        }, ct);
+
+        // Phase C: tenant-wide asset catalog (Inventory API). Slowest phase
+        // by far. Runs concurrently with phases A and B so the user sees the
+        // env grid + tiles populate while assets stream in the background.
+        var assetPhase = Task.Run(async () =>
+        {
+            try
+            {
+                progress?.Report("Fetching tenant-wide assets (Power Platform Inventory API)...");
+                var inv = new InventoryApiClient(_auth, _diagnostics);
+                var pulled = await inv.GetAllAssetsAsync(now, progress, ct).ConfigureAwait(false);
+                _catalog.ReplaceAssets(pulled);
+                if (onPhaseReady is not null)
+                    await onPhaseReady(RefreshPhase.Assets).ConfigureAwait(false);
+                return pulled.Count;
+            }
+            catch (Exception ex)
+            {
+                progress?.Report($"  (Inventory API failed: {ex.GetType().Name}: {ex.Message}) — continuing without asset catalog.");
+                return 0;
+            }
+        }, ct);
+
+        var (envCount, capCount) = await envPhase.ConfigureAwait(false);
+        await tenantPhase.ConfigureAwait(false);
+        var assetCount = await assetPhase.ConfigureAwait(false);
 
         sw.Stop();
-        progress?.Report($"Done in {sw.Elapsed.TotalSeconds:0.0}s.");
-        return new RefreshResult(envRows.Count, capRows.Count, assetRows.Count, sw.Elapsed);
+        progress?.Report($"All phases done in {sw.Elapsed.TotalSeconds:0.0}s.");
+        return new RefreshResult(envCount, capCount, assetCount, sw.Elapsed);
     }
 
     // ------------------------------------------------------------------

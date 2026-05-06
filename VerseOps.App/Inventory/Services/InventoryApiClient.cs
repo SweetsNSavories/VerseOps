@@ -105,14 +105,29 @@ public sealed class InventoryApiClient
 
         var all = new List<AssetRow>(capacity: 4096);
         string skipToken = string.Empty;
+        string? prevSkipToken = null;
         int page = 0;
         int totalReported = -1;
         bool firstPageDumped = false;
+
+        // Hard safety cap. With PageSize=1000 and a fresh tenant of ~150k
+        // assets we expect ~150 pages. 500 is a generous ceiling that still
+        // breaks any infinite-loop bug (we previously saw the pager run to
+        // 1000+ pages because the SkipToken was being ignored).
+        const int MaxPages = 500;
 
         while (true)
         {
             ct.ThrowIfCancellationRequested();
             page++;
+
+            if (page > MaxPages)
+            {
+                progress?.Report(
+                    $"Inventory API: hit safety cap of {MaxPages} pages with running total {all.Count}. " +
+                    "Stopping (server is likely echoing the same SkipToken).");
+                break;
+            }
 
             QueryResponse? page1 = null;
             string? lastError = null;
@@ -190,11 +205,46 @@ public sealed class InventoryApiClient
                     $"(running total {all.Count}{(totalReported > 0 ? $" / {totalReported}" : "")}).");
             }
 
-            // Stop conditions: server says we're complete, or no skip token.
+            // Stop conditions, in priority order:
+            //   1. Server explicitly says we're done (no more truncation).
+            //   2. We've hit/exceeded the totalRecords the server reported on page 1.
+            //   3. Server returned 0 rows on this page (no point asking again).
+            //   4. Server returned a SkipToken identical to the one we just used
+            //      (means the cursor isn't advancing — broken paging contract).
+            //   5. Server returned no SkipToken at all.
             var moreOnServer = page1.ResultTruncated > 0;
             var nextToken    = page1.SkipToken ?? string.Empty;
-            if (!moreOnServer || string.IsNullOrEmpty(nextToken)) break;
-            skipToken = nextToken;
+
+            if (!moreOnServer)
+            {
+                progress?.Report($"Inventory API: server reported result complete on page {page} ({all.Count} rows).");
+                break;
+            }
+            if (totalReported > 0 && all.Count >= totalReported)
+            {
+                progress?.Report($"Inventory API: reached reported total of {totalReported} rows on page {page}.");
+                break;
+            }
+            if (page1.Count == 0)
+            {
+                progress?.Report($"Inventory API: empty page {page} returned, stopping.");
+                break;
+            }
+            if (string.IsNullOrEmpty(nextToken))
+            {
+                progress?.Report($"Inventory API: no SkipToken returned on page {page}, stopping.");
+                break;
+            }
+            if (string.Equals(nextToken, prevSkipToken, StringComparison.Ordinal))
+            {
+                progress?.Report(
+                    $"Inventory API: SkipToken did not advance between page {page - 1} and {page} " +
+                    $"(running total {all.Count} / {totalReported}). Stopping to avoid infinite loop.");
+                break;
+            }
+
+            prevSkipToken = skipToken;
+            skipToken     = nextToken;
         }
 
         progress?.Report($"Inventory API: {all.Count} total assets fetched in {page} page(s).");
@@ -203,6 +253,10 @@ public sealed class InventoryApiClient
 
     /// <summary>
     /// One POST against the inventory query endpoint. Caller owns the retry loop.
+    /// On the first page (skipToken empty) we send <c>Skip</c> only; on
+    /// continuation pages we send <c>SkipToken</c> only — the server treats
+    /// <c>{Skip:0, SkipToken:"..."}</c> ambiguously and was returning page 1
+    /// over and over (the runaway-pager bug).
     /// </summary>
     private async Task<QueryResponse?> PostQueryAsync(HttpClient http, string skipToken, CancellationToken ct)
     {
@@ -213,12 +267,9 @@ public sealed class InventoryApiClient
             {
                 new() { Type = "where", FieldName = "type", Operator = "in~", Values = AssetTypes },
             },
-            Options = new OptionsDto
-            {
-                Top = PageSize,
-                Skip = 0,
-                SkipToken = skipToken
-            }
+            Options = string.IsNullOrEmpty(skipToken)
+                ? new OptionsDto { Top = PageSize, Skip = 0 }
+                : new OptionsDto { Top = PageSize, SkipToken = skipToken }
         };
 
         using var req  = new HttpRequestMessage(HttpMethod.Post, QueryUrl)
@@ -292,8 +343,11 @@ public sealed class InventoryApiClient
     private sealed class OptionsDto
     {
         [JsonPropertyName("Top")]       public int Top { get; set; }
-        [JsonPropertyName("Skip")]      public int Skip { get; set; }
-        [JsonPropertyName("SkipToken")] public string SkipToken { get; set; } = "";
+        // Nullable so JsonIgnoreCondition.WhenWritingNull omits these fields
+        // when not set. Sending {Skip:0, SkipToken:"x"} together is treated
+        // ambiguously by ARG-fronted endpoints — see PostQueryAsync.
+        [JsonPropertyName("Skip")]      public int? Skip { get; set; }
+        [JsonPropertyName("SkipToken")] public string? SkipToken { get; set; }
     }
 
     private sealed class QueryResponse

@@ -7,7 +7,7 @@
         xmlns:local="clr-namespace:VerseOps.App"
         xmlns:inventory="clr-namespace:VerseOps.App.Inventory"
         mc:Ignorable="d"
-        Title="VerseOps — Power Platform Control-Plane Console"
+        Title="VerseOps — Power Platform Inventory Console"
         Height="820" Width="1400"
         WindowStartupLocation="CenterScreen"
         WindowBackdropType="Mica"
@@ -16,288 +16,28 @@
         Foreground="{DynamicResource TokenTextPrimary}"
         FontFamily="{DynamicResource TokenFontFamilyBase}" FontSize="12">
 
-    <Window.Resources>
-        <!-- All control styling now comes from App.xaml's Fluent token theme.
-             We keep this dictionary node so future window-scoped tweaks have
-             a place to land. -->
-    </Window.Resources>
-
+    <!-- Shell layout: a Fluent v2 title bar across the top + the
+         InventoryView consumes the rest of the window. The previous API
+         Explorer tab and the visible Authentication expander were removed
+         in the May 2026 refactor — that surface lives in a separate tool
+         now. AuthService is still wired up in code-behind so the inventory
+         pipeline can silently acquire tokens for PPAC, BAP, Microsoft
+         Graph and Dataverse on first use. -->
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Fluent title bar (replaces the OS chrome). Hosts the app icon,
-             title, and the system min / max / close caption buttons. -->
+        <!-- Fluent title bar replaces the OS chrome and hosts the system
+             min / max / close caption buttons. -->
         <ui:TitleBar Grid.Row="0"
-                     Title="VerseOps — Power Platform Control-Plane Console"
+                     Title="VerseOps — Power Platform Inventory Console"
                      ShowMaximize="True" ShowMinimize="True"/>
 
-        <!-- Authentication settings. Wrapped in a collapsible Expander so the
-             (rarely-changed) auth fields can be folded away to give the
-             dashboard / API explorer the full vertical space below the title
-             bar. Default-collapsed once the user is signed in (we set
-             IsExpanded=false in code-behind on first successful sign-in). -->
-        <Expander Grid.Row="1" Header="Authentication" x:Name="AuthExpander"
-                  IsExpanded="True" Margin="4,2,4,0">
-            <Grid Margin="6,4,6,6">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Margin="0,0,12,4">
-                    <RadioButton x:Name="RbUser" Content="User (interactive)" IsChecked="True" GroupName="AuthMode" Checked="OnAuthModeChanged"/>
-                    <RadioButton x:Name="RbApp"  Content="App-only (client credentials)" GroupName="AuthMode" Checked="OnAuthModeChanged"/>
-                </StackPanel>
-
-                <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal">
-                    <Label Content="Tenant:" VerticalAlignment="Center"/>
-                    <TextBox x:Name="TbTenant" Width="280" Text="common"/>
-                </StackPanel>
-
-                <StackPanel x:Name="UserPanel" Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
-                    <Label Content="Public client id:" VerticalAlignment="Center"/>
-                    <TextBox x:Name="TbPublicClientId" Width="290" Text="04b07795-8ddb-461a-bbee-02f9e1bf7b46"
-                             ToolTip="Default = Azure CLI public client (works in most tenants)."/>
-                </StackPanel>
-
-                <StackPanel x:Name="AppPanel" Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0" Visibility="Collapsed">
-                    <Label Content="App ClientId:" VerticalAlignment="Center"/>
-                    <TextBox x:Name="TbAppClientId" Width="280"/>
-                    <Label Content="Secret:" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                    <PasswordBox x:Name="PbAppSecret" Width="280"/>
-                </StackPanel>
-
-                <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock x:Name="TxtAuthState" VerticalAlignment="Center" Margin="0,0,12,0"
-                               Foreground="{DynamicResource TokenBrandForeground}"/>
-                    <Button Content="Register SP" Click="OnRegisterSp"
-                            Background="{DynamicResource TokenSuccessBackground}"
-                            BorderBrush="{DynamicResource TokenSuccessBackground}"
-                            Foreground="{DynamicResource TokenTextOnAccent}"
-                            ToolTip="One-time, per tenant. Signs in interactively as a Power Platform admin and registers the App-only ClientId as a tenant admin management application. (Required for any SP to call admin APIs — PPAC and BAP both honor this registration.)"/>
-                    <Button Content="Sign out" Click="OnSignOut" Style="{StaticResource DangerButton}"/>
-                </StackPanel>
-            </Grid>
-        </Expander>
-
-        <TabControl Grid.Row="2" Margin="4">
-            <TabControl.Resources>
-                <!-- Tab styling now comes from the global Fluent theme; the
-                     selected tab gets a brand-blue underline indicator. -->
-            </TabControl.Resources>
-
-            <TabItem Header="Inventory Dashboard">
-                <inventory:InventoryView x:Name="InventoryDashboard"/>
-            </TabItem>
-
-            <TabItem Header="API Explorer">
-                <Grid Margin="4">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="290"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-
-            <GroupBox Grid.Column="0" Header="PPAC operations (api.powerplatform.com — preview)">
-                <DockPanel>
-                    <Border DockPanel.Dock="Top" Background="#1F2A2D" BorderBrush="#205A5A" BorderThickness="1"
-                            Padding="6" Margin="0,0,0,4" CornerRadius="2">
-                        <TextBlock x:Name="TxtSurfaceNotice" TextWrapping="Wrap" Foreground="#9CDCFE" FontSize="11"/>
-                    </Border>
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
-                        <RadioButton x:Name="RbModeRest" Content="REST (docs)" IsChecked="True" Checked="OnTreeModeChanged" GroupName="TreeMode" Margin="0,0,12,0"/>
-                        <RadioButton x:Name="RbModeSdk"  Content="SDK (NuGet)" Checked="OnTreeModeChanged" GroupName="TreeMode"
-                            ToolTip="Browse and invoke Microsoft.PowerPlatform.Management RequestBuilders via Kiota. Same auth as REST mode."/>
-                    </StackPanel>
-                    <TreeView x:Name="TvOps" SelectedItemChanged="OnOperationSelected"/>
-                </DockPanel>
-            </GroupBox>
-
-            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
-                          Background="{DynamicResource TokenStrokeSubtle}"/>
-
-            <Grid Grid.Column="2">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-
-                <GroupBox Grid.Row="0" Header="Request">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <Label Grid.Row="0" Grid.Column="0" Content="Method:"/>
-                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
-                            <ComboBox x:Name="CbMethod" Width="100">
-                                <ComboBoxItem>GET</ComboBoxItem>
-                                <ComboBoxItem>POST</ComboBoxItem>
-                                <ComboBoxItem>PATCH</ComboBoxItem>
-                                <ComboBoxItem>PUT</ComboBoxItem>
-                                <ComboBoxItem>DELETE</ComboBoxItem>
-                            </ComboBox>
-                            <Label Content="Scope:" Margin="12,0,0,0"/>
-                            <ComboBox x:Name="CbScope" Width="320">
-                                <ComboBoxItem Content="https://api.powerplatform.com/.default" IsSelected="True"/>
-                                <ComboBoxItem Content="https://service.powerapps.com/.default"/>
-                                <ComboBoxItem Content="https://api.bap.microsoft.com/.default"/>
-                                <ComboBoxItem Content="https://graph.microsoft.com/.default"/>
-                            </ComboBox>
-                            <Button x:Name="BtnSend" Content="Send" Click="OnSend"
-                                    Style="{StaticResource AccentButton}"
-                                    Margin="16,0,0,0" Padding="22,4"/>
-                            <Button x:Name="BtnDecode" Content="Decode bearer" Click="OnDecodeToken"/>
-                            <Button x:Name="BtnSweep" Content="Sweep × 10 envs" Click="OnPpacSweep"
-                                    ToolTip="Run every PPAC operation against the first N environments and dump a report into the Body tab."/>
-                            <Button x:Name="BtnCancel" Content="Cancel" Click="OnCancel" IsEnabled="False"
-                                    Style="{StaticResource DangerButton}"/>
-                        </StackPanel>
-
-                        <Label Grid.Row="1" Grid.Column="0" Content="URL:"/>
-                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="TbUrl" FontFamily="Cascadia Mono, Consolas"/>
-
-                        <Label Grid.Row="2" Grid.Column="0" Content="Body:" VerticalAlignment="Top"/>
-                        <TabControl Grid.Row="2" Grid.Column="1">
-                            <TabItem Header="Form">
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                    <StackPanel Margin="6">
-                                        <TextBlock x:Name="TxtFormHint"
-                                                   Foreground="{DynamicResource TokenTextTertiary}"
-                                                   Text="Select an operation to see its parameters."
-                                                   Margin="0,0,0,6"/>
-                                        <Grid x:Name="GridForm"/>
-                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                            <Button x:Name="BtnApplyForm"   Content="Apply to URL + Body" Click="OnApplyForm"/>
-                                            <Button x:Name="BtnLoadEnvs"    Content="Load environments" Click="OnLoadEnvironments" Margin="6,0,0,0"/>
-                                            <Button x:Name="BtnLoadGroups"  Content="Load groups"       Click="OnLoadGroups"       Margin="6,0,0,0"/>
-                                            <Button x:Name="BtnLoadDlp"     Content="Load DLP"          Click="OnLoadDlp"          Margin="6,0,0,0"/>
-                                            <Button x:Name="BtnLoadBilling" Content="Load billing"      Click="OnLoadBilling"      Margin="6,0,0,0"/>
-                                            <TextBlock x:Name="TxtFormStatus" Margin="10,5,0,0"
-                                                       Foreground="{DynamicResource TokenBrandForeground}"/>
-                                        </StackPanel>
-                                    </StackPanel>
-                                </ScrollViewer>
-                            </TabItem>
-                            <TabItem Header="Raw body">
-                                <TextBox x:Name="TbBody"
-                                         FontFamily="Cascadia Mono, Consolas"
-                                         AcceptsReturn="True" AcceptsTab="True"
-                                         VerticalScrollBarVisibility="Auto"
-                                         HorizontalScrollBarVisibility="Auto"
-                                         TextWrapping="NoWrap"/>
-                            </TabItem>
-                        </TabControl>
-                    </Grid>
-                </GroupBox>
-
-                <GridSplitter Grid.Row="1" Height="4" HorizontalAlignment="Stretch"
-                              Background="{DynamicResource TokenStrokeSubtle}"/>
-
-                <GroupBox Grid.Row="2">
-                    <GroupBox.Header>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Response"/>
-                            <TextBlock x:Name="TxtRespMeta" Margin="14,0,0,0"
-                                       Foreground="{DynamicResource TokenCodeString}"/>
-                        </StackPanel>
-                    </GroupBox.Header>
-                    <TabControl>
-                        <TabItem Header="Response body">
-                            <TextBox x:Name="TbResponse"
-                                     FontFamily="Cascadia Mono, Consolas"
-                                     IsReadOnly="True" AcceptsReturn="True"
-                                     VerticalScrollBarVisibility="Auto"
-                                     HorizontalScrollBarVisibility="Auto"
-                                     TextWrapping="NoWrap"/>
-                        </TabItem>
-                        <TabItem Header="Response tree">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
-                                </Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="4">
-                                    <Button x:Name="BtnTreeExpand"   Content="Expand all"   Margin="0,0,6,0" Click="OnTreeExpandAll"/>
-                                    <Button x:Name="BtnTreeCollapse" Content="Collapse all" Click="OnTreeCollapseAll"/>
-                                    <TextBlock x:Name="TxtTreeStats" Margin="14,4,0,0"
-                                               Foreground="{DynamicResource TokenTextTertiary}"/>
-                                </StackPanel>
-                                <TreeView x:Name="TvJson" Grid.Row="1"
-                                          FontFamily="Cascadia Mono, Consolas"
-                                          VirtualizingStackPanel.IsVirtualizing="True"
-                                          VirtualizingStackPanel.VirtualizationMode="Recycling"/>
-                            </Grid>
-                        </TabItem>
-                        <TabItem Header="Headers">
-                            <TextBox x:Name="TbHeaders"
-                                     FontFamily="Cascadia Mono, Consolas"
-                                     IsReadOnly="True" AcceptsReturn="True"
-                                     VerticalScrollBarVisibility="Auto"/>
-                        </TabItem>
-                        <TabItem Header="Description">
-                            <TextBox x:Name="TbDescription"
-                                     IsReadOnly="True" TextWrapping="Wrap"
-                                     VerticalScrollBarVisibility="Auto"/>
-                        </TabItem>
-                        <TabItem Header="Return type (SDK)">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
-                                </Grid.RowDefinitions>
-                                <TextBlock x:Name="TxtReturnTypeHeader" Grid.Row="0" Margin="6,4"
-                                           Foreground="{DynamicResource TokenBrandForeground}"
-                                           FontFamily="{DynamicResource TokenFontFamilyMono}"
-                                           Text="(select an SDK leaf to see its return shape)"/>
-                                <TreeView x:Name="TvReturn" Grid.Row="1"
-                                          FontFamily="Cascadia Mono, Consolas"
-                                          VirtualizingStackPanel.IsVirtualizing="True"
-                                          VirtualizingStackPanel.VirtualizationMode="Recycling"/>
-                            </Grid>
-                        </TabItem>
-                    </TabControl>
-                </GroupBox>
-            </Grid>
-                </Grid>
-            </TabItem>
-        </TabControl>
-
-        <Border Grid.Row="3" Background="{DynamicResource TokenBrandBackground}" Padding="10,5">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock x:Name="TxtStatus" Grid.Column="0"
-                           Foreground="{DynamicResource TokenTextOnAccent}"
-                           VerticalAlignment="Center" Text="Ready."/>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock x:Name="TxtElapsed"
-                               Foreground="{DynamicResource TokenTextOnAccent}"
-                               VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <ProgressBar x:Name="PbBusy" Width="180" Height="6" IsIndeterminate="True"
-                                 Visibility="Collapsed"/>
-                </StackPanel>
-            </Grid>
-        </Border>
+        <!-- The inventory dashboard owns the entire client area. It carries
+             its own toolbar (refresh / cancel / search / filters) and
+             status bar so no chrome is needed at the window level. -->
+        <inventory:InventoryView Grid.Row="1" x:Name="InventoryDashboard"/>
     </Grid>
 </ui:FluentWindow>

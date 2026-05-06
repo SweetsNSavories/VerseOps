@@ -183,6 +183,36 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Destructive row action: revokes System Administrator from a
+             Dataverse systemuser. Visibility is bound at the call-site to
+             UserGroupRow.IsAdmin so it only shows for admin rows. The red
+             foreground is the single signal that this is irreversible — the
+             actual confirmation prompt lives in the view-model. -->
+        <Style x:Key="RevokeAdminIconButton" TargetType="Button" BasedOn="{StaticResource RowIconButton}">
+            <Setter Property="ToolTip" Value="Revoke System Administrator (Dataverse)"/>
+            <Setter Property="Foreground" Value="{DynamicResource TokenDangerForeground}"/>
+            <Setter Property="Content" Value=" "/>
+            <Setter Property="ContentTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <ui:SymbolIcon Symbol="ShieldDismiss24" FontSize="13"/>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Per-cell capacity TextBlock used by the Database/File/Log/FinOps
+             columns. Default is the neutral primary text color; DataTriggers
+             flip the foreground based on the row's *Status string ("ok",
+             "warn", "over", or "" for unknown). The status comes from
+             EnvironmentRow.UsageStatus(actual, limit) so the threshold logic
+             stays in one place. -->
+        <Style x:Key="CapacityCellText" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin"            Value="6,0"/>
+            <Setter Property="FontWeight"        Value="Normal"/>
+            <Setter Property="Foreground"        Value="{DynamicResource TokenTextPrimary}"/>
+        </Style>
 
         <!-- Section header label inside a SectionExpander. Pre-baked so each
              collapsed section shows a consistent brand-blue caption. -->
@@ -258,13 +288,22 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- Refresh button -->
-                    <Button Grid.Column="2" Style="{StaticResource ToolbarButton}"
-                            Content="â†» Refresh"
-                            Command="{Binding RefreshCommand}"
-                            Background="#15314D" BorderBrush="#1F4A75"
-                            Padding="18,6" FontSize="13" FontWeight="SemiBold"
-                            ToolTip="Pull all environments + capacity via PPAC SDK and BAP capacity route, then replace the local catalog."/>
+                    <!-- Refresh + Cancel buttons. Cancel is only enabled while a refresh is in flight. -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <Button Style="{StaticResource ToolbarButton}"
+                                Content="â†» Refresh"
+                                Command="{Binding RefreshCommand}"
+                                Background="#15314D" BorderBrush="#1F4A75"
+                                Padding="18,6" FontSize="13" FontWeight="SemiBold"
+                                ToolTip="Pull all environments + capacity via PPAC SDK and BAP capacity route, then replace the local catalog."/>
+                        <Button Style="{StaticResource ToolbarButton}"
+                                Content="âœ• Cancel"
+                                Command="{Binding CancelRefreshCommand}"
+                                Background="#3A1A1A" BorderBrush="#5A2A2A"
+                                Padding="14,6" FontSize="13" FontWeight="SemiBold"
+                                Margin="6,0,0,0"
+                                ToolTip="Cancel the in-flight refresh. Already-loaded data stays."/>
+                    </StackPanel>
                 </Grid>
             </Border>
 
@@ -390,9 +429,59 @@
                               IsChecked="{Binding ShowOnlyMyEnvironments, Mode=TwoWay}"
                               Content="Only my environments"
                               ToolTip="Filter to environments where you have a Dataverse user record (issues a WhoAmI to each env on first toggle)."/>
+                    <!-- Free-text search across every column the env grid header surfaces.
+                         Tokens are AND-ed (whitespace-separated). Backed by EnvSearchText /
+                         _envSearchTokens in InventoryViewModel.FilterEnvironment. -->
+                    <Grid Margin="14,0,0,0" VerticalAlignment="Center" Width="240">
+                        <TextBox x:Name="EnvSearchBox"
+                                 Text="{Binding EnvSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Background="{DynamicResource TokenSurfaceTertiary}"
+                                 Foreground="{DynamicResource TokenTextPrimary}"
+                                 BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                                 Padding="6,3,22,3"
+                                 ToolTip="Search environments — name, sku, region, version, security group, owner, GUID, storage. Tokens are AND-ed."/>
+                        <TextBlock Text="Search environments..."
+                                   IsHitTestVisible="False"
+                                   Foreground="{DynamicResource TokenTextDisabled}"
+                                   VerticalAlignment="Center" Margin="8,0,0,0"
+                                   Visibility="{Binding HasEnvSearch, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasEnvSearch}" Value="False">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <Button Content="✕" Width="18" Height="18" Padding="0"
+                                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,2,0"
+                                Background="Transparent" BorderBrush="Transparent"
+                                Foreground="{DynamicResource TokenTextSecondary}" Cursor="Hand"
+                                Command="{Binding ClearEnvSearchCommand}"
+                                ToolTip="Clear search"
+                                Visibility="{Binding HasEnvSearch, Converter={StaticResource BoolToVisibility}}"/>
+                    </Grid>
                     <TextBlock Text="{Binding LastRefreshedDisplay}"
                                VerticalAlignment="Center" Margin="14,0,0,0"
                                Foreground="{DynamicResource TokenBrandForeground}"/>
+                    <!-- Per-column filter bulk-clear. Only visible when at least one
+                         column funnel has a value; clears every per-column filter
+                         in one click without touching the global env search. -->
+                    <Button Margin="14,0,0,0" Padding="8,3" VerticalAlignment="Center"
+                            Background="Transparent" BorderBrush="{DynamicResource TokenStrokeSubtle}"
+                            Foreground="{DynamicResource TokenTextSecondary}" Cursor="Hand"
+                            Command="{Binding ClearColumnFiltersCommand}"
+                            ToolTip="Clear all per-column header filters."
+                            Visibility="{Binding HasAnyColumnFilter, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE894;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                       FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBlock Text="Clear column filters" FontSize="11" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <ProgressBar Width="120" Height="6" Margin="14,0,0,0"
                                  VerticalAlignment="Center" IsIndeterminate="True"
                                  Background="{DynamicResource TokenSurfaceTertiary}" Foreground="{DynamicResource TokenBrandForeground}" BorderBrush="{DynamicResource TokenBrandBackground}"
@@ -459,11 +548,36 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTextColumn Header="Name"     Binding="{Binding DisplayName}"        Width="260"/>
-                    <DataGridTextColumn Header="SKU"      Binding="{Binding Sku}"                Width="110"/>
-                    <DataGridTextColumn Header="Status"   Binding="{Binding ProvisioningState}"  Width="110"/>
-                    <DataGridTextColumn Header="Region"   Binding="{Binding Region}"             Width="110"/>
-                    <DataGridTextColumn Header="Version"  Binding="{Binding Version}"            Width="120"/>
+                    <DataGridTextColumn Binding="{Binding DisplayName}"       Width="260">
+                        <DataGridTextColumn.Header>
+                            <local:ColumnFilterHeader Label="Name"
+                                FilterText="{Binding DataContext.FilterName,    RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"/>
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Binding="{Binding Sku}"               Width="110">
+                        <DataGridTextColumn.Header>
+                            <local:ColumnFilterHeader Label="SKU"
+                                FilterText="{Binding DataContext.FilterSku,     RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"/>
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Binding="{Binding ProvisioningState}" Width="110">
+                        <DataGridTextColumn.Header>
+                            <local:ColumnFilterHeader Label="Status"
+                                FilterText="{Binding DataContext.FilterStatus,  RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"/>
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Binding="{Binding Region}"            Width="110">
+                        <DataGridTextColumn.Header>
+                            <local:ColumnFilterHeader Label="Region"
+                                FilterText="{Binding DataContext.FilterRegion,  RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"/>
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Binding="{Binding Version}"           Width="120">
+                        <DataGridTextColumn.Header>
+                            <local:ColumnFilterHeader Label="Version"
+                                FilterText="{Binding DataContext.FilterVersion, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"/>
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
 
                     <!-- Default: tenant-default env (the open-to-everyone env every
                          tenant has by default; only one per tenant). The PPAC SDK
@@ -505,20 +619,195 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTextColumn Header="Created"  Binding="{Binding CreatedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
-                    <DataGridTextColumn Header="DB GB"    Binding="{Binding DatabaseGb, StringFormat={}{0:N2}}" Width="80"/>
-                    <DataGridTextColumn Header="File GB"  Binding="{Binding FileGb,     StringFormat={}{0:N2}}" Width="80"/>
-                    <DataGridTextColumn Header="Log GB"   Binding="{Binding LogGb,      StringFormat={}{0:N2}}" Width="80"/>
-                    <DataGridTextColumn Header="Apps"     Binding="{Binding AppCount}"           Width="60"/>
-                    <DataGridTextColumn Header="Flows"    Binding="{Binding FlowCount}"          Width="60"/>
-                    <DataGridTextColumn Header="Agents"   Binding="{Binding AgentCount}"         Width="60"/>
+                    <DataGridTextColumn Binding="{Binding CreatedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100">
+                        <DataGridTextColumn.Header>
+                            <local:ColumnFilterHeader Label="Created"
+                                FilterText="{Binding DataContext.FilterCreated, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"/>
+                        </DataGridTextColumn.Header>
+                    </DataGridTextColumn>
+
+                    <!-- Security Group: Azure AD security group that gates env
+                         access. SecurityGroupSummary returns "Open to all"
+                         when no SG is attached, "{name}" once Graph resolved
+                         the id, "{first8}…" while the resolve is pending,
+                         and adds a ★ when the signed-in user is a transitive
+                         member of the group. -->
+                    <DataGridTextColumn Binding="{Binding SecurityGroupSummary}" Width="180">
+                        <DataGridTextColumn.Header>
+                            <local:ColumnFilterHeader Label="Security Group"
+                                FilterText="{Binding DataContext.FilterSecurityGroup, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"
+                                ToolTip="Azure AD security group that gates env access. ★ marks groups the signed-in user is a transitive member of (drives the 'Only my envs' toggle)."/>
+                        </DataGridTextColumn.Header>
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="ToolTip" Value="{Binding SecurityGroupId}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+
+                    <!-- Capacity columns: actual / limit GB with traffic-light
+                         coloring. *Status returns "ok" / "warn" (>=80%) /
+                         "over" (>=100%) and the DataTriggers tint the cell
+                         red/amber. *GbDisplay handles formatting + the "—"
+                         placeholder when no data is loaded. -->
+                    <DataGridTemplateColumn Width="120" SortMemberPath="DatabaseGb">
+                        <DataGridTemplateColumn.Header>
+                            <local:ColumnFilterHeader Label="DB GB"
+                                FilterText="{Binding DataContext.FilterDatabase, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"/>
+                        </DataGridTemplateColumn.Header>
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding DatabaseGbDisplay}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource CapacityCellText}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding DatabaseStatus}" Value="warn">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TokenWarningForeground}"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding DatabaseStatus}" Value="over">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TokenDangerForeground}"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTemplateColumn Width="120" SortMemberPath="FileGb">
+                        <DataGridTemplateColumn.Header>
+                            <local:ColumnFilterHeader Label="File GB"
+                                FilterText="{Binding DataContext.FilterFile, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"/>
+                        </DataGridTemplateColumn.Header>
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding FileGbDisplay}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource CapacityCellText}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding FileStatus}" Value="warn">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TokenWarningForeground}"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding FileStatus}" Value="over">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TokenDangerForeground}"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTemplateColumn Width="120" SortMemberPath="LogGb">
+                        <DataGridTemplateColumn.Header>
+                            <local:ColumnFilterHeader Label="Log GB"
+                                FilterText="{Binding DataContext.FilterLog, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"/>
+                        </DataGridTemplateColumn.Header>
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding LogGbDisplay}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource CapacityCellText}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding LogStatus}" Value="warn">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TokenWarningForeground}"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding LogStatus}" Value="over">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TokenDangerForeground}"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- FinOps capacity (Dynamics 365 Finance & Operations). Empty
+                         "—" for non-FinOps envs so the column doesn't visually
+                         imply they're at zero usage. Same status-trigger
+                         coloring as the regular capacity columns. -->
+                    <DataGridTemplateColumn Width="130" SortMemberPath="FinOpsDatabaseGb">
+                        <DataGridTemplateColumn.Header>
+                            <local:ColumnFilterHeader Label="FinOps DB"
+                                FilterText="{Binding DataContext.FilterFinOpsDb, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"
+                                ToolTip="FinOps (Dynamics 365 F&amp;O) database storage actual / rated capacity."/>
+                        </DataGridTemplateColumn.Header>
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding FinOpsDatabaseGbDisplay}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource CapacityCellText}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding FinOpsDatabaseStatus}" Value="warn">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TokenWarningForeground}"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding FinOpsDatabaseStatus}" Value="over">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TokenDangerForeground}"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTemplateColumn Width="130" SortMemberPath="FinOpsFileGb">
+                        <DataGridTemplateColumn.Header>
+                            <local:ColumnFilterHeader Label="FinOps File"
+                                FilterText="{Binding DataContext.FilterFinOpsFile, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"
+                                ToolTip="FinOps (Dynamics 365 F&amp;O) file storage actual / rated capacity."/>
+                        </DataGridTemplateColumn.Header>
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding FinOpsFileGbDisplay}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource CapacityCellText}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding FinOpsFileStatus}" Value="warn">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TokenWarningForeground}"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding FinOpsFileStatus}" Value="over">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TokenDangerForeground}"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Apps / Flows / Agents counts moved out of the env grid
+                         (they live on the per-env header inside the row
+                         details panel). The asset totals are still visible
+                         via the dashboard tiles at the top — keeping them
+                         off the grid frees ~180px and lets the wider
+                         Security Group / capacity / FinOps columns breathe. -->
 
                     <!-- Instance URL: copyable monospace text + browser launch.
                          Buttons collapse for envs without Dataverse (no URL).
                          Fixed width sized to fit a typical "https://orgxxxxx.crm.dynamics.com/"
                          (~36 chars) plus the two action icons; longer URLs scroll
                          inside the read-only TextBox via Ctrl+arrow / mouse drag. -->
-                    <DataGridTemplateColumn Header="Instance URL" Width="320" SortMemberPath="InstanceUrl">
+                    <DataGridTemplateColumn Width="320" SortMemberPath="InstanceUrl">
+                        <DataGridTemplateColumn.Header>
+                            <local:ColumnFilterHeader Label="Instance URL"
+                                FilterText="{Binding DataContext.FilterInstanceUrl, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"/>
+                        </DataGridTemplateColumn.Header>
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <DockPanel LastChildFill="True" Margin="2,0">
@@ -555,8 +844,12 @@
 
                     <!-- Env ID: copyable monospace + open-in-maker (env home).
                          The Open icon launches make.powerapps.com/environments/{id}/home;
-                         the Copy icon copies the GUID. -->
-                    <DataGridTemplateColumn Header="Env ID" Width="280" SortMemberPath="EnvId">
+                         the Copy icon copies the GUID.
+                         Width="*" with MinWidth="280" so the column absorbs any
+                         extra horizontal space — fixes the previous behaviour
+                         where the env grid left a large empty band on the
+                         right of the trailing column on wide screens. -->
+                    <DataGridTemplateColumn Header="Env ID" Width="*" MinWidth="280" SortMemberPath="EnvId">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <DockPanel LastChildFill="True" Margin="2,0">
@@ -1229,7 +1522,7 @@
                                                 <DataGridTextColumn Header="Admin Status"    Binding="{Binding AdminStatus}"     Width="110"/>
                                                 <DataGridTextColumn Header="Created"         Binding="{Binding CreatedUtc, StringFormat={}{0:yyyy-MM-dd}}"  Width="100"/>
                                                 <DataGridTextColumn Header="Modified"        Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
-                                                <DataGridTemplateColumn Header="Actions" Width="90">
+                                                <DataGridTemplateColumn Header="Actions" Width="120">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -1237,6 +1530,15 @@
                                                                         CommandParameter="{Binding}"/>
                                                                 <Button Style="{StaticResource InspectJsonIconButton}"                                                                                                                                                Command="{Binding DataContext.InspectJsonCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
                                                                         CommandParameter="{Binding}"/>
+                                                                <!-- Revoke System Administrator (Dataverse DELETE on
+                                                                     systemuserroles_association). Hidden for non-
+                                                                     admin rows so the column doesn't add visual
+                                                                     noise. The view-model modal-confirms before the
+                                                                     destructive call. -->
+                                                                <Button Style="{StaticResource RevokeAdminIconButton}"
+                                                                        Command="{Binding DataContext.RevokeAdminCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                        CommandParameter="{Binding}"
+                                                                        Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVisibility}}"/>
                                                             </StackPanel>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
