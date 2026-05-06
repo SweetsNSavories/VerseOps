@@ -707,9 +707,9 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
 
             case "governance":
                 DrawerTitle    = "Tenant Governance: DLP Policies";
-                DrawerSubtitle = "DLP policy enumeration ships in v1.6 — placeholder list shown.";
-                for (int i = 1; i <= 8; i++)
-                    DrawerItems.Add(new DrawerItem($"Default Policy {i}", "Created: N/A   Rule Sets: 1 active configurations   Scope: All Environments", "ENFORCED"));
+                DrawerSubtitle = "Loading DLP policies from BAP " +
+                                 "(/providers/PowerPlatform.Governance/v2/policies)…";
+                _ = LoadDlpDrawerAsync();
                 break;
 
             case "assets":
@@ -1296,6 +1296,101 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
             DrawerItems.Add(new DrawerItem(
                 "License rollup failed", ex.Message, string.Empty));
         }
+    }
+
+    /// <summary>
+    /// Populates the right-side drawer with the tenant DLP policy list. First
+    /// call also kicks off the BAP fetch on the background thread; subsequent
+    /// calls reuse the cached snapshot owned by the inventory service.
+    /// One row per policy, with subtitle showing scope + classified-connector
+    /// counts (Business / Non-Business / Blocked) and the badge showing the
+    /// scope kind (ALL / ONLY / EXCEPT) so admins can see at a glance whether
+    /// a policy is global or env-scoped.
+    /// </summary>
+    private async Task LoadDlpDrawerAsync()
+    {
+        try
+        {
+            var policies = await _service.LoadDlpPoliciesAsync().ConfigureAwait(true);
+
+            DrawerItems.Clear();
+            if (policies.Count == 0)
+            {
+                DrawerSubtitle = "No DLP policies configured on this tenant.";
+                DrawerItems.Add(new DrawerItem(
+                    "No DLP policies",
+                    "Create a policy in the Power Platform admin center to control which connectors can be combined.",
+                    string.Empty));
+                return;
+            }
+
+            // Scope kind drives the badge — admins want to see at-a-glance
+            // which policies are tenant-wide vs env-scoped.
+            foreach (var p in policies.OrderBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase))
+            {
+                var businessCount  = CountConnectors(p, "Confidential");
+                var generalCount   = CountConnectors(p, "General");
+                var blockedCount   = CountConnectors(p, "Blocked");
+                var envCount       = p.Environments?.Count ?? 0;
+
+                var scopeText = (p.EnvironmentType ?? "AllEnvironments") switch
+                {
+                    "AllEnvironments"    => "Scope: All environments",
+                    "OnlyEnvironments"   => $"Scope: Only {envCount} env(s)",
+                    "ExceptEnvironments" => $"Scope: All except {envCount} env(s)",
+                    _                    => $"Scope: {p.EnvironmentType}"
+                };
+                var ruleText  = $"Business: {businessCount}   Non-Business: {generalCount}   Blocked: {blockedCount}";
+                var createdBy = p.CreatedBy?.DisplayName;
+                var subtitle  = string.IsNullOrEmpty(createdBy)
+                    ? $"{scopeText}   •   {ruleText}"
+                    : $"{scopeText}   •   {ruleText}   •   Created by: {createdBy}";
+
+                var badge = (p.EnvironmentType ?? "AllEnvironments") switch
+                {
+                    "AllEnvironments"    => "ALL",
+                    "OnlyEnvironments"   => "ONLY",
+                    "ExceptEnvironments" => "EXCEPT",
+                    _                    => "POLICY"
+                };
+
+                DrawerItems.Add(new DrawerItem(
+                    p.DisplayName ?? p.Name ?? "(unnamed policy)",
+                    subtitle,
+                    badge));
+            }
+
+            DrawerSubtitle = $"{policies.Count:N0} DLP policy(ies) tenant-wide " +
+                             "(BAP /providers/PowerPlatform.Governance/v2/policies).";
+        }
+        catch (Exception ex)
+        {
+            DrawerItems.Clear();
+            DrawerSubtitle = "DLP policy fetch failed.";
+            DrawerItems.Add(new DrawerItem(
+                "DLP policy fetch failed",
+                ex.Message + "  (Need Power Platform Admin / Service Admin role to read policies.)",
+                string.Empty));
+        }
+    }
+
+    /// <summary>
+    /// Sum the connector counts across every group whose classification
+    /// matches the supplied bucket name. The v2 envelope returns groups in
+    /// no particular order so we can't index by position; classification
+    /// strings are stable: <c>Confidential</c> = Business, <c>General</c> =
+    /// Non-Business, <c>Blocked</c> = Blocked.
+    /// </summary>
+    private static int CountConnectors(BapDlpClient.DlpPolicyDto p, string classification)
+    {
+        if (p.ConnectorGroups is null) return 0;
+        var n = 0;
+        foreach (var g in p.ConnectorGroups)
+        {
+            if (!string.Equals(g.Classification, classification, StringComparison.OrdinalIgnoreCase)) continue;
+            n += g.Connectors?.Count ?? 0;
+        }
+        return n;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
