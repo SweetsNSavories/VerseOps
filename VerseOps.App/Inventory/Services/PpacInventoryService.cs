@@ -65,31 +65,130 @@ public sealed class PpacInventoryService : IInventoryService
         => _catalog.LastRefreshedUtc();
 
     /// <summary>
-    /// Per-env Dataverse drill-down. The row itself isn't mutated here —
-    /// the caller (view-model) owns the property assignments + threading.
+    /// Per-env Dataverse drill-down. Cache-first: the FIRST expansion of a
+    /// row hits the network, persists the result into <c>gov_env_details</c>,
+    /// and returns it. Every subsequent expansion in this process — and
+    /// every expansion in future app launches — hydrates synchronously from
+    /// SQLite (no HTTP at all). The per-env "Refresh" button calls this with
+    /// <paramref name="forceRefresh"/> = <c>true</c> to bypass the cache.
+    /// <para>
+    /// The row itself isn't mutated here — the caller (view-model) owns the
+    /// property assignments + threading. Per-asset enrichments (Status,
+    /// IsPremium, DlpStatus, SolutionName, IsManaged) ARE stamped onto the
+    /// AssetRow instances in <paramref name="envAssets"/> on both code
+    /// paths so the bound grids light up immediately.
+    /// </para>
+    /// <para>
+    /// On a force-refresh the cached row is deleted BEFORE the network
+    /// fetch starts, so a failed re-fetch leaves the user with "no cache"
+    /// rather than a stale snapshot — clean failure mode.
+    /// </para>
     /// Also kicks the tenant DLP policy fetch (cached after first call) so
     /// the canvas-app enrichment can stamp <see cref="AssetRow.DlpStatus"/>
     /// in the same Dataverse round-trip. The DLP fetch is best-effort: if
     /// the user lacks the policy.read permission, canvas apps still get
     /// status + premium classification stamped, just no DLP badge.
     /// </summary>
+    public Task<DataverseEnvClient.EnvDetails> LoadEnvironmentDetailsAsync(
+        EnvironmentRow env,
+        IReadOnlyList<AssetRow> envAssets,
+        CancellationToken ct = default)
+        => LoadEnvironmentDetailsAsync(env, envAssets, forceRefresh: false, ct);
+
     public async Task<DataverseEnvClient.EnvDetails> LoadEnvironmentDetailsAsync(
         EnvironmentRow env,
         IReadOnlyList<AssetRow> envAssets,
+        bool forceRefresh,
         CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(env.InstanceUrl))
             throw new InvalidOperationException(
                 "This environment has no Dataverse instance URL — no database to query (it may be a Teams or Developer env without Dataverse, or PPAC hasn't reported the URL yet).");
 
-        // Best-effort DLP policy snapshot. Cached service-side so subsequent
-        // env-expands reuse the same in-memory list (no extra HTTP).
-        IReadOnlyList<BapDlpClient.DlpPolicyDto>? dlpPolicies = null;
-        try { dlpPolicies = await LoadDlpPoliciesAsync(ct).ConfigureAwait(false); }
-        catch { /* user lacks policy.read or BAP transient — proceed without DLP eval */ }
+        // Cache-first path. Snapshot stamps enrichments back onto the live
+        // AssetRow instances in envAssets before returning, so flat-view
+        // grids see Status / IsPremium / DlpStatus / SolutionName /
+        // IsManaged populated without us having to re-hit Dataverse.
+        if (!forceRefresh)
+        {
+            var cached = _catalog.ReadEnvDetails(env.EnvId);
+            if (cached.HasValue)
+            {
+                var snap = EnvDetailsSnapshot.Deserialize(cached.Value.payloadJson);
+                if (snap is not null)
+                {
+                    // Self-heal stale snapshots written by older builds that
+                    // didn't synthesize the "(unmatched)" SolutionGroup when
+                    // Dataverse returned zero visible solutions. If the env
+                    // has assets but the cached snapshot stored 0 solutions,
+                    // the hydrated grouped view would render an empty
+                    // SOLUTIONS section forever — drop the row and fall
+                    // through to a live fetch so the orphan-group logic
+                    // (LoadSolutionsAsync) gets a chance to populate.
+                    bool isStale = snap.Solutions.Count == 0 && envAssets.Count > 0;
+                    if (!isStale)
+                    {
+                        env.DetailsLastSyncedUtc = cached.Value.syncedUtc;
+                        return snap.Hydrate(envAssets);
+                    }
+                    _catalog.DeleteEnvDetails(env.EnvId);
+                }
+                else
+                {
+                    // Corrupted JSON (rare — a future build's serialization went
+                    // sideways). Drop the row and fall through to live fetch.
+                    _catalog.DeleteEnvDetails(env.EnvId);
+                }
+            }
+        }
+        else
+        {
+            // Force-refresh: drop the row first so a failure leaves no cache.
+            _catalog.DeleteEnvDetails(env.EnvId);
+            // Also clear the previous enrichments stamped on the AssetRow
+            // instances so the new fetch fills them in cleanly. (Status etc.
+            // come back stale-shaped only if Dataverse partially fails.)
+            foreach (var a in envAssets)
+            {
+                a.Status       = null;
+                a.IsPremium    = null;
+                a.DlpStatus    = null;
+                a.SolutionName = null;
+                a.IsManaged    = null;
+            }
+        }
+
+        // Kick the DLP fetch in PARALLEL with the Dataverse fan-out instead of
+        // awaiting it first. AssetMeta inside DataverseEnvClient awaits this
+        // task only when it actually needs the policies (canvas-app DLP eval),
+        // so Solutions / Power Pages / Users no longer wait on BAP for env #1.
+        // After env #1, the service-side cache makes the task instantly
+        // resolved and the overlap is free.
+        Task<IReadOnlyList<BapDlpClient.DlpPolicyDto>?> dlpTask = Task.Run(async () =>
+        {
+            try { return await LoadDlpPoliciesAsync(ct).ConfigureAwait(false); }
+            catch { return null; /* policy.read missing or BAP transient */ }
+        }, ct);
 
         var client = new DataverseEnvClient(_auth, _diagnostics);
-        return await client.LoadAllAsync(env.EnvId, env.InstanceUrl, envAssets, dlpPolicies, ct).ConfigureAwait(false);
+        var details = await client.LoadAllAsync(env.EnvId, env.InstanceUrl, envAssets, dlpTask, ct).ConfigureAwait(false);
+
+        // Persist the freshly-fetched snapshot. Best-effort: if SQLite write
+        // fails (disk full, file locked) we still hand the live result back
+        // to the caller — caching is an optimisation, not a correctness gate.
+        try
+        {
+            var syncedUtc = DateTime.UtcNow;
+            var snap = EnvDetailsSnapshot.Capture(details, envAssets, syncedUtc);
+            _catalog.SaveEnvDetails(env.EnvId, snap.Serialize(), syncedUtc);
+            env.DetailsLastSyncedUtc = syncedUtc;
+        }
+        catch
+        {
+            // Cache write failed — proceed with the in-memory result.
+        }
+
+        return details;
     }
 
     /// <summary>
@@ -353,7 +452,7 @@ public sealed class PpacInventoryService : IInventoryService
     }
 
     // ------------------------------------------------------------------
-    // ServiceClient construction (mirrors VerseOps.SdkProbe + SdkExecutor).
+    // ServiceClient construction.
     // ------------------------------------------------------------------
     private async Task<ServiceClient> BuildClientAsync(CancellationToken ct)
     {
@@ -363,10 +462,10 @@ public sealed class PpacInventoryService : IInventoryService
         var authProv = new BaseBearerTokenAuthenticationProvider(tokenProvider);
 
         var handlers = KiotaClientFactory.CreateDefaultHandlers();
-        // Use the SDK-provided ApiVersionHandler (same as VerseOps.SdkProbe). Kiota
-        // pre-adds "?api-version=" with an empty value when QueryParameters.ApiVersion
-        // isn't set; the SDK handler replaces the empty value, our local one only added
-        // when missing -> 400 ApiVersionInvalid.
+        // Use the SDK-provided ApiVersionHandler. Kiota pre-adds "?api-version="
+        // with an empty value when QueryParameters.ApiVersion isn't set; the
+        // SDK handler replaces the empty value, our local one only added when
+        // missing -> 400 ApiVersionInvalid.
         handlers.Insert(0, new Microsoft.PowerPlatform.Management.ApiVersionHandler(ApiVersion));
         handlers.Insert(0, _diagnostics); // outermost so it sees the final response
 

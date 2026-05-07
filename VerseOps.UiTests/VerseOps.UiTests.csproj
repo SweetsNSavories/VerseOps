@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    VerseOps.UiTests — end-to-end UI smoke suite for the WPF cockpit.
+
+    Tooling choices:
+
+      • FlaUI.UIA3            — modern .NET wrapper around Microsoft UI
+                                Automation v3 (the Win10/11 native API).
+                                Beats WinAppDriver/Appium because it's
+                                actively maintained and runs in-process.
+                                (Playwright is HTML-only and cannot drive
+                                a WPF process — the user asked, and that's
+                                why we picked FlaUI here.)
+
+      • xUnit                 — test runner; pairs with `dotnet test`.
+
+      • IClassFixture<AppFixture>
+                              — lifts/lowers the WPF process exactly once
+                                per test class, so we don't pay startup
+                                cost per test.
+
+    The tests deliberately hit only the *navigation chrome* (header,
+    hero tiles, toolbar, env grid presence, theme toggle) — they do NOT
+    call PPAC / BAP / Graph because that requires interactive Entra auth
+    and live tenant data.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>VerseOps.UiTests</RootNamespace>
+    <Platforms>AnyCPU</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+  </ItemGroup>
+
+  <!-- We need the app built first so the fixture can launch its EXE. -->
+  <ItemGroup>
+    <ProjectReference Include="..\VerseOps.App\VerseOps.App.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

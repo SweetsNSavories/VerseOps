@@ -97,13 +97,22 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
         CloseDrawerCommand = new RelayCommand(_ => CloseDrawer());
         InspectJsonCommand = new RelayCommand(p => InspectJson(p));
         OpenInMakerCommand = new RelayCommand(p => OpenInMaker(p));
+        ShowLicensesCommand = new RelayCommand(p => ShowLicenses(p as UserGroupRow),
+                                               p => p is UserGroupRow);
         OpenEnvCommand = new RelayCommand(p => OpenEnv(p as EnvironmentRow));
         CopyTextCommand = new RelayCommand(p => CopyText(p as string));
         OpenUrlCommand = new RelayCommand(p => OpenUrl(p as string));
         RevokeAdminCommand = new RelayCommand(async p => await RevokeAdminAsync(p as UserGroupRow),
                                               p => p is UserGroupRow u && u.IsAdmin && !IsBusy);
-        ClearEnvSearchCommand = new RelayCommand(_ => EnvSearchText = string.Empty,
-                                                 _ => HasEnvSearch);
+        ClearEnvSearchCommand = new RelayCommand(_ => ResetEnvView(),
+                                                 _ => HasEnvSearch || _anyRowExpanded);
+        // Per-env "Refresh details" button (lives in each expanded row's
+        // detail header). Force-refresh path: drops the SQLite snapshot for
+        // that env, hits Dataverse fresh, persists the new snapshot.
+        // Disabled while a fetch is in flight to prevent double-clicks.
+        RefreshEnvDetailsCommand = new RelayCommand(
+            async p => { if (p is EnvironmentRow r) await RefreshEnvironmentDetailsAsync(r); },
+            p => p is EnvironmentRow r && !r.IsLoadingDetails);
         ReloadFromCatalog();
     }
 
@@ -150,6 +159,14 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
     /// <summary>Open the row in the appropriate maker portal in the default browser.</summary>
     public ICommand OpenInMakerCommand { get; }
 
+    /// <summary>
+    /// Pop the User Licenses dialog for a <see cref="UserGroupRow"/>. The dialog
+    /// renders the Microsoft Graph license assignments enriched onto the row
+    /// (<see cref="UserGroupRow.LicenseDetails"/>) as a chip wrap, mirroring
+    /// the Metadata Inspector chrome.
+    /// </summary>
+    public ICommand ShowLicensesCommand { get; }
+
     /// <summary>Open the env's <c>make.powerapps.com</c> home page in the default browser.</summary>
     public ICommand OpenEnvCommand { get; }
 
@@ -189,6 +206,14 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
     /// Multiple whitespace-separated tokens are AND-ed so the user can type
     /// e.g. <c>"prod uat eastus"</c> to narrow progressively. Empty string
     /// passes everything.
+    ///
+    /// Setter design notes (UI responsiveness):
+    ///   * The TextBox binds with UpdateSourceTrigger=PropertyChanged so the
+    ///     watermark / clear-button visibility updates per keystroke.
+    ///   * The grid refresh is deferred onto a 200 ms DispatcherTimer so a
+    ///     fast typist doesn't pay for N filter passes (each pass walks the
+    ///     full env list and re-runs predicates). The keystroke itself is
+    ///     never blocked — only the visual filter result is collapsed.
     /// </summary>
     public string EnvSearchText
     {
@@ -207,7 +232,7 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
                        .ToArray();
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasEnvSearch));
-            EnvironmentsView.Refresh();
+            ScheduleEnvFilterRefresh();
         }
     }
     private string[] _envSearchTokens = Array.Empty<string>();
@@ -217,6 +242,135 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
 
     /// <summary>Clears <see cref="EnvSearchText"/> from the toolbar X button.</summary>
     public ICommand ClearEnvSearchCommand { get; }
+
+    /// <summary>
+    /// Per-env force-refresh of the Dataverse drill-down (Solutions / Power
+    /// Pages / Users + per-asset enrichments). Bound to the small "Refresh"
+    /// button in each expanded row's detail header. Drops the SQLite
+    /// snapshot for that env, then hits Dataverse fresh and re-persists.
+    /// Command parameter is the <see cref="EnvironmentRow"/> to refresh.
+    /// </summary>
+    public ICommand RefreshEnvDetailsCommand { get; }
+
+    /// <summary>
+    /// Single "reset env view" entry-point fired by the search-box X button.
+    /// Three responsibilities, in this order:
+    ///   1. SYNCHRONOUS — wipe <see cref="EnvSearchText"/> + raise INPC so
+    ///      the TextBox, X-button visibility and watermark all repaint on
+    ///      the very next layout pass. The user gets the visual confirmation
+    ///      that their click was heard before any heavy work runs.
+    ///   2. ASYNC (Background priority) — collapse every expanded env so
+    ///      focus-mode releases and WPF tears down the heavy per-env detail
+    ///      visuals (six PagedDataGrids per expanded row, ~hundreds of items
+    ///      each). This was the actual blocking cost on the previous version
+    ///      because we did it inline with the click; deferring to Background
+    ///      lets the UI thread breathe between collapse + grid re-virtualization.
+    ///   3. ASYNC (Background priority, after step 2) — final
+    ///      <see cref="ICollectionView.Refresh"/> so the grid re-runs the
+    ///      filter predicate and snaps back to "all envs".
+    /// </summary>
+    private void ResetEnvView()
+    {
+        // Cancel any debounced refresh queued by the last keystroke; we
+        // own the next refresh below.
+        _envFilterDebounce?.Stop();
+
+        // STEP 1 — synchronous, instantaneous visual feedback.
+        // Wipe state directly so we don't pay the EnvSearchText setter's
+        // debounce. INPC keeps the bound TextBox / clear button / watermark
+        // in sync on the very next render tick.
+        bool hadSearch = _envSearchText.Length > 0 || _envSearchTokens.Length > 0;
+        if (hadSearch)
+        {
+            _envSearchText = string.Empty;
+            _envSearchTokens = Array.Empty<string>();
+            OnPropertyChanged(nameof(EnvSearchText));
+            OnPropertyChanged(nameof(HasEnvSearch));
+        }
+
+        // STEPS 2 + 3 — defer the heavy work. WPF needs to dispose the
+        // expanded row's RowDetailsTemplate visual tree (6 PagedDataGrids
+        // with potentially thousands of items + filter funnels), then
+        // re-virtualize all envs. Doing that inline with the click made
+        // the click feel "stuck" \u2014 the Window message pump didn't get a
+        // turn to repaint the search box. DispatcherPriority.Background
+        // schedules behind input + render so the cleared TextBox paints
+        // first; the user perceives "instant clear, list re-populates".
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher == null)
+        {
+            // Test / headless fallback \u2014 just do the work synchronously.
+            CollapseAllRowsAndRefresh();
+            return;
+        }
+        dispatcher.BeginInvoke(
+            new Action(CollapseAllRowsAndRefresh),
+            System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// Heavy-half of <see cref="ResetEnvView"/>: collapses every expanded
+    /// env (releases focus mode and tears down per-env detail visuals)
+    /// and runs one final filter refresh. Always invoked on the UI thread.
+    /// Idempotent so it's safe even if no row was actually expanded.
+    /// </summary>
+    private void CollapseAllRowsAndRefresh()
+    {
+        // Suppress the per-row Refresh that RecomputeAnyRowExpanded would
+        // otherwise trigger when the last expanded row flips to false. We
+        // do exactly one Refresh below, so doubling up just doubles the
+        // wall-time cost on a 716-row grid.
+        _suppressExpansionRefresh = true;
+        try
+        {
+            foreach (var row in Environments)
+                if (row.IsExpanded) row.IsExpanded = false;
+        }
+        finally
+        {
+            _suppressExpansionRefresh = false;
+        }
+        // Recompute the cached flag now that all rows have flipped, then
+        // run the single canonical refresh.
+        _anyRowExpanded = false;
+        EnvironmentsView.Refresh();
+    }
+
+    /// <summary>
+    /// Set true while <see cref="CollapseAllRowsAndRefresh"/> bulk-collapses
+    /// rows so the per-row INPC handler doesn't trigger N intermediate
+    /// CollectionView refreshes.
+    /// </summary>
+    private bool _suppressExpansionRefresh;
+
+    // Debounce machinery for the env search box. A single DispatcherTimer
+    // is reset on every keystroke; it fires once 200ms after the LAST
+    // character so a fast typist sees the grid refresh exactly once.
+    private System.Windows.Threading.DispatcherTimer? _envFilterDebounce;
+    private void ScheduleEnvFilterRefresh()
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher == null)
+        {
+            // Fallback for unit-test contexts without an Application instance.
+            EnvironmentsView.Refresh();
+            return;
+        }
+        if (_envFilterDebounce == null)
+        {
+            _envFilterDebounce = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background, dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(200)
+            };
+            _envFilterDebounce.Tick += (_, _) =>
+            {
+                _envFilterDebounce!.Stop();
+                EnvironmentsView.Refresh();
+            };
+        }
+        _envFilterDebounce.Stop();
+        _envFilterDebounce.Start();
+    }
 
     // -----------------------------------------------------------------------
     // Per-column filters (Sentinel-style funnel popups in each header). Each
@@ -336,6 +490,9 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
         var any = Environments.Any(r => r.IsExpanded);
         if (any == _anyRowExpanded) return;
         _anyRowExpanded = any;
+        // Skip the refresh while CollapseAllRowsAndRefresh is bulk-flipping
+        // rows; it owns the single canonical refresh after the loop.
+        if (_suppressExpansionRefresh) return;
         // Refresh on the UI thread; CollectionChanged + INPC handlers can
         // be raised from background workers (e.g., the per-row Dataverse
         // load) so we marshal defensively.
@@ -572,15 +729,33 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
             return;
         }
 
-        var confirm = System.Windows.MessageBox.Show(
-            $"Remove the System Administrator role from\n  {user.DisplayName} ({user.Identity})\n\n" +
-            $"on environment {user.EnvId}?\n\n" +
-            "This calls Dataverse Web API and is auditable. You must hold System Administrator on the target env.",
-            "Revoke System Administrator?",
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Warning,
-            System.Windows.MessageBoxResult.No);
-        if (confirm != System.Windows.MessageBoxResult.Yes) return;
+        // Resolve a friendly env label so the confirm dialog reads "on
+        // environment Production" instead of dumping the GUID.
+        var envLabel = !string.IsNullOrEmpty(user.EnvId)
+            ? Environments.FirstOrDefault(e => string.Equals(e.EnvId, user.EnvId, StringComparison.OrdinalIgnoreCase))?.DisplayName ?? user.EnvId
+            : "(unknown env)";
+
+        // Use the WPF-UI Fluent MessageBox so the confirmation matches the
+        // rest of the app's chrome (Mica title-bar, themed buttons, accent
+        // primary). The Win32 MessageBox.Show() looks alien against the
+        // FluentWindow shell.
+        var msg = new Wpf.Ui.Controls.MessageBox
+        {
+            Title           = "Revoke System Administrator?",
+            Content         =
+                $"Remove the System Administrator role from\n" +
+                $"  {user.DisplayName}  ({user.Identity})\n\n" +
+                $"on environment \"{envLabel}\"?\n\n" +
+                "This calls Dataverse Web API and is auditable. " +
+                "You must hold System Administrator on the target env.",
+            PrimaryButtonText        = "Yes, revoke",
+            PrimaryButtonAppearance  = Wpf.Ui.Controls.ControlAppearance.Danger,
+            CloseButtonText          = "Cancel",
+            CloseButtonAppearance    = Wpf.Ui.Controls.ControlAppearance.Secondary,
+            Owner                    = System.Windows.Application.Current?.MainWindow
+        };
+        var dialogResult = await msg.ShowDialogAsync().ConfigureAwait(true);
+        if (dialogResult != Wpf.Ui.Controls.MessageBoxResult.Primary) return;
 
         try
         {
@@ -1103,6 +1278,21 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
         win.Show(System.Windows.Application.Current?.MainWindow, subtitle, raw, makerUrl);
     }
 
+    /// <summary>
+    /// Pop the <see cref="UserLicensesWindow"/> for the given user row. Source
+    /// data is whatever <c>GraphLicenseClient</c> already enriched onto the
+    /// row — no additional fetch is performed here so the dialog opens
+    /// instantly. If Graph hasn't enriched the row yet (admin Graph perms
+    /// missing, or a brand-new env that hasn't been expanded), the dialog
+    /// shows its empty state with that explanation.
+    /// </summary>
+    private void ShowLicenses(UserGroupRow? row)
+    {
+        if (row is null) return;
+        var win = new UserLicensesWindow();
+        win.Show(System.Windows.Application.Current?.MainWindow, row);
+    }
+
     /// <summary>Open the row in the maker portal (CommandParameter is the row).</summary>
     private void OpenInMaker(object? param)
     {
@@ -1163,10 +1353,26 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
     /// re-selecting the same row is a no-op. Background thread does the HTTP;
     /// property assignments happen on the UI thread because the row is INPC
     /// and the bound DataGrids re-render immediately.
+    /// <para>
+    /// Caching policy: the FIRST expansion ever (or after the user clicks
+    /// the per-env Refresh button) hits Dataverse and persists a snapshot
+    /// to local SQLite. Every subsequent expansion — including across app
+    /// launches — hydrates synchronously from SQLite, no HTTP at all. The
+    /// per-env Refresh button calls back here with
+    /// <paramref name="forceRefresh"/> = <c>true</c> to bypass the cache.
+    /// </para>
     /// </summary>
-    public async Task LoadEnvironmentDetailsAsync(EnvironmentRow row, CancellationToken ct = default)
+    public async Task LoadEnvironmentDetailsAsync(
+        EnvironmentRow row,
+        CancellationToken ct = default,
+        bool forceRefresh = false)
     {
-        if (row is null || row.DetailsLoaded || row.IsLoadingDetails) return;
+        if (row is null) return;
+        if (row.IsLoadingDetails) return;
+        // Cached or already-loaded? Skip the network unless the user explicitly
+        // asked for a refresh. DetailsLoaded gates re-runs in the same session;
+        // forceRefresh resets it before re-fetching below.
+        if (row.DetailsLoaded && !forceRefresh) return;
 
         row.IsLoadingDetails = true;
         row.DetailsError     = null;
@@ -1175,9 +1381,10 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
         {
             // Hand the row's cached Inventory-API assets to the client so it
             // can re-bucket them by their owning solution. The client does
-            // its own HTTP — Task.Run keeps the UI thread free.
+            // its own HTTP (or hydrates the cached snapshot synchronously)
+            // — Task.Run keeps the UI thread free either way.
             var details = await Task.Run(
-                () => _service.LoadEnvironmentDetailsAsync(row, row.Assets, ct), ct).ConfigureAwait(true);
+                () => _service.LoadEnvironmentDetailsAsync(row, row.Assets, forceRefresh, ct), ct).ConfigureAwait(true);
 
             row.Solutions      = details.Solutions;
             row.PowerPages     = details.PowerPages;
@@ -1204,6 +1411,20 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
         {
             row.IsLoadingDetails = false;
         }
+    }
+
+    /// <summary>
+    /// User-initiated re-fetch of one env's Dataverse drill-down. Bound to
+    /// the per-env "Refresh" button on the row's detail header. Resets the
+    /// row's loaded flag so <see cref="LoadEnvironmentDetailsAsync"/> with
+    /// <c>forceRefresh: true</c> actually does work — otherwise it would
+    /// short-circuit on the cached <c>DetailsLoaded == true</c>.
+    /// </summary>
+    public async Task RefreshEnvironmentDetailsAsync(EnvironmentRow row, CancellationToken ct = default)
+    {
+        if (row is null || row.IsLoadingDetails) return;
+        row.DetailsLoaded = false;
+        await LoadEnvironmentDetailsAsync(row, ct, forceRefresh: true).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -1418,7 +1639,23 @@ internal sealed class RelayCommand : ICommand
     public bool CanExecute(object? parameter) => _canExecute?.Invoke(parameter) ?? true;
     public async void Execute(object? parameter) => await _executeAsync(parameter);
 
-    public event EventHandler? CanExecuteChanged;
+    // Hook WPF's global CommandManager.RequerySuggested so any UI input event
+    // (focus change, mouse move into a control, key press) triggers a fresh
+    // CanExecute evaluation. Without this, ICommand bindings that depend on
+    // properties WPF can't see (e.g. row.IsLoadingDetails on a per-row
+    // RowDetailsTemplate-bound RelayCommand, or CommandParameter bindings
+    // that propagate after the first CanExecute call) stay stuck in their
+    // initial state — which is why per-env Refresh buttons rendered
+    // permanently disabled even when IsLoadingDetails was false.
+    //
+    // We still expose RaiseCanExecuteChanged() for explicit pushes, and
+    // chain it through CommandManager.InvalidateRequerySuggested so all
+    // bound buttons re-query on the same tick.
+    public event EventHandler? CanExecuteChanged
+    {
+        add    { CommandManager.RequerySuggested += value; }
+        remove { CommandManager.RequerySuggested -= value; }
+    }
     public void RaiseCanExecuteChanged()
-        => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+        => CommandManager.InvalidateRequerySuggested();
 }

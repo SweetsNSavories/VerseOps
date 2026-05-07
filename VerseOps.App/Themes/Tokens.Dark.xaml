@@ -1,0 +1,123 @@
+<!--
+  Fluent v2 — Dark theme tokens.
+
+  Mirrors @fluentui/tokens dark-theme defaults so the app reads as a
+  first-party Fluent surface. Loaded as the *active* token dictionary at
+  startup and swapped at runtime when the user (or system) toggles to Light.
+
+  Every brush key here MUST exist (with an equivalent semantic value) in
+  Tokens.Light.xaml — the runtime dictionary swap is symmetric.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============================================================
+         Neutral surfaces (background)
+         ============================================================ -->
+    <SolidColorBrush x:Key="TokenSurfaceCanvas"      Color="#141414"/>
+    <SolidColorBrush x:Key="TokenSurfacePrimary"     Color="#1F1F1F"/>
+    <SolidColorBrush x:Key="TokenSurfaceSecondary"   Color="#292929"/>
+    <SolidColorBrush x:Key="TokenSurfaceTertiary"    Color="#333333"/>
+    <SolidColorBrush x:Key="TokenSurfaceSubtle"      Color="#1A1A1A"/>
+
+    <!-- ============================================================
+         Neutral foregrounds (text)
+         ============================================================ -->
+    <SolidColorBrush x:Key="TokenTextPrimary"        Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="TokenTextSecondary"      Color="#D6D6D6"/>
+    <SolidColorBrush x:Key="TokenTextTertiary"       Color="#ADADAD"/>
+    <SolidColorBrush x:Key="TokenTextDisabled"       Color="#5C5C5C"/>
+    <SolidColorBrush x:Key="TokenTextOnAccent"       Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="TokenTextOnBrand"        Color="#FFFFFF"/>
+
+    <!-- ============================================================
+         Strokes / dividers
+         ============================================================ -->
+    <SolidColorBrush x:Key="TokenStrokeSubtle"       Color="#3D3D3D"/>
+    <SolidColorBrush x:Key="TokenStrokeDefault"      Color="#525252"/>
+    <SolidColorBrush x:Key="TokenStrokeAccessible"   Color="#ADADAD"/>
+    <SolidColorBrush x:Key="TokenStrokeFocus"        Color="#479EF5"/>
+
+    <!-- ============================================================
+         Brand (Office blue)
+         ============================================================ -->
+    <SolidColorBrush x:Key="TokenBrandBackground"      Color="#115EA3"/>
+    <SolidColorBrush x:Key="TokenBrandBackgroundHover" Color="#0F548C"/>
+    <SolidColorBrush x:Key="TokenBrandBackgroundPress" Color="#0C3B5E"/>
+    <!-- Subtle selection tint (dark theme parity with Light token set). -->
+    <SolidColorBrush x:Key="TokenBrandSelectionSubtle" Color="#1E3A52"/>
+    <SolidColorBrush x:Key="TokenBrandForeground"      Color="#479EF5"/>
+    <SolidColorBrush x:Key="TokenBrandForegroundHover" Color="#62ABF5"/>
+    <SolidColorBrush x:Key="TokenBrandStroke"          Color="#479EF5"/>
+
+    <!-- ============================================================
+         Semantic palette
+         ============================================================ -->
+    <SolidColorBrush x:Key="TokenSuccessBackground"  Color="#0E700E"/>
+    <SolidColorBrush x:Key="TokenSuccessForeground"  Color="#6CCB5F"/>
+    <SolidColorBrush x:Key="TokenWarningBackground"  Color="#8A5300"/>
+    <SolidColorBrush x:Key="TokenWarningForeground"  Color="#F7BA2C"/>
+    <SolidColorBrush x:Key="TokenDangerBackground"   Color="#8B1A1A"/>
+    <SolidColorBrush x:Key="TokenDangerForeground"   Color="#F87171"/>
+    <SolidColorBrush x:Key="TokenInfoBackground"     Color="#0A2A48"/>
+    <SolidColorBrush x:Key="TokenInfoForeground"     Color="#9CDCFE"/>
+
+    <!-- ============================================================
+         Code / mono surface (used by JSON viewers)
+         ============================================================ -->
+    <SolidColorBrush x:Key="TokenCodeBackground"     Color="#0F0F0F"/>
+    <SolidColorBrush x:Key="TokenCodeForeground"     Color="#C5C5C5"/>
+    <SolidColorBrush x:Key="TokenCodeKeyword"        Color="#9CDCFE"/>
+    <SolidColorBrush x:Key="TokenCodeString"         Color="#CE9178"/>
+
+    <!-- ============================================================
+         Inventory-cockpit chrome (header band, hero tiles, status pills)
+         These are the per-tile / per-pill "decorative" colors that used to
+         be hardcoded in InventoryView.xaml. Moved here so light/dark swaps
+         pick them up.
+         ============================================================ -->
+
+    <!-- Top header gradient band -->
+    <LinearGradientBrush x:Key="TokenHeaderGradient" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#0B1B2C" Offset="0"/>
+        <GradientStop Color="#10283F" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="TokenHeaderLogoBackground" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="TokenHeaderTextOnBrand"    Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="TokenHeaderSubText"        Color="#A0C5E8"/>
+
+    <!-- Header status pills (auth ok / refresh failure) -->
+    <SolidColorBrush x:Key="TokenHeaderPillInfoBg"     Color="#15314D"/>
+    <SolidColorBrush x:Key="TokenHeaderPillInfoBorder" Color="#1F4A75"/>
+    <SolidColorBrush x:Key="TokenHeaderPillInfoFg"     Color="#9CC2F5"/>
+    <SolidColorBrush x:Key="TokenHeaderPillDangerBg"     Color="#3A1A1A"/>
+    <SolidColorBrush x:Key="TokenHeaderPillDangerBorder" Color="#5A2A2A"/>
+    <SolidColorBrush x:Key="TokenHeaderPillDangerFg"     Color="#F87171"/>
+
+    <!-- Hero tile palettes (Total Assets — purple "LIVE", Licensed Users —
+         blue "GRAPH"). The other 3 hero tiles share the neutral
+         TokenSurfaceSecondary / TokenStrokeSubtle pair, so they don't need
+         their own brushes here. -->
+    <SolidColorBrush x:Key="TokenHeroPurpleBg"     Color="#2A1F3D"/>
+    <SolidColorBrush x:Key="TokenHeroPurpleBorder" Color="#4B3A6E"/>
+    <SolidColorBrush x:Key="TokenHeroPurpleFg"     Color="#C5B0F0"/>
+    <SolidColorBrush x:Key="TokenHeroPurpleBadgeBg" Color="#3D2D5C"/>
+    <SolidColorBrush x:Key="TokenHeroBlueBg"       Color="#1F2D3D"/>
+    <SolidColorBrush x:Key="TokenHeroBlueBorder"   Color="#3A547A"/>
+    <SolidColorBrush x:Key="TokenHeroBlueFg"       Color="#9CC2F5"/>
+    <SolidColorBrush x:Key="TokenHeroBlueBadgeBg"  Color="#2A4569"/>
+
+    <!-- Neutral status pill (used for "—" / "PENDING" / disabled badges) -->
+    <SolidColorBrush x:Key="TokenNeutralPillBg"     Color="#3A3A3D"/>
+    <SolidColorBrush x:Key="TokenNeutralPillBorder" Color="#555555"/>
+
+    <!-- Subtle hover overlay (10% white over surface) -->
+    <SolidColorBrush x:Key="TokenHoverOverlay"     Color="#10FFFFFF"/>
+
+    <!-- ============================================================
+         Typography
+         ============================================================ -->
+    <FontFamily x:Key="TokenFontFamilyBase">Segoe UI Variable, Segoe UI</FontFamily>
+    <FontFamily x:Key="TokenFontFamilyMono">Cascadia Mono, Consolas</FontFamily>
+
+</ResourceDictionary>

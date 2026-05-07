@@ -148,6 +148,72 @@ public sealed class SqliteCatalog
     }
 
     // ------------------------------------------------------------------
+    // Per-environment Dataverse drill-down cache. Solutions / Power Pages
+    // / users / per-asset enrichments for one env, persisted as a JSON
+    // snapshot so the second-and-later expansion of the same row is
+    // instant. The "Refresh" button on the row's detail header is the
+    // only invalidator.
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Writes (or replaces) the cached drill-down payload for one env.
+    /// Uses INSERT OR REPLACE so the caller never has to know whether a
+    /// previous snapshot existed.
+    /// </summary>
+    public void SaveEnvDetails(string envId, string payloadJson, DateTime syncedUtc)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            INSERT OR REPLACE INTO gov_env_details (env_id, payload_json, last_synced_utc)
+            VALUES (@env_id, @payload_json, @last_synced_utc);";
+        cmd.Parameters.Add("@env_id", SqliteType.Text).Value = envId;
+        cmd.Parameters.Add("@payload_json", SqliteType.Text).Value = payloadJson;
+        cmd.Parameters.Add("@last_synced_utc", SqliteType.Text).Value =
+            syncedUtc.ToString("o", CultureInfo.InvariantCulture);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Reads the cached drill-down payload + last-synced timestamp for
+    /// one env. Returns <c>null</c> if no snapshot is present (first
+    /// expansion ever) or if the row was deleted by an explicit refresh.
+    /// </summary>
+    public (string payloadJson, DateTime syncedUtc)? ReadEnvDetails(string envId)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT payload_json, last_synced_utc FROM gov_env_details WHERE env_id = @env_id";
+        cmd.Parameters.Add("@env_id", SqliteType.Text).Value = envId;
+        using var rdr = cmd.ExecuteReader();
+        if (!rdr.Read()) return null;
+        var payload = rdr.GetString(0);
+        var syncedTxt = rdr.GetString(1);
+        if (!DateTime.TryParse(syncedTxt, CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
+                out var syncedUtc))
+            syncedUtc = DateTime.UtcNow;
+        return (payload, syncedUtc);
+    }
+
+    /// <summary>
+    /// Drops the cached drill-down for one env. Called by the per-env
+    /// "Refresh" button before the new fetch so a failed re-fetch leaves
+    /// the user with "no cache" rather than a stale snapshot.
+    /// </summary>
+    public void DeleteEnvDetails(string envId)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM gov_env_details WHERE env_id = @env_id";
+        cmd.Parameters.Add("@env_id", SqliteType.Text).Value = envId;
+        cmd.ExecuteNonQuery();
+    }
+
+    // ------------------------------------------------------------------
     // Insert helpers — extracted from ReplaceAll so the per-phase writers
     // above and the legacy ReplaceAll can share the same parameter binding.
     // ------------------------------------------------------------------

@@ -275,13 +275,22 @@ public sealed class GraphLicenseClient
     }
 
     /// <summary>
-    /// Resolves AAD group ids to their <c>displayName</c> via Microsoft Graph
-    /// <c>POST /v1.0/directoryObjects/getByIds</c>. Used by the env grid to
-    /// label the "Security Group" column with a human-readable name instead
-    /// of a raw GUID. One round-trip per chunk of 1000 ids (Graph cap), so
-    /// even a tenant with hundreds of envs typically resolves in a single
-    /// call. Failures are non-fatal — missing names just mean the column
-    /// falls back to the GUID prefix.
+    /// Resolves AAD group ids to their <c>displayName</c> via Microsoft Graph.
+    ///
+    /// Strategy:
+    ///   1. <c>POST /v1.0/directoryObjects/getByIds</c> in chunks of 1000
+    ///      (the Graph cap). One round-trip resolves hundreds of envs but
+    ///      requires <c>Directory.Read.All</c>-tier delegated permissions —
+    ///      common in corp tenants but NOT in the default user role set,
+    ///      so getByIds can return 403 / 401 with "Insufficient privileges".
+    ///   2. Per-id <c>GET /v1.0/groups/{id}?$select=displayName</c> fallback
+    ///      for any ids the bulk call did not resolve. This endpoint works
+    ///      with basic <c>Group.Read.All</c> and (for groups the signed-in
+    ///      user is a member of) even tighter scopes. Slower but reliable
+    ///      so the env grid does not just show GUIDs forever.
+    ///
+    /// Failures are non-fatal — missing names mean the column falls back
+    /// to the GUID prefix in <see cref="EnvironmentRow.SecurityGroupSummary"/>.
     /// </summary>
     public async Task<Dictionary<string, string>> ResolveGroupNamesAsync(
         IEnumerable<string> groupIds,
@@ -305,6 +314,7 @@ public sealed class GraphLicenseClient
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
+            // ---- Pass 1: bulk getByIds (best case, single round-trip) ----
             // getByIds caps at 1000 ids per request; chunk defensively.
             const int Chunk = 1000;
             for (int i = 0; i < distinct.Count; i += Chunk)
@@ -321,8 +331,12 @@ public sealed class GraphLicenseClient
                 using var resp = await http.PostAsync("directoryObjects/getByIds", content, ct).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode)
                 {
-                    Warning = $"Graph getByIds returned {(int)resp.StatusCode} — security-group names degraded.";
-                    return result;
+                    // 401/403 here is expected on tenants where the signed-
+                    // in user lacks Directory.Read.All. Don't bail — fall
+                    // through to the per-id pass which works with narrower
+                    // scopes.
+                    Warning = $"Graph getByIds returned {(int)resp.StatusCode} — falling back to per-id /groups lookup.";
+                    break;
                 }
                 var respJson = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
                 using var doc = JsonDocument.Parse(respJson);
@@ -341,10 +355,48 @@ public sealed class GraphLicenseClient
                     }
                 }
             }
+
+            // ---- Pass 2: per-id fallback for anything still missing ----
+            // Cap concurrency to avoid Graph's per-app throttling tier; 8
+            // is a safe default for an interactive desktop client.
+            var unresolved = distinct.Where(id => !result.ContainsKey(id)).ToList();
+            if (unresolved.Count > 0)
+            {
+                using var gate = new System.Threading.SemaphoreSlim(8, 8);
+                var lookups = unresolved.Select(async id =>
+                {
+                    await gate.WaitAsync(ct).ConfigureAwait(false);
+                    try
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        using var resp = await http.GetAsync($"groups/{id}?$select=displayName", ct)
+                            .ConfigureAwait(false);
+                        if (!resp.IsSuccessStatusCode) return;
+                        var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                        using var doc = JsonDocument.Parse(body);
+                        if (doc.RootElement.TryGetProperty("displayName", out var nameEl) &&
+                            nameEl.ValueKind == JsonValueKind.String)
+                        {
+                            var name = nameEl.GetString();
+                            if (!string.IsNullOrEmpty(name))
+                            {
+                                lock (result) result[id] = name!;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Per-id failures are silent — the column already
+                        // degrades gracefully to GUID prefix.
+                    }
+                    finally { gate.Release(); }
+                }).ToList();
+                await Task.WhenAll(lookups).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {
-            Warning = $"Graph getByIds failed ({ex.GetType().Name}: {ex.Message}).";
+            Warning = $"Graph group-name resolve failed ({ex.GetType().Name}: {ex.Message}).";
         }
         return result;
     }

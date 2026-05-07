@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="VerseOps.App.Inventory.InventoryView"
+<UserControl x:Class="VerseOps.App.Inventory.InventoryView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -60,7 +60,7 @@
                     <ControlTemplate TargetType="Button">
                         <Grid>
                             <ContentPresenter/>
-                            <Border x:Name="hover" Background="#10FFFFFF" CornerRadius="6"
+                            <Border x:Name="hover" Background="{DynamicResource TokenHoverOverlay}" CornerRadius="6"
                                     Opacity="0" IsHitTestVisible="False"/>
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -98,19 +98,22 @@
                     <TextBlock Foreground="{DynamicResource TokenTextTertiary}" FontSize="10">
                         <Run Text="{Binding TypeDisplay, Mode=OneWay}"/>
                         <Run Text=" â€¢ "/>
-                        <Run Text="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}, Mode=OneWay, TargetNullValue=â€”}"/>
+                        <Run Text="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}, Mode=OneWay, TargetNullValue=—}"/>
                     </TextBlock>
                 </StackPanel>
             </Border>
         </DataTemplate>
 
         <!-- Sub-section header used inside a Solution expander
-             (APPS / FLOWS / AGENTS labels). -->
+             (APPS / FLOWS / AGENTS labels). Fluent v2 Caption Strong
+             with positive letter-spacing so the all-caps reads cleanly
+             at small sizes. -->
         <Style x:Key="AssetSectionLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TokenBrandForeground}"/>
-            <Setter Property="FontSize" Value="10"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Margin" Value="0,0,0,4"/>
+            <Setter Property="Foreground"  Value="{DynamicResource TokenBrandForeground}"/>
+            <Setter Property="FontSize"    Value="{DynamicResource TokenFontSizeCaption1}"/>
+            <Setter Property="FontWeight"  Value="SemiBold"/>
+            <Setter Property="Margin"      Value="0,0,0,6"/>
+            <Setter Property="Typography.Capitals" Value="AllSmallCaps"/>
         </Style>
 
         <!-- Solution row Expander style: card-like container that opens to
@@ -168,7 +171,7 @@
             <Setter Property="ContentTemplate">
                 <Setter.Value>
                     <DataTemplate>
-                        <ui:SymbolIcon Symbol="Open24" FontSize="13"/>
+                        <ui:SymbolIcon Symbol="Open24" FontSize="15"/>
                     </DataTemplate>
                 </Setter.Value>
             </Setter>
@@ -179,7 +182,22 @@
             <Setter Property="ContentTemplate">
                 <Setter.Value>
                     <DataTemplate>
-                        <ui:SymbolIcon Symbol="Code24" FontSize="13"/>
+                        <ui:SymbolIcon Symbol="Code24" FontSize="15"/>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- Per-row "Show licenses" action: pops UserLicensesWindow with the
+             chip wrap of Microsoft Graph SKU assignments enriched onto the
+             UserGroupRow. Same family as the Inspector / Open-in-Maker
+             icon buttons so the actions column reads consistently. -->
+        <Style x:Key="ShowLicensesIconButton" TargetType="Button" BasedOn="{StaticResource RowIconButton}">
+            <Setter Property="ToolTip" Value="Show assigned licenses (Microsoft Graph)"/>
+            <Setter Property="Content" Value=" "/>
+            <Setter Property="ContentTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <ui:SymbolIcon Symbol="Key24" FontSize="15"/>
                     </DataTemplate>
                 </Setter.Value>
             </Setter>
@@ -196,7 +214,7 @@
             <Setter Property="ContentTemplate">
                 <Setter.Value>
                     <DataTemplate>
-                        <ui:SymbolIcon Symbol="ShieldDismiss24" FontSize="13"/>
+                        <ui:SymbolIcon Symbol="ShieldDismiss24" FontSize="15"/>
                     </DataTemplate>
                 </Setter.Value>
             </Setter>
@@ -211,23 +229,26 @@
         <Style x:Key="CapacityCellText" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin"            Value="6,0"/>
+            <Setter Property="FontSize"          Value="{DynamicResource TokenFontSizeBody1}"/>
             <Setter Property="FontWeight"        Value="Normal"/>
             <Setter Property="Foreground"        Value="{DynamicResource TokenTextPrimary}"/>
         </Style>
 
-        <!-- Section header label inside a SectionExpander. Pre-baked so each
-             collapsed section shows a consistent brand-blue caption. -->
+        <!-- Section header label inside a SectionExpander. Fluent v2 Body
+             Strong (14 px SemiBold) so each section caption (SOLUTIONS,
+             APPS, FLOWS, AGENTS, POWER PAGES, USERS & GROUPS) reads as a
+             proper section title rather than fine print. -->
         <Style x:Key="SectionExpanderLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TokenBrandForeground}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground"  Value="{DynamicResource TokenBrandForeground}"/>
+            <Setter Property="FontWeight"  Value="SemiBold"/>
+            <Setter Property="FontSize"    Value="{DynamicResource TokenFontSizeBody1}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style x:Key="SectionExpanderCount" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TokenTextTertiary}"/>
-            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Foreground"  Value="{DynamicResource TokenTextSecondary}"/>
+            <Setter Property="FontSize"    Value="{DynamicResource TokenFontSizeCaption1}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="14,0,0,0"/>
+            <Setter Property="Margin"      Value="14,0,0,0"/>
         </Style>
 
         <!-- Collapsible per-section frame used inside each env row's details
@@ -243,6 +264,32 @@
             <Setter Property="Margin"          Value="0,0,0,6"/>
             <Setter Property="IsExpanded"      Value="False"/>
         </Style>
+
+        <!-- Maker portal Solutions glyph (stacked-documents) lifted from
+             Power Apps make.powerapps.com sidebar SVG (20x20 viewbox).
+             Using the real SVG path keeps the Solutions section icon
+             pixel-identical to the Maker portal everywhere it appears. -->
+        <Geometry x:Key="SolutionsIconGeometry">M12 2a2 2 0 0 1 2 2v8h1V4.27c.6.34 1 .99 1 1.73v6.27c.6.34 1 .99 1 1.73v1.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 3 15.5V9a2 2 0 0 1 1-1.73V4c0-1.1.9-2 2-2h6ZM5 7h1.88a2 2 0 0 1 1.41.59l4.12 4.12a1 1 0 0 0 .59.28V4a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1v3ZM4 9v6.5c0 .83.67 1.5 1.5 1.5h9c.83 0 1.5-.67 1.5-1.5V14a1 1 0 0 0-1-1h-1.88a2 2 0 0 1-1.41-.59L7.59 8.3A1 1 0 0 0 6.88 8H5a1 1 0 0 0-1 1Z</Geometry>
+
+        <!-- Maker portal Flows glyph (three connected nodes) lifted from
+             Power Apps make.powerapps.com sidebar SVG (20x20 viewbox). -->
+        <Geometry x:Key="FlowsIconGeometry">M15 5a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm-2.96 1.5a3 3 0 1 1 0 1H12c-.83 0-1.5.67-1.5 1.5v2A2.5 2.5 0 0 1 8 13.5h-.04a3 3 0 1 1 0-1H8c.83 0 1.5-.67 1.5-1.5V9A2.5 2.5 0 0 1 12 6.5h.04ZM5 11a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z</Geometry>
+
+        <!-- Maker portal Apps glyph (rounded canvas tile + chevron arrow)
+             from make.powerapps.com sidebar — filled variant. -->
+        <Geometry x:Key="AppsIconGeometry">M4.5 17A1.5 1.5 0 0 1 3 15.65V4.5c0-.78.6-1.42 1.36-1.5H9c.78 0 1.42.6 1.5 1.36v.4l2.19-2.27a1.5 1.5 0 0 1 2-.14l.12.1 2.76 2.72c.55.55.6 1.42.11 2.02l-.1.11-2.31 2.2h.23c.78 0 1.42.6 1.5 1.36v4.64c0 .78-.6 1.42-1.36 1.5H4.5Zm5-6.5H4v5c0 .22.14.4.33.47l.08.02.09.01h5v-5.5Zm6 0h-5V16h5a.5.5 0 0 0 .5-.4V11a.5.5 0 0 0-.41-.5h-.09Zm-5-2.79V9.5h1.79L10.5 7.71ZM9 4.01H4.5a.5.5 0 0 0-.5.4v5.1h5.5v-5a.5.5 0 0 0-.33-.48l-.08-.02H9Z</Geometry>
+
+        <!-- Maker portal Agents glyph (Copilot Studio agent badge with stem)
+             from make.powerapps.com — composed of two distinct paths so we
+             use a GeometryGroup. -->
+        <GeometryGroup x:Key="AgentsIconGeometry">
+            <PathGeometry Figures="M7.47087 2.82148C6.79738 2.91063 6.27761 3.43785 6.18312 4.09326L6.16089 4.09326V7.73485L3.46986 8.08757C2.72317 8.18544 2.16479 8.82177 2.16479 9.57485V14.2347H2.16675C2.20375 14.9625 2.7618 15.5636 3.49315 15.6478L6.15649 15.9546V14.9734L6.14909 14.9986L3.64947 14.6911C3.36937 14.6566 3.15894 14.4187 3.15894 14.1365C3.15894 13.8535 3.37047 13.6152 3.65145 13.5816L8.15361 13.044L9.84778 12.8214C10.5943 12.7233 11.1524 12.0871 11.1524 11.3342V11.3283C11.1411 10.6088 10.6062 10.0031 9.89099 9.90491L7.64164 9.59609C7.36294 9.55782 7.15527 9.3197 7.15527 9.03838C7.15527 8.75347 7.36815 8.51347 7.65103 8.47947L12.4487 7.90278L12.4765 7.89923L12.5706 7.88812L13.287 7.802L13.1924 7.81471L13.8316 7.73924C14.5868 7.65008 15.1557 7.00998 15.1557 6.24958V4.16098L15.1498 4.16012V3.5166C15.1498 2.60999 14.3517 1.9106 13.4529 2.02958L7.47087 2.82148Z"/>
+            <PathGeometry Figures="M16.1557 4.30601V6.24958C16.1557 7.51691 15.2075 8.58374 13.9489 8.73234L12.5938 8.89233C12.3421 8.92205 12.1524 9.13542 12.1524 9.38888V11.3342C12.1524 12.589 11.2222 13.6494 9.97804 13.8129L7.59137 14.1264C7.34254 14.1591 7.15649 14.3712 7.15649 14.6222V17.0231C7.15649 17.6134 7.66355 18.0706 8.24316 18.0194L13.873 17.1887C14.6089 17.0802 15.1541 16.4487 15.1541 15.7048V12.525C15.1541 12.2798 15.3319 12.0708 15.5739 12.0315L16.8943 11.817C17.6203 11.699 18.1537 11.072 18.1537 10.3364V5.89392C18.1537 5.14866 17.6066 4.51641 16.869 4.40945L16.1557 4.30601Z"/>
+        </GeometryGroup>
+
+        <!-- Maker portal Websites glyph (browser-window outline) used for
+             the Power Pages section header. -->
+        <Geometry x:Key="PowerPagesIconGeometry">M3 6a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6Zm1 1v7c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V7H4Z</Geometry>
     </UserControl.Resources>
 
     <!-- Outer Grid hosts the dashboard content + the slide-in right drawer overlay. -->
@@ -258,14 +305,9 @@
             </Grid.RowDefinitions>
 
             <!-- Branded header: logo tile + product wordmark + search + refresh.
-                 Inspired by the PCF "Inventory Sentinel â€” ECOSYSTEM GOVERNANCE" header. -->
-            <Border Grid.Row="0" CornerRadius="8" Margin="4,4,4,8" Padding="14,10">
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                        <GradientStop Color="#0B1B2C" Offset="0"/>
-                        <GradientStop Color="#10283F" Offset="1"/>
-                    </LinearGradientBrush>
-                </Border.Background>
+                 Inspired by the PCF "Inventory Sentinel — ECOSYSTEM GOVERNANCE" header. -->
+            <Border Grid.Row="0" CornerRadius="8" Margin="4,4,4,8" Padding="14,10"
+                    Background="{DynamicResource TokenHeaderGradient}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -279,35 +321,73 @@
                          platform we govern. -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                         <Border Width="44" Height="44" CornerRadius="6"
-                                Background="#FFFFFF" Margin="0,0,12,0" Padding="6">
+                                Background="{DynamicResource TokenHeaderLogoBackground}" Margin="0,0,12,0" Padding="6">
                             <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/PowerPlatform_scalable.svg"
                                              Width="32" Height="32"/>
                         </Border>
                         <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="VerseOps Inventory" Foreground="#FFFFFF"
+                            <TextBlock Text="VerseOps Inventory" Foreground="{DynamicResource TokenHeaderTextOnBrand}"
                                        FontSize="18" FontWeight="Bold"/>
-                            <TextBlock Text="ECOSYSTEM GOVERNANCE" Foreground="{DynamicResource TokenBrandForeground}"
+                            <TextBlock Text="ECOSYSTEM GOVERNANCE" Foreground="{DynamicResource TokenHeaderSubText}"
                                        FontSize="10" FontWeight="SemiBold"
                                        Margin="0,2,0,0" Opacity="0.85"/>
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- Refresh + Cancel buttons. Cancel is only enabled while a refresh is in flight. -->
+                    <!-- Theme toggle + Refresh + Cancel buttons. Cancel is only enabled while a refresh is in flight. -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <!-- Light/Dark theme toggle. Click handler in code-behind
+                             flips ApplicationThemeManager and persists the choice.
+                             MinWidth/MinHeight match the Refresh/Cancel pills so
+                             the three buttons line up cleanly in the header strip. -->
+                        <!-- Theme toggle hidden in the light-only build. Kept
+                             in the tree (Visibility=Collapsed) so existing
+                             code-behind hooks and automation IDs stay valid. -->
+                        <Button x:Name="ThemeToggleButton" Style="{StaticResource ToolbarButton}"
+                                AutomationProperties.AutomationId="ThemeToggleButton"
+                                AutomationProperties.Name="Toggle theme"
+                                Visibility="Collapsed"
+                                Click="ThemeToggleButton_Click"
+                                Background="{DynamicResource TokenHeaderPillInfoBg}"
+                                BorderBrush="{DynamicResource TokenHeaderPillInfoBorder}"
+                                Foreground="{DynamicResource TokenHeaderPillInfoFg}"
+                                Padding="0" FontSize="13" FontWeight="SemiBold"
+                                Width="32" Height="32"
+                                VerticalAlignment="Center"
+                                VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                                Margin="0,0,6,0">
+                            <ui:SymbolIcon x:Name="ThemeToggleIcon" Symbol="WeatherSunny24" FontSize="14"/>
+                        </Button>
                         <Button Style="{StaticResource ToolbarButton}"
+                                AutomationProperties.AutomationId="RefreshButton"
+                                AutomationProperties.Name="Refresh"
                                 Command="{Binding RefreshCommand}"
-                                Background="#15314D" BorderBrush="#1F4A75"
-                                Padding="14,6" FontSize="13" FontWeight="SemiBold"
+                                Background="{DynamicResource TokenHeaderPillInfoBg}"
+                                BorderBrush="{DynamicResource TokenHeaderPillInfoBorder}"
+                                Foreground="{DynamicResource TokenHeaderPillInfoFg}"
+                                Padding="14,0" FontSize="13" FontWeight="SemiBold"
+                                Height="32" VerticalAlignment="Center"
+                                VerticalContentAlignment="Center"
                                 ToolTip="Pull all environments + capacity via PPAC SDK and BAP capacity route, then replace the local catalog.">
                             <StackPanel Orientation="Horizontal">
                                 <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="16" Margin="0,0,6,0"/>
                                 <TextBlock Text="Refresh" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
+                        <!-- Cancel is a sibling action to Refresh, not a destructive one
+                             (it just stops an in-flight refresh; nothing is deleted), so
+                             it shares the neutral pill chrome instead of using the bright
+                             danger pill. The Dismiss icon already communicates intent. -->
                         <Button Style="{StaticResource ToolbarButton}"
+                                AutomationProperties.AutomationId="CancelRefreshButton"
+                                AutomationProperties.Name="Cancel refresh"
                                 Command="{Binding CancelRefreshCommand}"
-                                Background="#3A1A1A" BorderBrush="#5A2A2A"
-                                Padding="12,6" FontSize="13" FontWeight="SemiBold"
+                                Background="{DynamicResource TokenHeaderPillInfoBg}"
+                                BorderBrush="{DynamicResource TokenHeaderPillInfoBorder}"
+                                Foreground="{DynamicResource TokenHeaderPillInfoFg}"
+                                Padding="12,0" FontSize="13" FontWeight="SemiBold"
+                                Height="32" VerticalAlignment="Center"
+                                VerticalContentAlignment="Center"
                                 Margin="6,0,0,0"
                                 ToolTip="Cancel the in-flight refresh. Already-loaded data stays.">
                             <StackPanel Orientation="Horizontal">
@@ -330,6 +410,8 @@
                 </Grid.ColumnDefinitions>
 
                 <Button Grid.Column="0" Style="{StaticResource HeroTileButton}"
+                        AutomationProperties.AutomationId="HeroTileEnvironments"
+                        AutomationProperties.Name="Environments tile"
                         Command="{Binding OpenDrawerCommand}" CommandParameter="environments"
                         Margin="4">
                     <Border Style="{StaticResource TileBorder}">
@@ -338,8 +420,12 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <svgc:SvgViewbox Grid.Column="0" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center"
-                                             Source="/Assets/MicrosoftIcons/PowerPlatform/PowerPlatform_scalable.svg"/>
+                            <!-- Fluent System Icons (Globe) — matches PPAC + Maker
+                                 Portal sidebar style. Single brand color so the
+                                 four hero tiles read as a coherent set. -->
+                            <ui:SymbolIcon Grid.Column="0" Symbol="Globe24" FontSize="32"
+                                           Foreground="{DynamicResource TokenBrandForeground}"
+                                           Margin="2,0,14,0" VerticalAlignment="Center"/>
                             <StackPanel Grid.Column="1">
                                 <TextBlock Text="ENVIRONMENTS" Style="{StaticResource TileLabel}"/>
                                 <TextBlock Text="{Binding EnvironmentCount}" Style="{StaticResource TileValue}"/>
@@ -352,6 +438,8 @@
                 </Button>
 
                 <Button Grid.Column="1" Style="{StaticResource HeroTileButton}"
+                        AutomationProperties.AutomationId="HeroTileTenantDatabase"
+                        AutomationProperties.Name="Tenant database tile"
                         Command="{Binding OpenDrawerCommand}" CommandParameter="storage"
                         Margin="4">
                     <Border Style="{StaticResource TileBorder}">
@@ -360,8 +448,10 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <svgc:SvgViewbox Grid.Column="0" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center"
-                                             Source="/Assets/MicrosoftIcons/PowerPlatform/Dataverse_scalable.svg"/>
+                            <!-- Database glyph for tenant Dataverse storage. -->
+                            <ui:SymbolIcon Grid.Column="0" Symbol="Database24" FontSize="32"
+                                           Foreground="{DynamicResource TokenBrandForeground}"
+                                           Margin="2,0,14,0" VerticalAlignment="Center"/>
                             <StackPanel Grid.Column="1">
                                 <TextBlock Text="TENANT DATABASE" Style="{StaticResource TileLabel}"/>
                                 <TextBlock Text="{Binding DatabaseGbDisplay}" Style="{StaticResource TileValue}"
@@ -375,6 +465,8 @@
                 </Button>
 
                 <Button Grid.Column="2" Style="{StaticResource HeroTileButton}"
+                        AutomationProperties.AutomationId="HeroTileTenantFile"
+                        AutomationProperties.Name="Tenant file tile"
                         Command="{Binding OpenDrawerCommand}" CommandParameter="storage"
                         Margin="4">
                     <Border Style="{StaticResource TileBorder}">
@@ -383,8 +475,11 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <svgc:SvgViewbox Grid.Column="0" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center"
-                                             Source="/Assets/MicrosoftIcons/Azure/Storage-Accounts.svg"/>
+                            <!-- Document glyph for tenant FILE storage (separate from
+                                 the database tile so the two never visually merge). -->
+                            <ui:SymbolIcon Grid.Column="0" Symbol="Database24" FontSize="32"
+                                           Foreground="{DynamicResource TokenBrandForeground}"
+                                           Margin="2,0,14,0" VerticalAlignment="Center"/>
                             <StackPanel Grid.Column="1">
                                 <TextBlock Text="TENANT FILE" Style="{StaticResource TileLabel}"/>
                                 <TextBlock Text="{Binding FileGbDisplay}" Style="{StaticResource TileValue}"
@@ -398,25 +493,38 @@
                 </Button>
 
                 <Button Grid.Column="3" Style="{StaticResource HeroTileButton}"
+                        AutomationProperties.AutomationId="HeroTileTotalAssets"
+                        AutomationProperties.Name="Total assets tile"
                         Command="{Binding OpenDrawerCommand}" CommandParameter="assets"
                         Margin="4">
-                    <Border Style="{StaticResource TileBorder}" Background="#2A1F3D" BorderBrush="#4B3A6E">
+                    <Border Style="{StaticResource TileBorder}"
+                            Background="{DynamicResource TokenHeroPurpleBg}"
+                            BorderBrush="{DynamicResource TokenHeroPurpleBorder}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <svgc:SvgViewbox Grid.Column="0" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center"
-                                             Source="/Assets/MicrosoftIcons/PowerPlatform/PowerApps_scalable.svg"/>
+                            <!-- Apps glyph — total assets is the umbrella count of
+                                 every Power Apps / Flow / Agent in the tenant.
+                                 Uses the live Maker portal SVG so the hero tile
+                                 mirrors make.powerapps.com sidebar Apps icon. -->
+                            <Viewbox Grid.Column="0" Width="32" Height="32"
+                                     Margin="2,0,14,0" VerticalAlignment="Center">
+                                <Path Data="{StaticResource AppsIconGeometry}"
+                                      Fill="{DynamicResource TokenHeroPurpleFg}"/>
+                            </Viewbox>
                             <StackPanel Grid.Column="1">
                                 <TextBlock Text="TOTAL ASSETS" Style="{StaticResource TileLabel}"
-                                           Foreground="#C5B0F0"/>
+                                           Foreground="{DynamicResource TokenHeroPurpleFg}"/>
                                 <TextBlock Text="{Binding AssetCountDisplay}" Style="{StaticResource TileValue}"
                                            ToolTip="Tenant-wide assets (apps + flows + agents) from the Power Platform Inventory API. Click for breakdown by type."/>
                             </StackPanel>
-                            <Border Grid.Column="1" Style="{StaticResource StatusBadge}" Background="#3D2D5C"
+                            <Border Grid.Column="1" Style="{StaticResource StatusBadge}"
+                                    Background="{DynamicResource TokenHeroPurpleBadgeBg}"
                                     HorizontalAlignment="Right" VerticalAlignment="Top">
-                                <TextBlock Text="LIVE" Style="{StaticResource StatusBadgeText}" Foreground="#C5B0F0"/>
+                                <TextBlock Text="LIVE" Style="{StaticResource StatusBadgeText}"
+                                           Foreground="{DynamicResource TokenHeroPurpleFg}"/>
                             </Border>
                         </Grid>
                     </Border>
@@ -427,25 +535,34 @@
                      when the user clicks the tile, which kicks off the fetch
                      directly). Click opens a drawer broken down by SKU. -->
                 <Button Grid.Column="4" Style="{StaticResource HeroTileButton}"
+                        AutomationProperties.AutomationId="HeroTileLicensedUsers"
+                        AutomationProperties.Name="Licensed users tile"
                         Command="{Binding OpenDrawerCommand}" CommandParameter="licenses"
                         Margin="4">
-                    <Border Style="{StaticResource TileBorder}" Background="#1F2D3D" BorderBrush="#3A547A">
+                    <Border Style="{StaticResource TileBorder}"
+                            Background="{DynamicResource TokenHeroBlueBg}"
+                            BorderBrush="{DynamicResource TokenHeroBlueBorder}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <svgc:SvgViewbox Grid.Column="0" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center"
-                                             Source="/Assets/MicrosoftIcons/Entra/Entra-ID.svg"/>
+                            <!-- Person + shield glyph for identity / licensed users
+                                 (Microsoft Graph licensing rollup). -->
+                            <ui:SymbolIcon Grid.Column="0" Symbol="PersonAccounts24" FontSize="32"
+                                           Foreground="{DynamicResource TokenHeroBlueFg}"
+                                           Margin="2,0,14,0" VerticalAlignment="Center"/>
                             <StackPanel Grid.Column="1">
                                 <TextBlock Text="LICENSED USERS" Style="{StaticResource TileLabel}"
-                                           Foreground="#9CC2F5"/>
+                                           Foreground="{DynamicResource TokenHeroBlueFg}"/>
                                 <TextBlock Text="{Binding LicensedUserCountDisplay}" Style="{StaticResource TileValue}"
                                            ToolTip="Distinct users with at least one Microsoft 365 / Power Platform license assigned (Microsoft Graph). Click for the SKU breakdown."/>
                             </StackPanel>
-                            <Border Grid.Column="1" Style="{StaticResource StatusBadge}" Background="#2A4569"
+                            <Border Grid.Column="1" Style="{StaticResource StatusBadge}"
+                                    Background="{DynamicResource TokenHeroBlueBadgeBg}"
                                     HorizontalAlignment="Right" VerticalAlignment="Top">
-                                <TextBlock Text="GRAPH" Style="{StaticResource StatusBadgeText}" Foreground="#9CC2F5"/>
+                                <TextBlock Text="GRAPH" Style="{StaticResource StatusBadgeText}"
+                                           Foreground="{DynamicResource TokenHeroBlueFg}"/>
                             </Border>
                         </Grid>
                     </Border>
@@ -456,12 +573,18 @@
             <Border Grid.Row="2" Background="{DynamicResource TokenSurfacePrimary}" BorderBrush="{DynamicResource TokenStrokeSubtle}" BorderThickness="1" CornerRadius="3" Padding="6" Margin="4,2">
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Reload from cache" Style="{StaticResource ToolbarButton}"
+                            AutomationProperties.AutomationId="ReloadFromCacheButton"
+                            AutomationProperties.Name="Reload from cache"
                             Command="{Binding ReloadCommand}"
-                            Background="#3A3A3D" BorderBrush="#555"
+                            Background="{DynamicResource TokenNeutralPillBg}"
+                            BorderBrush="{DynamicResource TokenNeutralPillBorder}"
                             ToolTip="Re-read the local SQLite catalog without calling PPAC."/>
                     <Button Content="Open trace log" Style="{StaticResource ToolbarButton}"
+                            AutomationProperties.AutomationId="OpenTraceLogButton"
+                            AutomationProperties.Name="Open trace log"
                             Command="{Binding OpenTraceLogCommand}"
-                            Background="#3A3A3D" BorderBrush="#555"
+                            Background="{DynamicResource TokenNeutralPillBg}"
+                            BorderBrush="{DynamicResource TokenNeutralPillBorder}"
                             ToolTip="Open %LOCALAPPDATA%\VerseOps\inventory-trace.log (every HTTP request/response from the last refresh)."/>
                     <!-- Toggle: filter the env grid to envs the signed-in user is a Dataverse member of.
                          The first time this is checked we kick off a parallel WhoAmI probe per env;
@@ -473,26 +596,42 @@
                               ToolTip="Filter to environments where you have a Dataverse user record (issues a WhoAmI to each env on first toggle)."/>
                     <!-- Free-text search across every column the env grid header surfaces.
                          Tokens are AND-ed (whitespace-separated). Backed by EnvSearchText /
-                         _envSearchTokens in InventoryViewModel.FilterEnvironment. -->
+                         _envSearchTokens in InventoryViewModel.FilterEnvironment. The setter
+                         debounces grid refresh on a 200 ms timer so each keystroke stays
+                         fluid even on a 500-row grid. -->
                     <Grid Margin="14,0,0,0" VerticalAlignment="Center" Width="240">
+                        <!-- Search is committed on Enter (or focus loss) so typing
+                             stays buttery-smooth on large environment lists. The
+                             previous PropertyChanged binding ran the filter on every
+                             keystroke and made the box feel sluggish. -->
                         <TextBox x:Name="EnvSearchBox"
-                                 Text="{Binding EnvSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.AutomationId="EnvSearchBox"
+                                 AutomationProperties.Name="Environment search"
+                                 Text="{Binding EnvSearchText, UpdateSourceTrigger=Explicit}"
+                                 KeyDown="EnvSearchBox_KeyDown"
+                                 LostFocus="EnvSearchBox_LostFocus"
+                                 TextChanged="EnvSearchBox_TextChanged"
                                  Background="{DynamicResource TokenSurfaceTertiary}"
                                  Foreground="{DynamicResource TokenTextPrimary}"
                                  BorderBrush="{DynamicResource TokenStrokeSubtle}"
                                  Padding="6,3,22,3"
-                                 ToolTip="Search environments — name, sku, region, version, security group, owner, GUID, storage. Tokens are AND-ed."/>
+                                 ToolTip="Search environments — name, sku, region, version, security group, owner, GUID, storage. Press Enter to apply. Tokens are AND-ed."/>
+                        <!-- Watermark hides as soon as the box has either focus OR text.
+                             A multi-data-trigger pattern keeps it simple: drop visibility
+                             when EnvSearchBox.IsKeyboardFocusWithin OR HasEnvSearch. -->
                         <TextBlock Text="Search environments..."
                                    IsHitTestVisible="False"
                                    Foreground="{DynamicResource TokenTextDisabled}"
-                                   VerticalAlignment="Center" Margin="8,0,0,0"
-                                   Visibility="{Binding HasEnvSearch, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}">
+                                   VerticalAlignment="Center" Margin="8,0,0,0">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Setter Property="Visibility" Value="Visible"/>
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasEnvSearch}" Value="False">
-                                            <Setter Property="Visibility" Value="Visible"/>
+                                        <DataTrigger Binding="{Binding HasEnvSearch}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding ElementName=EnvSearchBox, Path=IsKeyboardFocusWithin}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -502,7 +641,7 @@
                                 HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,2,0"
                                 Background="Transparent" BorderBrush="Transparent"
                                 Foreground="{DynamicResource TokenTextSecondary}" Cursor="Hand"
-                                Command="{Binding ClearEnvSearchCommand}"
+                                Click="ClearEnvSearchButton_Click"
                                 ToolTip="Clear search"
                                 Visibility="{Binding HasEnvSearch, Converter={StaticResource BoolToVisibility}}"/>
                     </Grid>
@@ -533,6 +672,8 @@
 
             <!-- Environments grid -->
             <DataGrid x:Name="EnvGrid" Grid.Row="3" Margin="4,2"
+                      AutomationProperties.AutomationId="EnvironmentsGrid"
+                      AutomationProperties.Name="Environments grid"
                       ItemsSource="{Binding EnvironmentsView}"
                       RowDetailsVisibilityMode="Visible"
                       SelectionChanged="EnvGrid_SelectionChanged"
@@ -542,6 +683,18 @@
                       EnableRowVirtualization="True"
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling">
+                <DataGrid.RowStyle>
+                    <!-- Local RowStyle (BasedOn the implicit DataGridRow style
+                         from App.xaml so we keep selection / hover triggers)
+                         that pins MinHeight=40 so the 32 px circular chevron
+                         pill always fits without being clipped at non-maximized
+                         window sizes. Without this, rows defaulted to ~28-30 px
+                         and the bottom of the pill got cut off, making it look
+                         like the chevron only "showed up when maximized". -->
+                    <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                        <Setter Property="MinHeight" Value="40"/>
+                    </Style>
+                </DataGrid.RowStyle>
                 <!-- Row visibility note: RowDetailsVisibilityMode is "Visible" so
                      the per-row details slot is *always* in the visual tree.
                      The actual content (the ScrollViewer in RowDetailsTemplate)
@@ -557,34 +710,107 @@
                          Click also fires the per-env Dataverse drill-down on
                          first expansion (see EnvExpandToggle_Click). The icon
                          flips between right-facing (collapsed) and down-facing
-                         (expanded) using a DataTrigger on IsExpanded. -->
-                    <DataGridTemplateColumn Width="36" CanUserResize="False" CanUserSort="False">
+                         (expanded) using a DataTrigger on IsExpanded.
+                         Sized to Fluent v2 standard table-row affordance:
+                         48 px column gutter + 28 px circular hit target +
+                         18 px chevron glyph, leaving 10 px of even padding
+                         on both sides so the disc sits centered in the
+                         column without crowding the Name column on the right.
+                         Pinned width (CanUserResize=False) because the user
+                         shouldn't ever need to resize a single-purpose
+                         affordance column. -->
+                    <!-- Chevron column. Width must accommodate the implicit
+                         DataGridCell.Padding="10,6" defined in App.xaml +
+                         the 28 px circular hit-target inside, so we go to
+                         56 px (10 + 28 + 10 + 8 slack) to guarantee the
+                         disc is never sub-pixel-clipped on the first
+                         layout pass. We also override CellStyle locally
+                         to zero out that 10-px horizontal padding so the
+                         disc sits dead-center in the column instead of
+                         being shifted right by 10 px. Without these two
+                         changes the chevron only appeared after a column-
+                         splitter double-click forced a remeasure. -->
+                    <DataGridTemplateColumn Width="56" MinWidth="56" CanUserResize="False" CanUserSort="False">
+                        <DataGridTemplateColumn.CellStyle>
+                            <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                                <Setter Property="VerticalContentAlignment"   Value="Center"/>
+                            </Style>
+                        </DataGridTemplateColumn.CellStyle>
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
+                                <!-- Style="{x:Null}" opts this Button OUT of the
+                                     implicit App.xaml Button style — that style
+                                     sets Margin="2", BorderThickness="1", and a
+                                     custom Template that competes with our
+                                     local Button.Template. On first paint the
+                                     style cascade order was non-deterministic:
+                                     sometimes the implicit Template won and
+                                     the chevron disappeared until a window
+                                     resize forced a remeasure. Opting out of
+                                     the style cascade entirely makes the
+                                     local Template win on every paint pass. -->
                                 <Button Click="EnvExpandToggle_Click"
-                                        Background="Transparent" BorderThickness="0"
-                                        Padding="6,4" Cursor="Hand"
+                                        Style="{x:Null}"
+                                        Width="28" Height="28"
+                                        Background="Transparent"
+                                        BorderBrush="Transparent"
+                                        BorderThickness="0"
+                                        Padding="0"
+                                        Margin="0"
+                                        Cursor="Hand"
                                         HorizontalAlignment="Center" VerticalAlignment="Center"
                                         Focusable="False"
+                                        SnapsToDevicePixels="True"
                                         ToolTip="Show / hide environment details">
-                                    <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TokenBrandForeground}">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <!-- Fluent-icon glyphs: ChevronRight = U+E76C, ChevronDown = U+E70D.
-                                                     Both ship in Segoe Fluent Icons (Win 11) and Segoe MDL2 Assets
-                                                     (Win 10), so the icon always renders without depending on a
-                                                     third-party font dictionary. -->
-                                                <Setter Property="Text" Value="&#xE76C;"/>
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <!-- 28 px circular hit-target with a soft brand
+                                                 tint so the chevron is unmistakably a
+                                                 button. Background darkens on hover and
+                                                 deepens on press. -->
+                                            <Border x:Name="Hit"
+                                                    Width="28" Height="28"
+                                                    CornerRadius="14"
+                                                    Background="{DynamicResource TokenBrandBackground}"
+                                                    BorderBrush="{DynamicResource TokenBrandStroke}"
+                                                    BorderThickness="0"
+                                                    SnapsToDevicePixels="True">
+                                                <ContentPresenter HorizontalAlignment="Center"
+                                                                  VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Hit" Property="Background"
+                                                            Value="{DynamicResource TokenBrandBackgroundHover}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsPressed" Value="True">
+                                                    <Setter TargetName="Hit" Property="Background"
+                                                            Value="{DynamicResource TokenBrandBackgroundPress}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                    <!-- Switch from a bare Segoe-Fluent text glyph to the
+                                         Fluent v2 "chevron-in-a-circle" symbol icon. The
+                                         circled chevron is a much stronger expand/collapse
+                                         affordance than a bare arrow — it reads as a
+                                         button at any zoom and stays visible against the
+                                         row hover/selection brushes. -->
+                                    <ui:SymbolIcon FontSize="18"
+                                                   Foreground="White">
+                                        <ui:SymbolIcon.Style>
+                                            <Style TargetType="ui:SymbolIcon">
+                                                <Setter Property="Symbol" Value="ChevronCircleRight24"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsExpanded}" Value="True">
-                                                        <Setter Property="Text" Value="&#xE70D;"/>
+                                                        <Setter Property="Symbol" Value="ChevronCircleDown24"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
+                                        </ui:SymbolIcon.Style>
+                                    </ui:SymbolIcon>
                                 </Button>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
@@ -621,25 +847,6 @@
                         </DataGridTextColumn.Header>
                     </DataGridTextColumn>
 
-                    <!-- Default: tenant-default env (the open-to-everyone env every
-                         tenant has by default; only one per tenant). The PPAC SDK
-                         exposes this as Type=="Default" — it is *not* the same as
-                         "managed env" or "the one I'm working in". -->
-                    <DataGridTemplateColumn Header="Default" Width="60" SortMemberPath="IsDefault">
-                        <DataGridTemplateColumn.HeaderStyle>
-                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
-                                <Setter Property="ToolTip" Value="The tenant's default Power Platform environment (Type=Default). Every tenant has exactly one — open to all licensed users without a security group."/>
-                            </Style>
-                        </DataGridTemplateColumn.HeaderStyle>
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <CheckBox IsChecked="{Binding IsDefault, Mode=OneWay}" IsEnabled="False"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center"
-                                          ToolTip="True = this is the tenant's default env (open to all licensed users)."/>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-
                     <!-- Managed Environment (premium governance). PPAC ProtectionLevel
                          == "Standard" means the env has Managed Environments turned on
                          (DLP enforced, sharing limits, request-access workflows, etc.). -->
@@ -653,8 +860,10 @@
                             <DataTemplate>
                                 <Border Padding="6,1" CornerRadius="3" HorizontalAlignment="Center" VerticalAlignment="Center"
                                         Background="{DynamicResource TokenSuccessBackground}"
+                                        BorderBrush="{DynamicResource TokenSuccessForeground}"
+                                        BorderThickness="1"
                                         Visibility="{Binding IsManagedEnvironment, Converter={StaticResource BoolToVisibility}}">
-                                    <TextBlock Text="MANAGED" Foreground="{DynamicResource TokenTextOnAccent}"
+                                    <TextBlock Text="MANAGED" Foreground="{DynamicResource TokenSuccessForeground}"
                                                FontSize="9" FontWeight="SemiBold"/>
                                 </Border>
                             </DataTemplate>
@@ -692,11 +901,12 @@
                          "over" (>=100%) and the DataTriggers tint the cell
                          red/amber. *GbDisplay handles formatting + the "—"
                          placeholder when no data is loaded. -->
-                    <DataGridTemplateColumn Width="120" SortMemberPath="DatabaseGb">
-                        <DataGridTemplateColumn.Header>
-                            <local:ColumnFilterHeader Label="DB GB"
-                                FilterText="{Binding DataContext.FilterDatabase, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"/>
-                        </DataGridTemplateColumn.Header>
+                    <DataGridTemplateColumn Header="DB GB" Width="120" SortMemberPath="DatabaseGb">
+                        <DataGridTemplateColumn.HeaderStyle>
+                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                <Setter Property="ToolTip" Value="Database storage actual / rated capacity (Dataverse). Click the header to sort."/>
+                            </Style>
+                        </DataGridTemplateColumn.HeaderStyle>
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding DatabaseGbDisplay}">
@@ -719,11 +929,12 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Width="120" SortMemberPath="FileGb">
-                        <DataGridTemplateColumn.Header>
-                            <local:ColumnFilterHeader Label="File GB"
-                                FilterText="{Binding DataContext.FilterFile, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"/>
-                        </DataGridTemplateColumn.Header>
+                    <DataGridTemplateColumn Header="File GB" Width="120" SortMemberPath="FileGb">
+                        <DataGridTemplateColumn.HeaderStyle>
+                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                <Setter Property="ToolTip" Value="File storage actual / rated capacity (Dataverse). Click the header to sort."/>
+                            </Style>
+                        </DataGridTemplateColumn.HeaderStyle>
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding FileGbDisplay}">
@@ -746,11 +957,12 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Width="120" SortMemberPath="LogGb">
-                        <DataGridTemplateColumn.Header>
-                            <local:ColumnFilterHeader Label="Log GB"
-                                FilterText="{Binding DataContext.FilterLog, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"/>
-                        </DataGridTemplateColumn.Header>
+                    <DataGridTemplateColumn Header="Log GB" Width="120" SortMemberPath="LogGb">
+                        <DataGridTemplateColumn.HeaderStyle>
+                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                <Setter Property="ToolTip" Value="Log storage actual / rated capacity (Dataverse). Click the header to sort."/>
+                            </Style>
+                        </DataGridTemplateColumn.HeaderStyle>
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding LogGbDisplay}">
@@ -777,12 +989,12 @@
                          "—" for non-FinOps envs so the column doesn't visually
                          imply they're at zero usage. Same status-trigger
                          coloring as the regular capacity columns. -->
-                    <DataGridTemplateColumn Width="130" SortMemberPath="FinOpsDatabaseGb">
-                        <DataGridTemplateColumn.Header>
-                            <local:ColumnFilterHeader Label="FinOps DB"
-                                FilterText="{Binding DataContext.FilterFinOpsDb, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"
-                                ToolTip="FinOps (Dynamics 365 F&amp;O) database storage actual / rated capacity."/>
-                        </DataGridTemplateColumn.Header>
+                    <DataGridTemplateColumn Header="FinOps DB" Width="130" SortMemberPath="FinOpsDatabaseGb">
+                        <DataGridTemplateColumn.HeaderStyle>
+                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                <Setter Property="ToolTip" Value="FinOps (Dynamics 365 F&amp;O) database storage actual / rated capacity. Click the header to sort."/>
+                            </Style>
+                        </DataGridTemplateColumn.HeaderStyle>
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding FinOpsDatabaseGbDisplay}">
@@ -805,12 +1017,12 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Width="130" SortMemberPath="FinOpsFileGb">
-                        <DataGridTemplateColumn.Header>
-                            <local:ColumnFilterHeader Label="FinOps File"
-                                FilterText="{Binding DataContext.FilterFinOpsFile, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"
-                                ToolTip="FinOps (Dynamics 365 F&amp;O) file storage actual / rated capacity."/>
-                        </DataGridTemplateColumn.Header>
+                    <DataGridTemplateColumn Header="FinOps File" Width="130" SortMemberPath="FinOpsFileGb">
+                        <DataGridTemplateColumn.HeaderStyle>
+                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                <Setter Property="ToolTip" Value="FinOps (Dynamics 365 F&amp;O) file storage actual / rated capacity. Click the header to sort."/>
+                            </Style>
+                        </DataGridTemplateColumn.HeaderStyle>
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding FinOpsFileGbDisplay}">
@@ -927,15 +1139,15 @@
 
                 <!-- ==========================================================
                      Per-env row-details template. Sections (vertical stack):
-                       1.  Loading / error banner â€” only visible while the
+                       1.  Loading / error banner — only visible while the
                            Dataverse drill-down is in flight, or when it failed.
-                       2.  Solutions parent â€” Expander rows; each solution
+                       2.  Solutions parent — Expander rows; each solution
                            opens to reveal three multi-column DataGrids
                            (Apps / Flows / Agents). Lazy-loaded from the
                            Dataverse Web API on first row expand.
-                       3.  Power Pages â€” sibling DataGrid showing every
+                       3.  Power Pages — sibling DataGrid showing every
                            mspp_website (or legacy adx_website) in this env.
-                       4.  Users &amp; Groups â€” sibling DataGrid showing
+                       4.  Users &amp; Groups — sibling DataGrid showing
                            non-disabled systemusers from Dataverse.
                      ========================================================== -->
                 <DataGrid.RowDetailsTemplate>
@@ -998,19 +1210,69 @@
                                     Padding="14,12" Margin="0,2,0,6"
                                     CornerRadius="0,4,4,0">
                                 <StackPanel>
-                                <!-- Header: env totals summary line -->
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                    <TextBlock Text="ENV ASSETS" Foreground="{DynamicResource TokenBrandForeground}"
-                                               FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                    <TextBlock Text="â€¢" Foreground="{DynamicResource TokenStrokeSubtle}" Margin="8,0" VerticalAlignment="Center"/>
-                                    <TextBlock Foreground="{DynamicResource TokenBrandForeground}" FontSize="11" VerticalAlignment="Center">
-                                        <Run Text="{Binding AppCount, Mode=OneWay}"/><Run Text=" Apps "/>
-                                        <Run Text="â€¢" Foreground="{DynamicResource TokenStrokeSubtle}"/>
-                                        <Run Text=" "/><Run Text="{Binding FlowCount, Mode=OneWay}"/><Run Text=" Flows "/>
-                                        <Run Text="â€¢" Foreground="{DynamicResource TokenStrokeSubtle}"/>
-                                        <Run Text=" "/><Run Text="{Binding AgentCount, Mode=OneWay}"/><Run Text=" Agents"/>
-                                    </TextBlock>
-                                </StackPanel>
+                                <!-- Header: env totals summary line + cache-age badge + Refresh button.
+                                     The Refresh button force-re-fetches THIS env's Dataverse
+                                     drill-down (drops the SQLite snapshot, hits Dataverse fresh,
+                                     persists the new snapshot). All other expansions of this row
+                                     hydrate instantly from the cached snapshot — that's what makes
+                                     the second/third expand feel instant. -->
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="ENV ASSETS" Foreground="{DynamicResource TokenBrandForeground}"
+                                                   FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        <TextBlock Text="â€¢" Foreground="{DynamicResource TokenStrokeSubtle}" Margin="8,0" VerticalAlignment="Center"/>
+                                        <TextBlock Foreground="{DynamicResource TokenBrandForeground}" FontSize="11" VerticalAlignment="Center">
+                                            <Run Text="{Binding AppCount, Mode=OneWay}"/><Run Text=" Apps "/>
+                                            <Run Text="â€¢" Foreground="{DynamicResource TokenStrokeSubtle}"/>
+                                            <Run Text=" "/><Run Text="{Binding FlowCount, Mode=OneWay}"/><Run Text=" Flows "/>
+                                            <Run Text="â€¢" Foreground="{DynamicResource TokenStrokeSubtle}"/>
+                                            <Run Text=" "/><Run Text="{Binding AgentCount, Mode=OneWay}"/><Run Text=" Agents"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <!-- Cache-age badge — shown after first successful load. Reads
+                                         "Cached: 5m ago" / "Cached: 2h ago" / "Cached: 2026-05-04 16:22 UTC".
+                                         Updated whenever DetailsLastSyncedUtc INPCs (i.e. on first load
+                                         and after every Refresh click). -->
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding DetailsLastSyncedDisplay}"
+                                               Foreground="{DynamicResource TokenTextSecondary}"
+                                               FontSize="11" VerticalAlignment="Center"
+                                               Margin="0,0,12,0"
+                                               Visibility="{Binding HasDetailsLastSynced, Converter={StaticResource BoolToVisibility}}"/>
+                                    <!-- Refresh button — force re-fetch of this env's Dataverse
+                                         drill-down. Disabled while a fetch is in flight.
+                                         Uses the same Info pill chrome as the title-bar
+                                         Refresh so the action affordance is consistent and
+                                         the hit target is large + obvious (no muted
+                                         ui:Button "Secondary" styling that disappears into
+                                         the row). -->
+                                    <Button Grid.Column="3"
+                                            Style="{StaticResource ToolbarButton}"
+                                            AutomationProperties.AutomationId="EnvRefreshButton"
+                                            AutomationProperties.Name="Refresh environment details"
+                                            Command="{Binding DataContext.RefreshEnvDetailsCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type local:InventoryView}}}"
+                                            CommandParameter="{Binding}"
+                                            Background="{DynamicResource TokenHeaderPillInfoBg}"
+                                            BorderBrush="{DynamicResource TokenHeaderPillInfoBorder}"
+                                            Foreground="{DynamicResource TokenHeaderPillInfoFg}"
+                                            Padding="14,0" FontSize="12" FontWeight="SemiBold"
+                                            Height="30" MinWidth="100"
+                                            VerticalAlignment="Center"
+                                            VerticalContentAlignment="Center"
+                                            Cursor="Hand"
+                                            ToolTip="Re-fetch this environment's solutions, Power Pages, users, and per-asset enrichments from Dataverse and overwrite the local cache.">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="14" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Refresh" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
 
                                 <!-- Loading banner: visible while we fetch Dataverse details -->
                                 <Border Background="{DynamicResource TokenInfoBackground}" BorderBrush="{DynamicResource TokenBrandBackground}" BorderThickness="1"
@@ -1042,9 +1304,9 @@
                                      View-mode toggle. The user picks how
                                      this env's apps / flows / agents are
                                      organized inside the row-details panel:
-                                       â€¢ Group by Solution â€” Solutions
+                                       â€¢ Group by Solution — Solutions
                                          Expander (default).
-                                       â€¢ Flat â€” three sibling DataGrids
+                                       â€¢ Flat — three sibling DataGrids
                                          (Apps / Flows / Agents) showing
                                          every asset in the env, ungrouped.
                                      Power Pages and Users sections are
@@ -1065,7 +1327,7 @@
                                                      Tag="solutions"
                                                      Click="ViewModeRadio_Click"
                                                      ToolTip="Show Apps / Flows / Agents grouped under their owning Dataverse solution."/>
-                                        <RadioButton Content="Flat â€” Apps / Flows / Agents"
+                                        <RadioButton Content="Flat — Apps / Flows / Agents"
                                                      IsChecked="{Binding IsFlatView, Mode=OneWay}"
                                                      Foreground="{DynamicResource TokenTextPrimary}" FontSize="11"
                                                      VerticalAlignment="Center"
@@ -1077,7 +1339,7 @@
                                 </Border>
 
                                 <!-- ============================================
-                                     SECTION 1 â€” Solutions (parent grid).
+                                     SECTION 1 — Solutions (parent grid).
                                      Each solution row is an Expander whose
                                      content is the nested Apps / Flows /
                                      Agents DataGrids for that solution.
@@ -1093,15 +1355,17 @@
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/Dataverse_scalable.svg"
-                                                                 Width="14" Height="14" Margin="0,0,6,0"/>
+                                                <Viewbox Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                    <Path Data="{StaticResource SolutionsIconGeometry}"
+                                                          Fill="{DynamicResource TokenBrandForeground}"/>
+                                                </Viewbox>
                                                 <TextBlock Text="SOLUTIONS"
                                                            Foreground="{DynamicResource TokenBrandForeground}" FontWeight="SemiBold" FontSize="10"
                                                            VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Grid.Column="1" HorizontalAlignment="Right"
                                                        Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
-                                                       Text="{Binding SolutionCount, StringFormat={}{0} solution(s) â€” Dataverse}"
+                                                       Text="{Binding SolutionCount, StringFormat={}{0} solution(s) — Dataverse}"
                                                        VerticalAlignment="Center"/>
                                         </Grid>
                                         <ItemsControl ItemsSource="{Binding Solutions}">
@@ -1122,21 +1386,21 @@
                                                                     <TextBlock Text="{Binding Publisher}"
                                                                                Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
                                                                                Margin="10,0,0,0" VerticalAlignment="Center"/>
-                                                                    <Border Background="#3F2A4F" CornerRadius="8"
+                                                                    <Border Background="#5B2E91" CornerRadius="8"
                                                                             Padding="6,1" Margin="8,0,0,0"
                                                                             VerticalAlignment="Center"
                                                                             Visibility="{Binding IsManaged, Converter={StaticResource BoolToVisibility}}">
-                                                                        <TextBlock Text="MANAGED" Foreground="#D0B0FF"
+                                                                        <TextBlock Text="MANAGED" Foreground="White"
                                                                                    FontSize="9" FontWeight="SemiBold"/>
                                                                     </Border>
                                                                     <TextBlock Text="{Binding Version}"
                                                                                Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
                                                                                Margin="10,0,0,0" VerticalAlignment="Center"/>
                                                                 </StackPanel>
-                                                                <Border Grid.Column="1" Background="#1F3F5F" CornerRadius="10"
+                                                                <Border Grid.Column="1" Background="{DynamicResource TokenBrandBackground}" CornerRadius="10"
                                                                         Padding="10,2" VerticalAlignment="Center" Margin="0,0,8,0">
                                                                     <TextBlock Text="{Binding Summary}"
-                                                                               Foreground="{DynamicResource TokenBrandForeground}" FontSize="10"
+                                                                               Foreground="{DynamicResource TokenTextOnAccent}" FontSize="10"
                                                                                FontWeight="SemiBold"/>
                                                                 </Border>
                                                                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
@@ -1161,8 +1425,10 @@
                                                                             <ColumnDefinition Width="*"/>
                                                                         </Grid.ColumnDefinitions>
                                                                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                                            <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/PowerApps_scalable.svg"
-                                                                                             Width="14" Height="14" Margin="0,0,6,0"/>
+                                                                            <Viewbox Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                                                <Path Data="{StaticResource AppsIconGeometry}"
+                                                                                      Fill="{DynamicResource TokenBrandForeground}"/>
+                                                                            </Viewbox>
                                                                             <TextBlock Text="APPS"
                                                                                        Style="{StaticResource AssetSectionLabel}"/>
                                                                         </StackPanel>
@@ -1170,16 +1436,7 @@
                                                                                    Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
                                                                                    Text="{Binding AppCount, StringFormat={}{0} item(s)}"/>
                                                                     </Grid>
-                                                                    <DataGrid ItemsSource="{Binding Apps}"
-                                                                              Background="{DynamicResource TokenSurfaceSubtle}" RowBackground="{DynamicResource TokenSurfaceSubtle}"
-                                                                              AlternatingRowBackground="{DynamicResource TokenSurfaceSecondary}"
-                                                                              HeadersVisibility="Column"
-                                                                              AutoGenerateColumns="False" IsReadOnly="True"
-                                                                              CanUserAddRows="False" CanUserDeleteRows="False"
-                                                                              GridLinesVisibility="None"
-                                                                              HorizontalScrollBarVisibility="Auto"
-                                                                              MaxHeight="200">
-                                                                        <DataGrid.Columns>
+                                                                    <local:PagedDataGrid ItemsSource="{Binding Apps}" PageSize="10" MaxHeight="280">
                                                                             <DataGridTextColumn Header="Name"        Binding="{Binding DisplayName}" Width="260"/>
                                                                             <DataGridTextColumn Header="Type"        Binding="{Binding TypeDisplay}" Width="110"/>
                                                                             <DataGridTextColumn Header="Status"      Binding="{Binding Status, TargetNullValue=—}" Width="80"/>
@@ -1203,8 +1460,7 @@
                                                                                     </DataTemplate>
                                                                                 </DataGridTemplateColumn.CellTemplate>
                                                                             </DataGridTemplateColumn>
-                                                                        </DataGrid.Columns>
-                                                                    </DataGrid>
+                                                                    </local:PagedDataGrid>
                                                                 </DockPanel>
                                                             </Border>
 
@@ -1219,8 +1475,10 @@
                                                                             <ColumnDefinition Width="*"/>
                                                                         </Grid.ColumnDefinitions>
                                                                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                                            <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/PowerAutomate_scalable.svg"
-                                                                                             Width="14" Height="14" Margin="0,0,6,0"/>
+                                                                            <Viewbox Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                                                <Path Data="{StaticResource FlowsIconGeometry}"
+                                                                                      Fill="{DynamicResource TokenBrandForeground}"/>
+                                                                            </Viewbox>
                                                                             <TextBlock Text="FLOWS"
                                                                                        Style="{StaticResource AssetSectionLabel}"/>
                                                                         </StackPanel>
@@ -1228,16 +1486,7 @@
                                                                                    Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
                                                                                    Text="{Binding FlowCount, StringFormat={}{0} item(s)}"/>
                                                                     </Grid>
-                                                                    <DataGrid ItemsSource="{Binding Flows}"
-                                                                              Background="{DynamicResource TokenSurfaceSubtle}" RowBackground="{DynamicResource TokenSurfaceSubtle}"
-                                                                              AlternatingRowBackground="{DynamicResource TokenSurfaceSecondary}"
-                                                                              HeadersVisibility="Column"
-                                                                              AutoGenerateColumns="False" IsReadOnly="True"
-                                                                              CanUserAddRows="False" CanUserDeleteRows="False"
-                                                                              GridLinesVisibility="None"
-                                                                              HorizontalScrollBarVisibility="Auto"
-                                                                              MaxHeight="200">
-                                                                        <DataGrid.Columns>
+                                                                    <local:PagedDataGrid ItemsSource="{Binding Flows}" PageSize="10" MaxHeight="280">
                                                                             <DataGridTextColumn Header="Name"     Binding="{Binding DisplayName}" Width="260"/>
                                                                             <DataGridTextColumn Header="Type"     Binding="{Binding TypeDisplay}" Width="110"/>
                                                                             <DataGridTextColumn Header="Status"   Binding="{Binding Status, TargetNullValue=—}" Width="80"/>
@@ -1260,8 +1509,7 @@
                                                                                     </DataTemplate>
                                                                                 </DataGridTemplateColumn.CellTemplate>
                                                                             </DataGridTemplateColumn>
-                                                                        </DataGrid.Columns>
-                                                                    </DataGrid>
+                                                                    </local:PagedDataGrid>
                                                                 </DockPanel>
                                                             </Border>
 
@@ -1276,8 +1524,10 @@
                                                                             <ColumnDefinition Width="*"/>
                                                                         </Grid.ColumnDefinitions>
                                                                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                                            <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/CopilotStudio_scalable.svg"
-                                                                                             Width="14" Height="14" Margin="0,0,6,0"/>
+                                                                            <Viewbox Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                                                <Path Data="{StaticResource AgentsIconGeometry}"
+                                                                                      Fill="{DynamicResource TokenBrandForeground}"/>
+                                                                            </Viewbox>
                                                                             <TextBlock Text="AGENTS"
                                                                                        Style="{StaticResource AssetSectionLabel}"/>
                                                                         </StackPanel>
@@ -1285,16 +1535,7 @@
                                                                                    Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
                                                                                    Text="{Binding AgentCount, StringFormat={}{0} item(s)}"/>
                                                                     </Grid>
-                                                                    <DataGrid ItemsSource="{Binding Agents}"
-                                                                              Background="{DynamicResource TokenSurfaceSubtle}" RowBackground="{DynamicResource TokenSurfaceSubtle}"
-                                                                              AlternatingRowBackground="{DynamicResource TokenSurfaceSecondary}"
-                                                                              HeadersVisibility="Column"
-                                                                              AutoGenerateColumns="False" IsReadOnly="True"
-                                                                              CanUserAddRows="False" CanUserDeleteRows="False"
-                                                                              GridLinesVisibility="None"
-                                                                              HorizontalScrollBarVisibility="Auto"
-                                                                              MaxHeight="200">
-                                                                        <DataGrid.Columns>
+                                                                    <local:PagedDataGrid ItemsSource="{Binding Agents}" PageSize="10" MaxHeight="280">
                                                                             <DataGridTextColumn Header="Name"     Binding="{Binding DisplayName}" Width="260"/>
                                                                             <DataGridTextColumn Header="ALM"      Binding="{Binding ManagedDisplay}" Width="90"/>
                                                                             <DataGridTextColumn Header="Owner"    Binding="{Binding OwnerDisplay}"     Width="180"/>
@@ -1313,8 +1554,7 @@
                                                                                     </DataTemplate>
                                                                                 </DataGridTemplateColumn.CellTemplate>
                                                                             </DataGridTemplateColumn>
-                                                                        </DataGrid.Columns>
-                                                                    </DataGrid>
+                                                                    </local:PagedDataGrid>
                                                                 </DockPanel>
                                                             </Border>
                                                         </StackPanel>
@@ -1326,7 +1566,7 @@
                                 </Border>
 
                                 <!-- ============================================
-                                     SECTION 1b â€” FLAT view. Four sibling
+                                     SECTION 1b — FLAT view. Four sibling
                                      DataGrids (Solutions / Apps / Flows /
                                      Agents) bound to the env's full asset
                                      list, ignoring solution-component
@@ -1335,27 +1575,26 @@
                                      ============================================ -->
                                 <StackPanel Visibility="{Binding IsFlatView, Converter={StaticResource BoolToVisibility}}">
                                     <!-- Solutions (flat) -->
-                                    <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
-                                            BorderThickness="1" CornerRadius="4"
-                                            Padding="10" Margin="0,0,0,10">
-                                        <DockPanel>
-                                            <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                    <Expander Style="{StaticResource SectionExpander}" IsExpanded="True" Margin="0,0,0,10">
+                                        <Expander.Header>
+                                            <Grid HorizontalAlignment="Stretch">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/Dataverse_scalable.svg"
-                                                                     Width="14" Height="14" Margin="0,0,6,0"/>
-                                                    <TextBlock Text="SOLUTIONS" Foreground="{DynamicResource TokenBrandForeground}"
-                                                               FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                    <Viewbox Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                        <Path Data="{StaticResource SolutionsIconGeometry}"
+                                                              Fill="{DynamicResource TokenBrandForeground}"/>
+                                                    </Viewbox>
+                                                    <TextBlock Text="SOLUTIONS" Style="{StaticResource SectionExpanderLabel}"/>
                                                 </StackPanel>
                                                 <TextBlock Grid.Column="1" HorizontalAlignment="Right"
-                                                           Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
-                                                           Text="{Binding SolutionCount, StringFormat={}{0} solution(s) â€” visible Dataverse solutions only}"
-                                                           VerticalAlignment="Center"/>
+                                                           Style="{StaticResource SectionExpanderCount}"
+                                                           Text="{Binding SolutionCount, StringFormat={}{0} solution(s) — visible Dataverse solutions only}"/>
                                             </Grid>
-                                            <local:PagedDataGrid ItemsSource="{Binding Solutions}" PageSize="10" MaxHeight="280">
+                                        </Expander.Header>
+                                        <local:PagedDataGrid ItemsSource="{Binding Solutions}" PageSize="10" MaxHeight="280">
 <DataGridTextColumn Header="Display Name" Binding="{Binding Name}"        Width="260"/>
                                                     <DataGridTextColumn Header="Unique Name"  Binding="{Binding UniqueName}"  Width="200"/>
                                                     <DataGridTextColumn Header="Publisher"    Binding="{Binding Publisher}"   Width="160"/>
@@ -1377,31 +1616,29 @@
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
 </local:PagedDataGrid>
-                                        </DockPanel>
-                                    </Border>
+                                    </Expander>
 
                                     <!-- Apps (flat) -->
-                                    <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
-                                            BorderThickness="1" CornerRadius="4"
-                                            Padding="10" Margin="0,0,0,10">
-                                        <DockPanel>
-                                            <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                    <Expander Style="{StaticResource SectionExpander}" IsExpanded="True" Margin="0,0,0,10">
+                                        <Expander.Header>
+                                            <Grid HorizontalAlignment="Stretch">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/PowerApps_scalable.svg"
-                                                                     Width="14" Height="14" Margin="0,0,6,0"/>
-                                                    <TextBlock Text="APPS" Foreground="{DynamicResource TokenBrandForeground}"
-                                                               FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                    <Viewbox Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                        <Path Data="{StaticResource AppsIconGeometry}"
+                                                              Fill="{DynamicResource TokenBrandForeground}"/>
+                                                    </Viewbox>
+                                                    <TextBlock Text="APPS" Style="{StaticResource SectionExpanderLabel}"/>
                                                 </StackPanel>
                                                 <TextBlock Grid.Column="1" HorizontalAlignment="Right"
-                                                           Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
-                                                           Text="{Binding AppCount, StringFormat={}{0} app(s) â€” every canvas / model-driven / code app}"
-                                                           VerticalAlignment="Center"/>
+                                                           Style="{StaticResource SectionExpanderCount}"
+                                                           Text="{Binding AppCount, StringFormat={}{0} app(s) — every canvas / model-driven / code app}"/>
                                             </Grid>
-                                            <local:PagedDataGrid ItemsSource="{Binding AllApps}" PageSize="10" MaxHeight="280">
+                                        </Expander.Header>
+                                        <local:PagedDataGrid ItemsSource="{Binding AllApps}" PageSize="10" MaxHeight="280">
 <DataGridTextColumn Header="Name"        Binding="{Binding DisplayName}" Width="260"/>
                                                     <DataGridTextColumn Header="Type"        Binding="{Binding TypeDisplay}" Width="130"/>
                                                     <DataGridTextColumn Header="Status"      Binding="{Binding Status, TargetNullValue=—}" Width="80"/>
@@ -1427,31 +1664,29 @@
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
 </local:PagedDataGrid>
-                                        </DockPanel>
-                                    </Border>
+                                    </Expander>
 
                                     <!-- Flows (flat) -->
-                                    <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
-                                            BorderThickness="1" CornerRadius="4"
-                                            Padding="10" Margin="0,0,0,10">
-                                        <DockPanel>
-                                            <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                    <Expander Style="{StaticResource SectionExpander}" IsExpanded="True" Margin="0,0,0,10">
+                                        <Expander.Header>
+                                            <Grid HorizontalAlignment="Stretch">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/PowerAutomate_scalable.svg"
-                                                                     Width="14" Height="14" Margin="0,0,6,0"/>
-                                                    <TextBlock Text="FLOWS" Foreground="{DynamicResource TokenBrandForeground}"
-                                                               FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                    <Viewbox Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                        <Path Data="{StaticResource FlowsIconGeometry}"
+                                                              Fill="{DynamicResource TokenBrandForeground}"/>
+                                                    </Viewbox>
+                                                    <TextBlock Text="FLOWS" Style="{StaticResource SectionExpanderLabel}"/>
                                                 </StackPanel>
                                                 <TextBlock Grid.Column="1" HorizontalAlignment="Right"
-                                                           Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
-                                                           Text="{Binding FlowCount, StringFormat={}{0} flow(s) â€” cloud / agent / M365 agent flows}"
-                                                           VerticalAlignment="Center"/>
+                                                           Style="{StaticResource SectionExpanderCount}"
+                                                           Text="{Binding FlowCount, StringFormat={}{0} flow(s) — cloud / agent / M365 agent flows}"/>
                                             </Grid>
-                                            <local:PagedDataGrid ItemsSource="{Binding AllFlows}" PageSize="10" MaxHeight="280">
+                                        </Expander.Header>
+                                        <local:PagedDataGrid ItemsSource="{Binding AllFlows}" PageSize="10" MaxHeight="280">
 <DataGridTextColumn Header="Name"     Binding="{Binding DisplayName}" Width="260"/>
                                                     <DataGridTextColumn Header="Type"     Binding="{Binding TypeDisplay}" Width="130"/>
                                                     <DataGridTextColumn Header="Status"   Binding="{Binding Status, TargetNullValue=—}" Width="80"/>
@@ -1476,31 +1711,29 @@
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
 </local:PagedDataGrid>
-                                        </DockPanel>
-                                    </Border>
+                                    </Expander>
 
                                     <!-- Agents (flat) -->
-                                    <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
-                                            BorderThickness="1" CornerRadius="4"
-                                            Padding="10" Margin="0,0,0,10">
-                                        <DockPanel>
-                                            <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                    <Expander Style="{StaticResource SectionExpander}" IsExpanded="True" Margin="0,0,0,10">
+                                        <Expander.Header>
+                                            <Grid HorizontalAlignment="Stretch">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <svgc:SvgViewbox Source="/Assets/MicrosoftIcons/PowerPlatform/CopilotStudio_scalable.svg"
-                                                                     Width="14" Height="14" Margin="0,0,6,0"/>
-                                                    <TextBlock Text="AGENTS" Foreground="{DynamicResource TokenBrandForeground}"
-                                                               FontWeight="SemiBold" FontSize="10" VerticalAlignment="Center"/>
+                                                    <Viewbox Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                        <Path Data="{StaticResource AgentsIconGeometry}"
+                                                              Fill="{DynamicResource TokenBrandForeground}"/>
+                                                    </Viewbox>
+                                                    <TextBlock Text="AGENTS" Style="{StaticResource SectionExpanderLabel}"/>
                                                 </StackPanel>
                                                 <TextBlock Grid.Column="1" HorizontalAlignment="Right"
-                                                           Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
-                                                           Text="{Binding AgentCount, StringFormat={}{0} agent(s) â€” Copilot Studio agents}"
-                                                           VerticalAlignment="Center"/>
+                                                           Style="{StaticResource SectionExpanderCount}"
+                                                           Text="{Binding AgentCount, StringFormat={}{0} agent(s) — Copilot Studio agents}"/>
                                             </Grid>
-                                            <local:PagedDataGrid ItemsSource="{Binding AllAgents}" PageSize="10" MaxHeight="280">
+                                        </Expander.Header>
+                                        <local:PagedDataGrid ItemsSource="{Binding AllAgents}" PageSize="10" MaxHeight="280">
 <DataGridTextColumn Header="Name"     Binding="{Binding DisplayName}" Width="260"/>
                                                     <DataGridTextColumn Header="ALM"      Binding="{Binding ManagedDisplay}" Width="90"/>
                                                     <DataGridTextColumn Header="Solution" Binding="{Binding SolutionName, TargetNullValue=(none)}" Width="160"/>
@@ -1521,31 +1754,32 @@
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
 </local:PagedDataGrid>
-                                        </DockPanel>
-                                    </Border>
+                                    </Expander>
                                 </StackPanel>
 
                                 <!-- ============================================
-                                     SECTION 2 â€” Power Pages (mspp_website / adx_website).
+                                     SECTION 2 — Power Pages (mspp_website / adx_website).
                                      ============================================ -->
-                                <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
-                                        BorderThickness="1" CornerRadius="4"
-                                        Padding="10" Margin="0,0,0,10">
-                                    <DockPanel>
-                                        <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                <Expander Style="{StaticResource SectionExpander}" IsExpanded="True" Margin="0,0,0,10">
+                                    <Expander.Header>
+                                        <Grid HorizontalAlignment="Stretch">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="POWER PAGES"
-                                                       Foreground="{DynamicResource TokenBrandForeground}" FontWeight="SemiBold" FontSize="10"
-                                                       VerticalAlignment="Center"/>
+                                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Viewbox Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                    <Path Data="{StaticResource PowerPagesIconGeometry}"
+                                                          Fill="{DynamicResource TokenBrandForeground}"/>
+                                                </Viewbox>
+                                                <TextBlock Text="POWER PAGES" Style="{StaticResource SectionExpanderLabel}"/>
+                                            </StackPanel>
                                             <TextBlock Grid.Column="1" HorizontalAlignment="Right"
-                                                       Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
-                                                       Text="{Binding PowerPageCount, StringFormat={}{0} site(s) â€” Dataverse mspp_website}"
-                                                       VerticalAlignment="Center"/>
+                                                       Style="{StaticResource SectionExpanderCount}"
+                                                       Text="{Binding PowerPageCount, StringFormat={}{0} site(s) — Dataverse mspp_website}"/>
                                         </Grid>
-                                        <local:PagedDataGrid ItemsSource="{Binding PowerPages}" PageSize="10" MaxHeight="200">
+                                    </Expander.Header>
+                                    <local:PagedDataGrid ItemsSource="{Binding PowerPages}" PageSize="10" MaxHeight="200">
 <DataGridTextColumn Header="Name"           Binding="{Binding Name}"          Width="240"/>
                                                 <DataGridTextColumn Header="Site URL"       Binding="{Binding SiteUrl}"       Width="260"/>
                                                 <DataGridTextColumn Header="Type"           Binding="{Binding WebsiteType}"   Width="140"/>
@@ -1565,30 +1799,30 @@
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
 </local:PagedDataGrid>
-                                    </DockPanel>
-                                </Border>
+                                </Expander>
 
                                 <!-- ============================================
-                                     SECTION 3 â€” Users & Groups (Dataverse systemusers).
+                                     SECTION 3 — Users & Groups (Dataverse systemusers).
                                      ============================================ -->
-                                <Border Background="{DynamicResource TokenSurfaceSecondary}" BorderBrush="{DynamicResource TokenStrokeSubtle}"
-                                        BorderThickness="1" CornerRadius="4"
-                                        Padding="10">
-                                    <DockPanel>
-                                        <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                <Expander Style="{StaticResource SectionExpander}" IsExpanded="True">
+                                    <Expander.Header>
+                                        <Grid HorizontalAlignment="Stretch">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="USERS &amp; GROUPS"
-                                                       Foreground="{DynamicResource TokenBrandForeground}" FontWeight="SemiBold" FontSize="10"
-                                                       VerticalAlignment="Center"/>
+                                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <ui:SymbolIcon Symbol="People24" FontSize="14"
+                                                               Foreground="{DynamicResource TokenBrandForeground}"
+                                                               Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="USERS &amp; GROUPS" Style="{StaticResource SectionExpanderLabel}"/>
+                                            </StackPanel>
                                             <TextBlock Grid.Column="1" HorizontalAlignment="Right"
-                                                       Foreground="{DynamicResource TokenTextTertiary}" FontSize="10"
-                                                       Text="{Binding UserCount, StringFormat={}{0} user(s) â€” Dataverse systemusers}"
-                                                       VerticalAlignment="Center"/>
+                                                       Style="{StaticResource SectionExpanderCount}"
+                                                       Text="{Binding UserCount, StringFormat={}{0} user(s) — Dataverse systemusers}"/>
                                         </Grid>
-                                        <local:PagedDataGrid ItemsSource="{Binding UsersAndGroups}" PageSize="10" MaxHeight="240">
+                                    </Expander.Header>
+                                    <local:PagedDataGrid ItemsSource="{Binding UsersAndGroups}" PageSize="10" MaxHeight="240">
 <DataGridTextColumn Header="Display Name"    Binding="{Binding DisplayName}" Width="220"/>
 
                                                 <!-- Identity: hover for the Microsoft Graph license breakdown
@@ -1614,13 +1848,20 @@
                                                 <DataGridTextColumn Header="Admin Status"    Binding="{Binding AdminStatus}"     Width="110"/>
                                                 <DataGridTextColumn Header="Created"         Binding="{Binding CreatedUtc, StringFormat={}{0:yyyy-MM-dd}}"  Width="100"/>
                                                 <DataGridTextColumn Header="Modified"        Binding="{Binding ModifiedUtc, StringFormat={}{0:yyyy-MM-dd}}" Width="100"/>
-                                                <DataGridTemplateColumn Header="Actions" Width="120">
+                                                <DataGridTemplateColumn Header="Actions" Width="160">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                                 <Button Style="{StaticResource OpenInMakerIconButton}"                                                                                                                                                Command="{Binding DataContext.OpenInMakerCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
                                                                         CommandParameter="{Binding}"/>
                                                                 <Button Style="{StaticResource InspectJsonIconButton}"                                                                                                                                                Command="{Binding DataContext.InspectJsonCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
+                                                                        CommandParameter="{Binding}"/>
+                                                                <!-- Show Microsoft Graph license assignments
+                                                                     (chip wrap dialog, mirrors the Inspector
+                                                                     chrome). Always available for user rows;
+                                                                     dialog handles the no-licenses empty state. -->
+                                                                <Button Style="{StaticResource ShowLicensesIconButton}"
+                                                                        Command="{Binding DataContext.ShowLicensesCommand, RelativeSource={RelativeSource AncestorType={x:Type local:InventoryView}}}"
                                                                         CommandParameter="{Binding}"/>
                                                                 <!-- Revoke System Administrator (Dataverse DELETE on
                                                                      systemuserroles_association). Hidden for non-
@@ -1636,8 +1877,7 @@
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
 </local:PagedDataGrid>
-                                    </DockPanel>
-                                </Border>
+                                </Expander>
                             </StackPanel>
                         </Border>
                         </ScrollViewer>
@@ -1671,7 +1911,9 @@
                                     ToolTip="Copy the full error text (exception chain + HTTP body) to the clipboard."/>
                             <Button Content="Open trace log"
                                     Command="{Binding OpenTraceLogCommand}"
-                                    Background="#3A3A3D" BorderBrush="#555" Foreground="White"
+                                    Background="{DynamicResource TokenNeutralPillBg}"
+                                    BorderBrush="{DynamicResource TokenNeutralPillBorder}"
+                                    Foreground="{DynamicResource TokenTextPrimary}"
                                     Padding="10,2" Margin="2,0" Cursor="Hand"
                                     ToolTip="Open the full request/response trace file."/>
                         </StackPanel>
@@ -1717,7 +1959,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
-                                <TextBlock Text="{Binding DrawerTitle}" Foreground="White"
+                                <TextBlock Text="{Binding DrawerTitle}" Foreground="{DynamicResource TokenTextPrimary}"
                                            FontSize="16" FontWeight="Bold"/>
                                 <TextBlock Text="{Binding DrawerSubtitle}" Foreground="{DynamicResource TokenTextSecondary}"
                                            FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"/>
@@ -1744,12 +1986,16 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0">
-                                                <TextBlock Text="{Binding Title}" Foreground="White"
-                                                           FontWeight="SemiBold" FontSize="13"/>
-                                                <TextBlock Text="{Binding Subtitle}" Foreground="{DynamicResource TokenTextSecondary}"
+                                                <!-- License / SKU NAME. Uses a hardcoded near-black so it is
+                                                     readable regardless of any DynamicResource resolution order
+                                                     in the drawer. Bumped to 14pt Bold to dominate the row -
+                                                     admins scan this column to recognise the SKU at a glance. -->
+                                                <TextBlock Text="{Binding Title}" Foreground="#1B1B1B"
+                                                           FontWeight="Bold" FontSize="14"/>
+                                                <TextBlock Text="{Binding Subtitle}" Foreground="#424242"
                                                            FontSize="11" Margin="0,3,0,0" TextWrapping="Wrap"/>
                                             </StackPanel>
-                                            <Border Grid.Column="1" Background="#1F5A40"
+                                            <Border Grid.Column="1" Background="#107C41"
                                                     CornerRadius="10" Padding="8,2" VerticalAlignment="Center">
                                                 <Border.Style>
                                                     <Style TargetType="Border">
@@ -1762,7 +2008,7 @@
                                                 </Border.Style>
                                                 <TextBlock Text="{Binding Badge}"
                                                            Style="{StaticResource StatusBadgeText}"
-                                                           Foreground="#7DD9A6"/>
+                                                           Foreground="White"/>
                                             </Border>
                                         </Grid>
                                     </Border>

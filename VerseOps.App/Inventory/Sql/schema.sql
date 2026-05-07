@@ -68,3 +68,17 @@ CREATE INDEX IF NOT EXISTS ix_gov_capacity_env       ON gov_capacity(env_id);
 CREATE INDEX IF NOT EXISTS ix_gov_asset_env          ON gov_asset(env_id);
 CREATE INDEX IF NOT EXISTS ix_gov_asset_type         ON gov_asset(asset_type);
 
+-- Per-environment Dataverse drill-down cache (solutions, Power Pages,
+-- users + per-asset enrichments such as Status / IsPremium / DlpStatus /
+-- SolutionName / IsManaged). Populated lazily the first time an env row
+-- is expanded, hydrated synchronously on every subsequent expand. The
+-- per-env "Refresh" button is the only thing that invalidates a row.
+-- Payload is a JSON snapshot of EnvDetailsSnapshot (see
+-- VerseOps.App.Inventory.Services.EnvDetailsSnapshot) — schema-less by
+-- design so we can grow the snapshot without DB migrations.
+CREATE TABLE IF NOT EXISTS gov_env_details (
+    env_id          TEXT NOT NULL PRIMARY KEY,
+    payload_json    TEXT NOT NULL,
+    last_synced_utc TEXT NOT NULL
+);
+

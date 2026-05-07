@@ -249,6 +249,48 @@ public sealed class EnvironmentRow : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// UTC timestamp of the last successful per-env Dataverse fetch (or the
+    /// hydration of the cached snapshot, whichever came last). Drives the
+    /// "Last refreshed: X ago" badge in the env detail header. Null until
+    /// the very first expansion completes.
+    /// </summary>
+    private DateTime? _detailsLastSyncedUtc;
+    public DateTime? DetailsLastSyncedUtc
+    {
+        get => _detailsLastSyncedUtc;
+        set
+        {
+            _detailsLastSyncedUtc = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(DetailsLastSyncedDisplay));
+            OnPropertyChanged(nameof(HasDetailsLastSynced));
+        }
+    }
+
+    /// <summary>True when <see cref="DetailsLastSyncedUtc"/> is set — drives
+    /// visibility of the "Last refreshed" badge in the detail header.</summary>
+    public bool HasDetailsLastSynced => _detailsLastSyncedUtc.HasValue;
+
+    /// <summary>
+    /// "Cached: 5m ago" / "Cached: 2h ago" / "Cached: 2026-05-04 16:22 UTC".
+    /// Computed live from <see cref="DetailsLastSyncedUtc"/>. Re-evaluated
+    /// lazily by binding refreshes; we don't tick a timer.
+    /// </summary>
+    public string DetailsLastSyncedDisplay
+    {
+        get
+        {
+            if (!_detailsLastSyncedUtc.HasValue) return string.Empty;
+            var age = DateTime.UtcNow - _detailsLastSyncedUtc.Value;
+            if (age.TotalMinutes < 1)  return "Cached: just now";
+            if (age.TotalMinutes < 60) return $"Cached: {(int)age.TotalMinutes}m ago";
+            if (age.TotalHours   < 24) return $"Cached: {(int)age.TotalHours}h ago";
+            if (age.TotalDays    < 7)  return $"Cached: {(int)age.TotalDays}d ago";
+            return $"Cached: {_detailsLastSyncedUtc.Value:yyyy-MM-dd HH:mm} UTC";
+        }
+    }
+
+    /// <summary>
     /// True when the user has expanded this env's row-details panel. Driven
     /// by the chevron toggle in the leading column of the env grid; the
     /// <c>DataGridRow.DetailsVisibility</c> is bound to this via a

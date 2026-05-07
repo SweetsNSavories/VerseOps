@@ -44,20 +44,30 @@ public sealed class DataverseEnvClient
         string instanceUrl,
         IReadOnlyList<AssetRow> envAssets,
         CancellationToken ct = default)
-        => await LoadAllAsync(envId, instanceUrl, envAssets, dlpPolicies: null, ct).ConfigureAwait(false);
+        => await LoadAllAsync(envId, instanceUrl, envAssets, dlpPoliciesTask: null, ct).ConfigureAwait(false);
+
+    /// <summary>Legacy overload — wraps a ready list as an already-completed Task.</summary>
+    public Task<EnvDetails> LoadAllAsync(
+        string envId,
+        string instanceUrl,
+        IReadOnlyList<AssetRow> envAssets,
+        IReadOnlyList<BapDlpClient.DlpPolicyDto>? dlpPolicies,
+        CancellationToken ct = default)
+        => LoadAllAsync(envId, instanceUrl, envAssets, Task.FromResult(dlpPolicies), ct);
 
     /// <summary>
     /// Pulls solutions, Power Pages, users, and asset metadata (status,
     /// premium classification, DLP compliance) for one env in parallel.
-    /// When <paramref name="dlpPolicies"/> is supplied the canvas-app
-    /// enrichment also evaluates each app's connector graph against every
-    /// in-scope tenant DLP policy and stamps <see cref="AssetRow.DlpStatus"/>.
+    /// <paramref name="dlpPoliciesTask"/> is awaited only inside the canvas-app
+    /// DLP evaluator — Solutions / Power Pages / Users / Workflow status do
+    /// NOT block on it, so the per-env detail panel renders the moment those
+    /// finish even if BAP is still mid-flight on the very first env-expand.
     /// </summary>
     public async Task<EnvDetails> LoadAllAsync(
         string envId,
         string instanceUrl,
         IReadOnlyList<AssetRow> envAssets,
-        IReadOnlyList<BapDlpClient.DlpPolicyDto>? dlpPolicies,
+        Task<IReadOnlyList<BapDlpClient.DlpPolicyDto>?>? dlpPoliciesTask,
         CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(instanceUrl))
@@ -99,7 +109,7 @@ public sealed class DataverseEnvClient
         // parallel with the others; if it fails (table missing on
         // stripped-down envs, role doesn't include read on the table, etc.)
         // the rows simply keep Status=null and the UI shows "—".
-        var statusTask    = SafeAsync(() => LoadAssetMetaAsync(http, envId, envAssets, dlpPolicies, ct));
+        var statusTask    = SafeAsync(() => LoadAssetMetaAsync(http, envId, envAssets, dlpPoliciesTask, ct));
         await Task.WhenAll(solutionsTask, pagesTask, usersTask, statusTask).ConfigureAwait(false);
 
         return new EnvDetails(
@@ -194,7 +204,6 @@ public sealed class DataverseEnvClient
             + "&$filter=isvisible eq true"
             + "&$orderby=friendlyname asc"
             + "&$top=500";
-        var solRows = await GetRowsAsync(http, solUrl, ct).ConfigureAwait(false);
 
         // Pull every component for the types we care about. componenttype is an
         // option-set so we filter with In(). $top=5000 covers most tenants.
@@ -202,7 +211,16 @@ public sealed class DataverseEnvClient
             + "?$select=componenttype,objectid,_solutionid_value"
             + "&$filter=Microsoft.Dynamics.CRM.In(PropertyName='componenttype',PropertyValues=['29','61','80','300'])"
             + "&$top=5000";
-        var compRows = await GetRowsAsync(http, compUrl, ct).ConfigureAwait(false);
+
+        // Fire BOTH GETs in parallel — they're independent (we only need both
+        // result sets for the in-memory bucketing below). Cuts this task's wall
+        // time roughly in half on big tenants where solutioncomponents is the
+        // long pole.
+        var solRowsTask  = GetRowsAsync(http, solUrl,  ct);
+        var compRowsTask = GetRowsAsync(http, compUrl, ct);
+        await Task.WhenAll(solRowsTask, compRowsTask).ConfigureAwait(false);
+        var solRows  = solRowsTask.Result;
+        var compRows = compRowsTask.Result;
 
         // Build asset_id -> AssetRow lookup once. AssetRow.AssetId is the resource
         // Guid returned by the Inventory API; that's the same value as
@@ -362,7 +380,7 @@ public sealed class DataverseEnvClient
         HttpClient http,
         string envId,
         IReadOnlyList<AssetRow> envAssets,
-        IReadOnlyList<BapDlpClient.DlpPolicyDto>? dlpPolicies,
+        Task<IReadOnlyList<BapDlpClient.DlpPolicyDto>?>? dlpPoliciesTask,
         CancellationToken ct)
     {
         // Index assets by lower-case GUID once. Inventory API and Dataverse
@@ -386,7 +404,7 @@ public sealed class DataverseEnvClient
             byId,
             MapWorkflowStatecode,
             ct);
-        var canvasTask = TryStampCanvasAsync(http, envId, byId, dlpPolicies, ct);
+        var canvasTask = TryStampCanvasAsync(http, envId, byId, dlpPoliciesTask, ct);
         var mdaTask    = TryStampStatusAsync(http,
             "appmodules?$select=appmoduleid,statecode,statuscode&$top=5000",
             "appmoduleid",
@@ -490,15 +508,25 @@ public sealed class DataverseEnvClient
         HttpClient http,
         string envId,
         IReadOnlyDictionary<string, AssetRow> byId,
-        IReadOnlyList<BapDlpClient.DlpPolicyDto>? dlpPolicies,
+        Task<IReadOnlyList<BapDlpClient.DlpPolicyDto>?>? dlpPoliciesTask,
         CancellationToken ct)
     {
         try
         {
-            // connectionreferences is a memo (string) field. The DV Web API
-            // returns it as a JSON string we re-parse client-side.
+            // Issue the canvasapps GET in parallel with the DLP wait. The
+            // GET is the long pole and DLP usually finishes first (it's
+            // service-cached), but on the very first env-expand DLP may
+            // still be in flight when we get here — we don't want to block
+            // the canvasapps GET on it.
             const string url = "canvasapps?$select=canvasappid,statecode,statuscode,connectionreferences&$top=5000";
-            using var resp = await http.GetAsync(url, ct).ConfigureAwait(false);
+            var canvasGet = http.GetAsync(url, ct);
+            IReadOnlyList<BapDlpClient.DlpPolicyDto>? dlpPolicies = null;
+            if (dlpPoliciesTask is not null)
+            {
+                try { dlpPolicies = await dlpPoliciesTask.ConfigureAwait(false); }
+                catch { /* DLP optional */ }
+            }
+            using var resp = await canvasGet.ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode) return;
             var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             using var doc = JsonDocument.Parse(json);
