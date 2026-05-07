@@ -16,11 +16,11 @@
     <PackageReference Include="Microsoft.Identity.Client.Broker" Version="4.81.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
     <PackageReference Include="Microsoft.PowerPlatform.Management" Version="2.0.3317.207" />
-    <PackageReference Include="Microsoft.Kiota.Http.HttpClientLibrary" Version="1.21.2" />
-    <PackageReference Include="Microsoft.Kiota.Serialization.Json" Version="1.21.2" />
-    <PackageReference Include="Microsoft.Kiota.Serialization.Text" Version="1.21.2" />
-    <PackageReference Include="Microsoft.Kiota.Serialization.Form" Version="1.21.2" />
-    <PackageReference Include="Microsoft.Kiota.Serialization.Multipart" Version="1.21.2" />
+    <PackageReference Include="Microsoft.Kiota.Http.HttpClientLibrary" Version="1.22.0" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Json" Version="1.22.0" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Text" Version="1.22.0" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Form" Version="1.22.0" />
+    <PackageReference Include="Microsoft.Kiota.Serialization.Multipart" Version="1.22.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
     <PackageReference Include="WPF-UI" Version="3.0.5" />
     <!-- Renders Microsoft brand SVG assets (Power Platform / D365 / Entra /
@@ -32,6 +32,16 @@
     <None Update="Inventory\Sql\schema.sql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- app.ico must also live beside the EXE so the Win32 LoadImage call
+         in MainWindow.ApplyTaskbarIcon (WM_SETICON) can read it directly
+         from disk. Without this copy, that call fell back to extracting
+         the embedded resource into %TEMP%, which sometimes lost the handle
+         on subsequent launches and the taskbar icon reverted to the
+         generic .NET host glyph. The file is *also* embedded as a Resource
+         (see below) for pack:// URI access from XAML. -->
+    <None Include="Assets\app.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <!-- Microsoft brand SVG icons (Power Platform, D365, Entra, Azure). Embedded
@@ -39,6 +49,10 @@
        Trademarks of Microsoft Corporation; see ATTRIBUTIONS.md for terms. -->
   <ItemGroup>
     <Resource Include="Assets\MicrosoftIcons\**\*.svg" />
+    <!-- app.ico is also referenced via pack URI (MainWindow.Icon), so it must
+         be embedded as a Resource in addition to <ApplicationIcon> (which only
+         stamps the EXE file-icon). -->
+    <Resource Include="Assets\app.ico" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,165 @@
+<ui:FluentWindow x:Class="VerseOps.App.Inventory.UserLicensesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="User Licenses"
+        Background="{DynamicResource TokenSurfaceCanvas}"
+        WindowBackdropType="Mica"
+        ExtendsContentIntoTitleBar="True"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Width="640" Height="600"
+        MinWidth="480" MinHeight="380">
+
+    <Window.Resources>
+        <Style TargetType="Button" x:Key="DialogButton" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Padding"  Value="14,7"/>
+            <Setter Property="MinWidth" Value="92"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <!-- License chip: each assigned SKU is rendered as a Fluent v2 tag.
+             Brand-tinted background + brand-foreground text reads as a
+             subtle informational chip (not destructive, not alert). -->
+        <Style x:Key="LicenseChip" TargetType="Border">
+            <Setter Property="Background"     Value="{DynamicResource TokenBrandSelectionSubtle}"/>
+            <Setter Property="BorderBrush"    Value="{DynamicResource TokenBrandStroke}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius"   Value="4"/>
+            <Setter Property="Padding"        Value="10,6"/>
+            <Setter Property="Margin"         Value="0,0,8,8"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <!-- Fluent title bar replaces the default OS chrome. -->
+        <ui:TitleBar DockPanel.Dock="Top" Title="User Licenses"
+                     ShowMaximize="False" ShowMinimize="False"/>
+
+        <!-- Header card: avatar disc + display name + UPN + admin badge.
+             Mirrors the Metadata Inspector header so the two dialogs feel
+             part of the same family. -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource TokenSurfaceSubtle}"
+                Padding="20,16"
+                BorderBrush="{DynamicResource TokenStrokeSubtle}" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Avatar disc with the user's initials. Same brand-blue +
+                     white text as the Inspector header chip so the two
+                     dialogs share a visual language. -->
+                <Border Grid.Column="0" Background="{DynamicResource TokenBrandBackground}"
+                        CornerRadius="20" Width="40" Height="40" VerticalAlignment="Center">
+                    <TextBlock x:Name="AvatarInitials"
+                               Text="?"
+                               Foreground="{DynamicResource TokenTextOnAccent}"
+                               FontWeight="Bold" FontSize="16"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+
+                <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="DisplayNameText"
+                               Foreground="{DynamicResource TokenTextPrimary}"
+                               FontSize="16" FontWeight="Bold"
+                               TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="UpnText"
+                               Foreground="{DynamicResource TokenTextTertiary}"
+                               FontSize="11" Margin="0,3,0,0"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+
+                <!-- "ADMIN" badge — only visible for users with the System
+                     Administrator role. Red so it pops as a privilege flag. -->
+                <Border Grid.Column="2" x:Name="AdminBadge"
+                        Background="{DynamicResource TokenDangerBackground}"
+                        CornerRadius="3" Padding="8,3" Margin="10,0,0,0"
+                        VerticalAlignment="Center"
+                        Visibility="Collapsed">
+                    <TextBlock Text="ADMIN"
+                               Foreground="{DynamicResource TokenTextOnAccent}"
+                               FontSize="10" FontWeight="Bold"/>
+                </Border>
+
+                <Button Grid.Column="3" Content="×" x:Name="CloseHeaderBtn"
+                        Style="{StaticResource SubtleButton}"
+                        FontSize="20" Padding="10,0"
+                        VerticalAlignment="Top"
+                        ToolTip="Close (Esc)" Click="OnDismiss"/>
+            </Grid>
+        </Border>
+
+        <!-- Footer: Copy + Open in Maker + Dismiss. Same row as Inspector. -->
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource TokenSurfaceSubtle}"
+                Padding="20,12"
+                BorderBrush="{DynamicResource TokenStrokeSubtle}" BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" x:Name="CountLabel"
+                           Foreground="{DynamicResource TokenTextTertiary}"
+                           FontSize="11" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="Copy"
+                            Style="{StaticResource AccentButton}"
+                            Padding="14,7" MinWidth="92" FontSize="12"
+                            Margin="0,0,10,0" Click="OnCopy"/>
+                    <Button Content="Open in Maker"
+                            x:Name="OpenMakerBtn"
+                            Style="{StaticResource DialogButton}"
+                            Margin="0,0,10,0" Click="OnOpenMaker"/>
+                    <Button Content="Dismiss"
+                            Style="{StaticResource SubtleButton}"
+                            Padding="14,7" MinWidth="92" FontSize="12"
+                            Click="OnDismiss" IsCancel="True"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Body: section label + chip wrap of license SKUs.
+             Empty-state text is shown if the user has no licenses (or Graph
+             couldn't enumerate them — common for non-admin signed-in users). -->
+        <Border Background="{DynamicResource TokenSurfacePrimary}" Padding="20,16">
+            <DockPanel LastChildFill="True">
+                <TextBlock DockPanel.Dock="Top"
+                           Text="ASSIGNED LICENSES"
+                           Foreground="{DynamicResource TokenTextSecondary}"
+                           FontSize="10" FontWeight="SemiBold"
+                           Margin="0,0,0,12"/>
+
+                <TextBlock DockPanel.Dock="Top" x:Name="EmptyStateText"
+                           Foreground="{DynamicResource TokenTextTertiary}"
+                           FontSize="12" FontStyle="Italic"
+                           Visibility="Collapsed"
+                           TextWrapping="Wrap"/>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="LicensesList">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource LicenseChip}">
+                                    <TextBlock Text="{Binding}"
+                                               Foreground="{DynamicResource TokenBrandForeground}"
+                                               FontFamily="{DynamicResource TokenFontFamilyMono}"
+                                               FontSize="12"/>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </DockPanel>
+</ui:FluentWindow>

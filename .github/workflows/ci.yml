@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build + audit + SBOM
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore VerseOps.sln
+
+      - name: Build (Release, warnings-as-errors via Directory.Build.props)
+        env:
+          CI: true
+        run: dotnet build VerseOps.sln -c Release --no-restore --nologo
+
+      - name: Vulnerable package scan
+        run: |
+          dotnet list VerseOps.sln package --vulnerable --include-transitive 2>&1 | Tee-Object -FilePath audit-vulnerable.txt
+          if (Select-String -Path audit-vulnerable.txt -Pattern "has the following vulnerable packages" -Quiet) {
+            Write-Error "Vulnerable NuGet packages detected — see audit-vulnerable.txt"
+            exit 1
+          }
+
+      - name: Deprecated package scan
+        run: dotnet list VerseOps.sln package --deprecated 2>&1 | Tee-Object -FilePath audit-deprecated.txt
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          dotnet tool install --global CycloneDX --version 5.2.0
+          dotnet CycloneDX VerseOps.sln -o sbom -fn sbom.cdx.json --json
+
+      - name: Upload audit + SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-audit
+          path: |
+            audit-vulnerable.txt
+            audit-deprecated.txt
+            sbom\sbom.cdx.json
+          if-no-files-found: warn

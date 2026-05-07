@@ -4,44 +4,97 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              Background="{DynamicResource TokenSurfaceSubtle}"
              Foreground="{DynamicResource TokenTextPrimary}"
-             FontFamily="{DynamicResource TokenFontFamilyBase}" FontSize="12">
+             FontFamily="{DynamicResource TokenFontFamilyBase}"
+             FontSize="{DynamicResource TokenFontSizeBody1}">
     <DockPanel LastChildFill="True">
         <!-- Pager footer (docked bottom). Renders even when 0 items so the
              user always sees the count + navigation affordance. Page-size
              combo on the right; PREV / page text / NEXT on the left so the
-             nav stays where the user looks first when scanning a grid. -->
-        <Border DockPanel.Dock="Bottom" Padding="6,4"
+             nav stays where the user looks first when scanning a grid.
+             MinHeight + readable font + primary text color guarantee the
+             pager strip is legible against the inner-card surface in both
+             light and dark themes (TokenTextSecondary at FontSize=11 was
+             washing out and the user couldn't see the page count). -->
+        <Border DockPanel.Dock="Bottom" Padding="12,8" MinHeight="40"
                 Background="{DynamicResource TokenSurfacePrimary}"
                 BorderBrush="{DynamicResource TokenStrokeSubtle}"
                 BorderThickness="0,1,0,0">
             <DockPanel LastChildFill="False">
+                <!-- Page-size combo. Use a hand-pinned ItemContainerStyle so
+                     the selected/highlighted item foreground stays readable
+                     regardless of which theme dictionary wins. WPF-UI's
+                     implicit ComboBoxItem template was painting the popup
+                     selection with a light-cyan background and white text,
+                     which collapsed the value to invisible. -->
                 <ComboBox x:Name="PageSizeCombo" DockPanel.Dock="Right"
-                          Width="64" SelectionChanged="PageSizeCombo_SelectionChanged"
+                          Width="72" SelectionChanged="PageSizeCombo_SelectionChanged"
                           VerticalContentAlignment="Center"
+                          Foreground="{DynamicResource TokenTextPrimary}"
+                          Background="{DynamicResource TokenSurfaceSecondary}"
+                          BorderBrush="{DynamicResource TokenStrokeSubtle}"
                           ToolTip="Items per page"
+                          TextElement.Foreground="{DynamicResource TokenTextPrimary}"
+                          TextBlock.Foreground="{DynamicResource TokenTextPrimary}"
                           Margin="6,0,0,0">
+                    <ComboBox.ItemContainerStyle>
+                        <Style TargetType="ComboBoxItem">
+                            <Setter Property="Foreground" Value="{DynamicResource TokenTextPrimary}"/>
+                            <Setter Property="Background" Value="{DynamicResource TokenSurfacePrimary}"/>
+                            <Setter Property="Padding"    Value="10,6"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ComboBoxItem">
+                                        <Border x:Name="ItemBorder"
+                                                Background="{TemplateBinding Background}"
+                                                Padding="{TemplateBinding Padding}"
+                                                SnapsToDevicePixels="True">
+                                            <ContentPresenter
+                                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                VerticalAlignment="Center"
+                                                TextElement.Foreground="{TemplateBinding Foreground}"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsHighlighted" Value="True">
+                                                <Setter TargetName="ItemBorder" Property="Background"
+                                                        Value="{DynamicResource TokenBrandBackground}"/>
+                                                <Setter Property="Foreground"
+                                                        Value="{DynamicResource TokenTextOnAccent}"/>
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="ItemBorder" Property="Background"
+                                                        Value="{DynamicResource TokenBrandBackground}"/>
+                                                <Setter Property="Foreground"
+                                                        Value="{DynamicResource TokenTextOnAccent}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ComboBox.ItemContainerStyle>
                     <ComboBoxItem Content="10" IsSelected="True"/>
                     <ComboBoxItem Content="25"/>
                     <ComboBoxItem Content="50"/>
                     <ComboBoxItem Content="100"/>
                 </ComboBox>
                 <Button x:Name="PrevBtn" DockPanel.Dock="Left" Click="Prev_Click"
-                        Background="Transparent" BorderThickness="0" Padding="6,2" Cursor="Hand"
+                        Background="Transparent" BorderThickness="0" Padding="8,4" Cursor="Hand"
                         Foreground="{DynamicResource TokenBrandForeground}"
                         ToolTip="Previous page">
-                    <ui:SymbolIcon Symbol="ChevronLeft24" FontSize="14"/>
+                    <ui:SymbolIcon Symbol="ChevronLeft24" FontSize="16"/>
                 </Button>
                 <Button x:Name="NextBtn" DockPanel.Dock="Left" Click="Next_Click"
-                        Background="Transparent" BorderThickness="0" Padding="6,2" Cursor="Hand"
+                        Background="Transparent" BorderThickness="0" Padding="8,4" Cursor="Hand"
                         Foreground="{DynamicResource TokenBrandForeground}"
                         ToolTip="Next page">
-                    <ui:SymbolIcon Symbol="ChevronRight24" FontSize="14"/>
+                    <ui:SymbolIcon Symbol="ChevronRight24" FontSize="16"/>
                 </Button>
                 <TextBlock x:Name="PagerText" DockPanel.Dock="Left"
                            VerticalAlignment="Center"
-                           Margin="8,0,0,0"
-                           Foreground="{DynamicResource TokenTextSecondary}"
-                           FontSize="11"/>
+                           Margin="10,0,0,0"
+                           Foreground="{DynamicResource TokenTextPrimary}"
+                           FontSize="{DynamicResource TokenFontSizeBody1}" FontWeight="SemiBold"/>
             </DockPanel>
         </Border>
 
@@ -52,17 +105,88 @@
              Clear / Apply buttons. -->
         <DataGrid x:Name="InnerGrid"
                   Background="{DynamicResource TokenSurfaceSubtle}"
+                  Foreground="{DynamicResource TokenTextPrimary}"
                   RowBackground="{DynamicResource TokenSurfaceSubtle}"
                   AlternatingRowBackground="{DynamicResource TokenSurfaceSecondary}"
                   HeadersVisibility="Column"
                   AutoGenerateColumns="False" IsReadOnly="True"
                   CanUserAddRows="False" CanUserDeleteRows="False"
+                  CanUserResizeColumns="True"
                   GridLinesVisibility="None"
                   HorizontalScrollBarVisibility="Auto"
                   VerticalScrollBarVisibility="Auto"
-                  EnableRowVirtualization="True"
-                  VirtualizingPanel.IsVirtualizing="True"
-                  VirtualizingPanel.VirtualizationMode="Recycling">
+                  MinHeight="80"
+                  EnableRowVirtualization="False"
+                  EnableColumnVirtualization="False"
+                  VirtualizingPanel.IsVirtualizing="False"
+                  VirtualizingPanel.VirtualizationMode="Standard"
+                  ScrollViewer.CanContentScroll="False">
+            <!-- DataGridCell defaults its Foreground to Black via the
+                 control template, which is invisible on the dark theme's
+                 #1A1A1A surface (TokenSurfaceSubtle). Force the cell text
+                 to follow TokenTextPrimary so rows are readable in both
+                 light and dark mode — the alternating row background
+                 alone is not enough to lift contrast. Selection / hover
+                 states keep their own brushes. -->
+            <DataGrid.CellStyle>
+                <Style TargetType="DataGridCell">
+                    <Setter Property="Foreground" Value="{DynamicResource TokenTextPrimary}"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="BorderThickness" Value="0"/>
+                    <Setter Property="Padding" Value="10,8"/>
+                    <Setter Property="FontSize" Value="{DynamicResource TokenFontSizeBody1}"/>
+                    <Setter Property="VerticalContentAlignment"   Value="Center"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                    <!-- WPF's default DataGridCell template wraps cell content
+                         in a ContentPresenter whose VerticalAlignment does NOT
+                         TemplateBind to VerticalContentAlignment, so even with
+                         the setter above the bound TextBlock sits at the top
+                         of the row. Override the template with a minimal
+                         Border + ContentPresenter that DOES forward both
+                         alignments — this is the same shape WPF uses
+                         internally for non-frozen columns (we don't use
+                         frozen columns anywhere, so dropping the
+                         SelectiveScrollingGrid is safe). -->
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="DataGridCell">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        Padding="{TemplateBinding Padding}"
+                                        SnapsToDevicePixels="True">
+                                    <ContentPresenter VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                      SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                    <Style.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource TokenBrandSelectionSubtle}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TokenTextPrimary}"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.CellStyle>
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Setter Property="Foreground" Value="{DynamicResource TokenTextPrimary}"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="MinHeight" Value="36"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource TokenSurfaceTertiary}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource TokenBrandSelectionSubtle}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TokenTextPrimary}"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
             <DataGrid.ColumnHeaderStyle>
                 <!-- Custom DataGridColumnHeader template that renders Content
                      via a ContentPresenter (not a TextBlock binding). The
@@ -72,23 +196,59 @@
                      keeps any UIElement Header rendering correctly while
                      still adopting the surrounding token brushes. -->
                 <Style TargetType="DataGridColumnHeader">
-                    <Setter Property="Background"          Value="{DynamicResource TokenSurfacePrimary}"/>
-                    <Setter Property="Foreground"          Value="{DynamicResource TokenTextPrimary}"/>
+                    <Setter Property="Background"          Value="{DynamicResource TokenSurfaceSubtle}"/>
+                    <Setter Property="Foreground"          Value="{DynamicResource TokenTextSecondary}"/>
                     <Setter Property="BorderBrush"         Value="{DynamicResource TokenStrokeSubtle}"/>
-                    <Setter Property="BorderThickness"     Value="0,0,1,1"/>
-                    <Setter Property="Padding"             Value="6,4"/>
+                    <Setter Property="BorderThickness"     Value="0,0,0,1"/>
+                    <Setter Property="Padding"             Value="10,8"/>
                     <Setter Property="HorizontalContentAlignment" Value="Left"/>
                     <Setter Property="VerticalContentAlignment"   Value="Center"/>
+                    <Setter Property="FontSize"            Value="{DynamicResource TokenFontSizeCaption1}"/>
+                    <Setter Property="FontWeight"          Value="SemiBold"/>
+                    <Setter Property="MinHeight"           Value="36"/>
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="DataGridColumnHeader">
-                                <Border Background="{TemplateBinding Background}"
-                                        BorderBrush="{TemplateBinding BorderBrush}"
-                                        BorderThickness="{TemplateBinding BorderThickness}"
-                                        Padding="{TemplateBinding Padding}">
-                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
-                                </Border>
+                                <!-- Grid layout so we can stack the visible header
+                                     (Border + ContentPresenter) under two invisible
+                                     Thumbs at the left/right edges. The Thumbs MUST
+                                     be named PART_LeftHeaderGripper and
+                                     PART_RightHeaderGripper exactly — WPF's
+                                     DataGridColumnHeader code-behind looks them up
+                                     by name and wires the drag-resize behavior to
+                                     them. Without these the user cannot resize
+                                     columns even when CanUserResizeColumns is true. -->
+                                <Grid>
+                                    <Border Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                                    </Border>
+                                    <Thumb x:Name="PART_LeftHeaderGripper"
+                                           HorizontalAlignment="Left"
+                                           Width="8"
+                                           Background="Transparent"
+                                           Cursor="SizeWE">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Border Background="{TemplateBinding Background}"/>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                    <Thumb x:Name="PART_RightHeaderGripper"
+                                           HorizontalAlignment="Right"
+                                           Width="8"
+                                           Background="Transparent"
+                                           Cursor="SizeWE">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Border Background="{TemplateBinding Background}"/>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Grid>
                             </ControlTemplate>
                         </Setter.Value>
                     </Setter>

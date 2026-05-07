@@ -8,14 +8,16 @@
         xmlns:inventory="clr-namespace:VerseOps.App.Inventory"
         mc:Ignorable="d"
         Title="VerseOps — Power Platform Inventory Console"
+        AutomationProperties.AutomationId="VerseOpsMainWindow"
         Height="820" Width="1400"
         Icon="pack://application:,,,/Assets/app.ico"
         WindowStartupLocation="CenterScreen"
+        WindowState="Maximized"
         WindowBackdropType="Mica"
         ExtendsContentIntoTitleBar="True"
         Background="{DynamicResource TokenSurfaceCanvas}"
         Foreground="{DynamicResource TokenTextPrimary}"
-        FontFamily="{DynamicResource TokenFontFamilyBase}" FontSize="12">
+        FontFamily="{DynamicResource TokenFontFamilyBase}" FontSize="{DynamicResource TokenFontSizeBody1}">
 
     <!-- Shell layout: a Fluent v2 title bar across the top + the
          InventoryView consumes the rest of the window. The previous API
@@ -31,10 +33,19 @@
         </Grid.RowDefinitions>
 
         <!-- Fluent title bar replaces the OS chrome and hosts the system
-             min / max / close caption buttons. -->
+             min / max / close caption buttons. The Icon property here puts
+             the app glyph on the LEFT of the title bar (matching Win11
+             apps like Settings / Photos); Window.Icon above feeds the
+             taskbar tile and Alt+Tab thumbnail. Both must be set
+             explicitly because WPF-UI's TitleBar does not auto-pick from
+             Window.Icon. -->
         <ui:TitleBar Grid.Row="0"
                      Title="VerseOps — Power Platform Inventory Console"
-                     ShowMaximize="True" ShowMinimize="True"/>
+                     ShowMaximize="True" ShowMinimize="True">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Source="pack://application:,,,/Assets/app.ico"/>
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
 
         <!-- The inventory dashboard owns the entire client area. It carries
              its own toolbar (refresh / cancel / search / filters) and

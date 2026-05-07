@@ -58,6 +58,19 @@ public interface IInventoryService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Cache-aware overload. When <paramref name="forceRefresh"/> is
+    /// <c>false</c> the implementation MAY (and should) hydrate the result
+    /// from local SQLite without touching the network. When <c>true</c>
+    /// the cache is dropped first and a live Dataverse fetch is performed
+    /// + persisted. Used by the per-env "Refresh" button on the row detail.
+    /// </summary>
+    Task<DataverseEnvClient.EnvDetails> LoadEnvironmentDetailsAsync(
+        EnvironmentRow env,
+        IReadOnlyList<AssetRow> envAssets,
+        bool forceRefresh,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Quick membership probe (Dataverse <c>WhoAmI</c>) used by the "Only my
     /// environments" toggle. Returns <c>true</c> if the signed-in user has a
     /// systemuser record on the target env; <c>false</c> if not / no Dataverse;

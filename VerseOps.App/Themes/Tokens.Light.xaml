@@ -1,0 +1,144 @@
+<!--
+  Fluent v2 — Light theme tokens.
+
+  Mirrors @fluentui/tokens light-theme defaults. Every key here matches a
+  key in Tokens.Dark.xaml so the runtime swap stays symmetric. Hex values
+  are taken from Fluent v2 Design System (Web) Light palette specs.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============================================================
+         Neutral surfaces (background)
+         ============================================================ -->
+    <SolidColorBrush x:Key="TokenSurfaceCanvas"      Color="#F5F5F5"/>
+    <SolidColorBrush x:Key="TokenSurfacePrimary"     Color="#FAFAFA"/>
+    <SolidColorBrush x:Key="TokenSurfaceSecondary"   Color="#F0F0F0"/>
+    <SolidColorBrush x:Key="TokenSurfaceTertiary"    Color="#E6E6E6"/>
+    <SolidColorBrush x:Key="TokenSurfaceSubtle"      Color="#FFFFFF"/>
+
+    <!-- ============================================================
+         Neutral foregrounds (text)
+         ============================================================ -->
+    <SolidColorBrush x:Key="TokenTextPrimary"        Color="#242424"/>
+    <SolidColorBrush x:Key="TokenTextSecondary"      Color="#424242"/>
+    <SolidColorBrush x:Key="TokenTextTertiary"       Color="#707070"/>
+    <SolidColorBrush x:Key="TokenTextDisabled"       Color="#BDBDBD"/>
+    <SolidColorBrush x:Key="TokenTextOnAccent"       Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="TokenTextOnBrand"        Color="#FFFFFF"/>
+
+    <!-- ============================================================
+         Strokes / dividers
+         ============================================================ -->
+    <SolidColorBrush x:Key="TokenStrokeSubtle"       Color="#E0E0E0"/>
+    <SolidColorBrush x:Key="TokenStrokeDefault"      Color="#BDBDBD"/>
+    <SolidColorBrush x:Key="TokenStrokeAccessible"   Color="#707070"/>
+    <SolidColorBrush x:Key="TokenStrokeFocus"        Color="#0F6CBD"/>
+
+    <!-- ============================================================
+         Brand (Office blue) — light theme uses darker accents so they
+         hit AAA contrast against the lighter surfaces.
+         ============================================================ -->
+    <SolidColorBrush x:Key="TokenBrandBackground"      Color="#0F6CBD"/>
+    <SolidColorBrush x:Key="TokenBrandBackgroundHover" Color="#115EA3"/>
+    <SolidColorBrush x:Key="TokenBrandBackgroundPress" Color="#0C3B5E"/>
+    <!-- Subtle Fluent v2 selection tint. Used for DataGrid / TreeView row
+         selection so inner text (capacity GB, URLs, danger/warning cells)
+         that has its own explicit Foreground stays readable instead of
+         disappearing on a saturated brand fill. -->
+    <SolidColorBrush x:Key="TokenBrandSelectionSubtle" Color="#EFF6FC"/>
+    <SolidColorBrush x:Key="TokenBrandForeground"      Color="#0F6CBD"/>
+    <SolidColorBrush x:Key="TokenBrandForegroundHover" Color="#115EA3"/>
+    <SolidColorBrush x:Key="TokenBrandStroke"          Color="#0F6CBD"/>
+
+    <!-- ============================================================
+         Semantic palette
+         ============================================================ -->
+    <SolidColorBrush x:Key="TokenSuccessBackground"  Color="#DFF6DD"/>
+    <SolidColorBrush x:Key="TokenSuccessForeground"  Color="#107C10"/>
+    <SolidColorBrush x:Key="TokenWarningBackground"  Color="#FFF4CE"/>
+    <SolidColorBrush x:Key="TokenWarningForeground"  Color="#BC4B09"/>
+    <SolidColorBrush x:Key="TokenDangerBackground"   Color="#FDE7E9"/>
+    <SolidColorBrush x:Key="TokenDangerForeground"   Color="#B10E1C"/>
+    <SolidColorBrush x:Key="TokenInfoBackground"     Color="#DDF1FB"/>
+    <SolidColorBrush x:Key="TokenInfoForeground"     Color="#115EA3"/>
+
+    <!-- ============================================================
+         Code / mono surface
+         ============================================================ -->
+    <SolidColorBrush x:Key="TokenCodeBackground"     Color="#F5F5F5"/>
+    <SolidColorBrush x:Key="TokenCodeForeground"     Color="#1F1F1F"/>
+    <SolidColorBrush x:Key="TokenCodeKeyword"        Color="#0000FF"/>
+    <SolidColorBrush x:Key="TokenCodeString"         Color="#A31515"/>
+
+    <!-- ============================================================
+         Inventory-cockpit chrome (header band, hero tiles, status pills)
+         Same semantic roles as the dark dictionary, painted for a light
+         surface. The header band stays brand-blue so the wordmark + logo
+         remain anchored to Office colors regardless of theme.
+         ============================================================ -->
+
+    <!-- Top header gradient band (kept brand-blue in both themes for
+         consistent identity; reads light-on-dark in either) -->
+    <LinearGradientBrush x:Key="TokenHeaderGradient" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#0F6CBD" Offset="0"/>
+        <GradientStop Color="#115EA3" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="TokenHeaderLogoBackground" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="TokenHeaderTextOnBrand"    Color="#FFFFFF"/>
+    <!-- Header subtitle ("ECOSYSTEM GOVERNANCE" caption under the wordmark)
+         sits on the dark-blue brand gradient. It needs a high-contrast
+         pale tint, NOT the previous near-white #C7E0F4 which read as a faint
+         blur in light-mode preview tooltips. #DCEBFF is closer to AAA on
+         the gradient. -->
+    <SolidColorBrush x:Key="TokenHeaderSubText"        Color="#DCEBFF"/>
+
+    <!-- Header status pills -->
+    <SolidColorBrush x:Key="TokenHeaderPillInfoBg"     Color="#F0F8FF"/>
+    <SolidColorBrush x:Key="TokenHeaderPillInfoBorder" Color="#7AB8E5"/>
+    <SolidColorBrush x:Key="TokenHeaderPillInfoFg"     Color="#0F6CBD"/>
+    <SolidColorBrush x:Key="TokenHeaderPillDangerBg"     Color="#FDE7E9"/>
+    <SolidColorBrush x:Key="TokenHeaderPillDangerBorder" Color="#F1959B"/>
+    <SolidColorBrush x:Key="TokenHeaderPillDangerFg"     Color="#B10E1C"/>
+
+    <!-- Hero tile palettes (Total Assets purple, Licensed Users blue) -->
+    <SolidColorBrush x:Key="TokenHeroPurpleBg"     Color="#F4EAFF"/>
+    <SolidColorBrush x:Key="TokenHeroPurpleBorder" Color="#C8B4ED"/>
+    <SolidColorBrush x:Key="TokenHeroPurpleFg"     Color="#5C2E91"/>
+    <SolidColorBrush x:Key="TokenHeroPurpleBadgeBg" Color="#E0CCF5"/>
+    <SolidColorBrush x:Key="TokenHeroBlueBg"       Color="#EAF3FB"/>
+    <SolidColorBrush x:Key="TokenHeroBlueBorder"   Color="#A6C8E8"/>
+    <SolidColorBrush x:Key="TokenHeroBlueFg"       Color="#0F6CBD"/>
+    <SolidColorBrush x:Key="TokenHeroBlueBadgeBg"  Color="#CFE0F2"/>
+
+    <!-- Neutral status pill (—, PENDING, disabled) -->
+    <SolidColorBrush x:Key="TokenNeutralPillBg"     Color="#EDEDED"/>
+    <SolidColorBrush x:Key="TokenNeutralPillBorder" Color="#D1D1D1"/>
+
+    <!-- Subtle hover overlay (10% black over surface) -->
+    <SolidColorBrush x:Key="TokenHoverOverlay"     Color="#10000000"/>
+
+    <!-- ============================================================
+         Typography
+         ============================================================ -->
+    <FontFamily x:Key="TokenFontFamilyBase">Segoe UI Variable, Segoe UI</FontFamily>
+    <FontFamily x:Key="TokenFontFamilyMono">Cascadia Mono, Consolas</FontFamily>
+
+    <!-- ============================================================
+         Fluent v2 type ramp. Microsoft Design Tokens (Fluent UI v2)
+         specify the following sizes; using them keeps the app aligned
+         with Win11/Office and avoids the "spreadsheet" feel that the
+         previous 11/12 px ramp produced. Ratio is roughly 1.2 step.
+         https://fluent2.microsoft.design/typography
+         ============================================================ -->
+    <System:Double x:Key="TokenFontSizeCaption2"  xmlns:System="clr-namespace:System;assembly=System.Runtime">10</System:Double>
+    <System:Double x:Key="TokenFontSizeCaption1"  xmlns:System="clr-namespace:System;assembly=System.Runtime">12</System:Double>
+    <System:Double x:Key="TokenFontSizeBody1"     xmlns:System="clr-namespace:System;assembly=System.Runtime">14</System:Double>
+    <System:Double x:Key="TokenFontSizeBody2"     xmlns:System="clr-namespace:System;assembly=System.Runtime">16</System:Double>
+    <System:Double x:Key="TokenFontSizeSubtitle2" xmlns:System="clr-namespace:System;assembly=System.Runtime">16</System:Double>
+    <System:Double x:Key="TokenFontSizeSubtitle1" xmlns:System="clr-namespace:System;assembly=System.Runtime">20</System:Double>
+    <System:Double x:Key="TokenFontSizeTitle3"    xmlns:System="clr-namespace:System;assembly=System.Runtime">24</System:Double>
+    <System:Double x:Key="TokenFontSizeTitle2"    xmlns:System="clr-namespace:System;assembly=System.Runtime">28</System:Double>
+    <System:Double x:Key="TokenFontSizeTitle1"    xmlns:System="clr-namespace:System;assembly=System.Runtime">36</System:Double>
+
+</ResourceDictionary>

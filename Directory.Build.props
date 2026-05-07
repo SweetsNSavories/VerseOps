@@ -1,0 +1,48 @@
+<Project>
+
+  <!--
+    Repo-wide MSBuild defaults applied to every project.
+
+    Goals:
+      * Reproducible / deterministic builds — required for SBOM verification
+        and pentest "build matches binary" attestation.
+      * Source Link + embedded PDBs so customer-side builds can be debugged
+        against the public commit hash.
+      * Treat warnings as errors so a CVE-related compiler warning
+        (e.g. obsolete crypto API) fails CI instead of silently shipping.
+      * Enforce nullable + analyzers globally so individual csproj files
+        don't drift.
+
+    Customers re-building from source inherit all of these automatically.
+  -->
+
+  <PropertyGroup>
+    <!-- Reproducible build / SBOM hygiene -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition=" '$(CI)' == 'true' OR '$(TF_BUILD)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true' ">true</ContinuousIntegrationBuild>
+    <DebugType>embedded</DebugType>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>false</IncludeSymbols>
+
+    <!-- Hardening -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- WPF-UI 3.0.5 emits a few CS1591 (missing XML doc) and CA1416 (Windows-only)
+         that we're not going to "fix" upstream; suppress those specific ones,
+         everything else still fails the build. -->
+    <NoWarn>$(NoWarn);CS1591;CA1416</NoWarn>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <Nullable>enable</Nullable>
+
+    <!-- Build-time supply-chain checks -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+
+    <!-- Strip diagnostic strings from Release IL where possible -->
+    <DebuggerSupport Condition=" '$(Configuration)' == 'Release' ">false</DebuggerSupport>
+  </PropertyGroup>
+
+</Project>

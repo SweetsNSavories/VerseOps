@@ -1,5 +1,7 @@
 using System.Windows.Controls;
 using VerseOps.App.Inventory.Models;
+using Wpf.Ui.Appearance;
+using Wpf.Ui.Controls;
 
 namespace VerseOps.App.Inventory;
 /// <summary>
@@ -11,6 +13,29 @@ public partial class InventoryView : UserControl
     public InventoryView()
     {
         InitializeComponent();
+        Loaded += (_, _) => SyncThemeToggleIcon();
+    }
+
+    /// <summary>
+    /// Header sun/moon button: flips between <see cref="ApplicationTheme.Dark"/>
+    /// and <see cref="ApplicationTheme.Light"/>, persists the choice via
+    /// <see cref="App.ApplyTheme"/>, and updates the button's icon to reflect
+    /// the *next* state the user can switch to (sun = currently dark, click to
+    /// go light; moon = currently light, click to go dark).
+    /// </summary>
+    private void ThemeToggleButton_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        App.ToggleTheme();
+        SyncThemeToggleIcon();
+    }
+
+    private void SyncThemeToggleIcon()
+    {
+        if (ThemeToggleIcon is null) return;
+        var current = ApplicationThemeManager.GetAppTheme();
+        ThemeToggleIcon.Symbol = current == ApplicationTheme.Light
+            ? SymbolRegular.WeatherMoon24
+            : SymbolRegular.WeatherSunny24;
     }
 
     /// <summary>
@@ -89,5 +114,74 @@ public partial class InventoryView : UserControl
             return; // let the env DataGrid handle it
         sv.ScrollToVerticalOffset(sv.VerticalOffset - e.Delta);
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// Env search box: per-keystroke filtering was making typing visibly
+    /// laggy on large environment lists, so we now commit on Enter (or
+    /// focus loss). The TextBox is bound with UpdateSourceTrigger=Explicit;
+    /// these handlers push the text into the VM only at commit points.
+    /// </summary>
+    private void EnvSearchBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Enter && sender is System.Windows.Controls.TextBox tb)
+        {
+            tb.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty)?.UpdateSource();
+            e.Handled = true;
+        }
+        else if (e.Key == System.Windows.Input.Key.Escape && sender is System.Windows.Controls.TextBox tb2)
+        {
+            // Esc routes through the same X-button path so it also collapses
+            // any expanded env (releases focus mode) and bypasses the
+            // 200 ms keystroke debounce \u2014 instant "back to all envs".
+            tb2.Text = string.Empty;
+            if (DataContext is InventoryViewModel vm && vm.ClearEnvSearchCommand.CanExecute(null))
+                vm.ClearEnvSearchCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    private void EnvSearchBox_LostFocus(object sender, System.Windows.RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TextBox tb)
+            tb.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty)?.UpdateSource();
+    }
+
+    /// <summary>
+    /// We still need to know about per-keystroke text changes so the X (clear)
+    /// button + watermark visibility (which key off <c>HasEnvSearch</c>) stay
+    /// in sync without filtering the grid on every keystroke. This pushes
+    /// JUST the empty-state through to the VM so clicking X works smoothly.
+    /// </summary>
+    private void EnvSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TextBox tb && string.IsNullOrEmpty(tb.Text))
+            tb.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty)?.UpdateSource();
+    }
+
+    /// <summary>
+    /// X-button click on the env search box. We do NOT bind this directly
+    /// to the view-model command because the chain
+    /// (TextBox.LostFocus pushes target→source via Explicit binding, then
+    /// Command runs) leaves the source→target push from
+    /// <c>ResetEnvView()</c> ineffective — WPF keeps the dirty target text
+    /// on the screen even though the bound source is now empty. The Esc
+    /// handler avoids this by clearing TextBox.Text directly first; we
+    /// mirror that here so the X reliably wipes the visible text on the
+    /// first click.
+    /// </summary>
+    private void ClearEnvSearchButton_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        // Direct text wipe on the TextBox itself \u2014 this is the bit that
+        // makes the visible text disappear immediately. TextChanged then
+        // fires and pushes the empty value to the bound source via the
+        // EnvSearchBox_TextChanged handler above.
+        EnvSearchBox.Text = string.Empty;
+        EnvSearchBox.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty)?.UpdateSource();
+        // Still invoke the command so the focus-mode collapse + grid
+        // refresh logic (CollapseAllRowsAndRefresh) runs the same way it
+        // does from the Esc key path.
+        if (DataContext is InventoryViewModel vm && vm.ClearEnvSearchCommand.CanExecute(null))
+            vm.ClearEnvSearchCommand.Execute(null);
     }
 }
