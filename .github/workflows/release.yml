@@ -49,7 +49,7 @@ jobs:
           dotnet CycloneDX VerseOps.sln -o sbom -fn sbom.cdx.json --json
 
       - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: sbom\sbom.cdx.json
@@ -89,7 +89,7 @@ jobs:
         run: Compress-Archive -Path publish\win-x64\* -DestinationPath VerseOps.App-${{ github.ref_name }}-win-x64.zip
 
       - name: Upload release archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: VerseOps.App-${{ github.ref_name }}-win-x64
           path: VerseOps.App-${{ github.ref_name }}-win-x64.zip
