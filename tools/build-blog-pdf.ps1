@@ -174,12 +174,22 @@ function Convert-MarkdownToHtml {
         # blockquote
         if ($line -match '^>\s?(.*)$') {
             FlushList $sb ([ref]$inList) ([ref]$listType)
-            $buf = New-Object System.Text.StringBuilder
+            # collect all consecutive > lines into paragraph chunks split on bare > lines
+            $paragraphs = New-Object System.Collections.ArrayList
+            $cur = New-Object System.Text.StringBuilder
             while ($i -lt $lines.Count -and $lines[$i] -match '^>\s?(.*)$') {
-                [void]$buf.AppendLine((Inline $Matches[1]))
+                $content = $Matches[1]
+                if ([string]::IsNullOrWhiteSpace($content)) {
+                    if ($cur.Length -gt 0) { [void]$paragraphs.Add($cur.ToString().Trim()); $cur = New-Object System.Text.StringBuilder }
+                } else {
+                    if ($cur.Length -gt 0) { [void]$cur.Append(' ') }
+                    [void]$cur.Append($content)
+                }
                 $i++
             }
-            [void]$sb.AppendLine("<blockquote>$($buf.ToString().Trim())</blockquote>")
+            if ($cur.Length -gt 0) { [void]$paragraphs.Add($cur.ToString().Trim()) }
+            $inner = ($paragraphs | ForEach-Object { "<p>$(Inline $_)</p>" }) -join "`n"
+            [void]$sb.AppendLine("<blockquote>$inner</blockquote>")
             continue
         }
 
