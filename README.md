@@ -35,7 +35,14 @@ custom client ID if you set one) and ships **no secrets**.
 
 ### Run from a release
 
-1. Download the latest signed `.zip` from [Releases](../../releases) (signed with the
+Two archives are published per release:
+
+| Archive | Size | .NET runtime required | When to choose |
+|---------|------|-----------------------|----------------|
+| `VerseOps.App-vX.Y.Z-win-x64.zip` | small (~10 MB) | yes — install [.NET 10 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/10.0) | you already manage .NET runtimes |
+| `VerseOps.App-vX.Y.Z-win-x64-selfcontained.zip` | large (~150 MB) | **no** — bundled | "download and run", no admin install needed |
+
+1. Download the appropriate `.zip` from [Releases](../../releases) (signed with the
    publisher's code-signing certificate; see [SIGNING.md](SIGNING.md) for verification).
 2. Extract and run `VerseOps.App.exe`.
 3. Sign in with a tenant identity that holds **Power Platform Administrator** or

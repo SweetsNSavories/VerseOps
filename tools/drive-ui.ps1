@@ -89,13 +89,23 @@ switch ($Command) {
         if (-not $Index) { $Index = 0 }
         $win = Get-MainWindow
         # DataGrid rows expose IsExpandable via the per-row expand toggle button
-        # (the chevron). Find Buttons whose name is empty AND that have a small
-        # square bounding rect at the very left of a row.
+        # (the chevron). The chevrons are square (W==H, around 28px), have BOTH
+        # empty Name AND empty AutomationId, and sit at the leftmost edge of the
+        # DataGrid (X < 300 — accounts for the optional left side panel pushing
+        # the grid right). Filter on geometry alone — Y position varies with
+        # toolbar layout, so don't constrain it.
         $btns = Find-AllByControlType $win ([System.Windows.Automation.ControlType]::Button)
         $candidates = @()
         foreach ($b in $btns) {
             $r = $b.Current.BoundingRectangle
-            if ($r.Width -ge 18 -and $r.Width -le 50 -and $r.Height -ge 18 -and $r.Height -le 50 -and $r.X -lt 80 -and $r.Y -gt 280) {
+            $name = $b.Current.Name
+            $autoId = $b.Current.AutomationId
+            $square = ([Math]::Abs($r.Width - $r.Height) -le 4)
+            if (-not $name -and -not $autoId -and `
+                $r.Width -ge 20 -and $r.Width -le 40 -and `
+                $r.Height -ge 20 -and $r.Height -le 40 -and `
+                $square -and `
+                $r.X -lt 300) {
                 $candidates += $b
             }
         }
