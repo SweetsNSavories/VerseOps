@@ -467,7 +467,19 @@ public sealed class PpacInventoryService : IInventoryService
         // SDK handler replaces the empty value, our local one only added when
         // missing -> 400 ApiVersionInvalid.
         handlers.Insert(0, new Microsoft.PowerPlatform.Management.ApiVersionHandler(ApiVersion));
-        handlers.Insert(0, _diagnostics); // outermost so it sees the final response
+        // IMPORTANT: do NOT insert the singleton _diagnostics handler here.
+        // DelegatingHandler.InnerHandler can only be set ONCE per instance,
+        // so re-using _diagnostics across refreshes throws on the 2nd refresh
+        // ("This instance has already started one or more requests. Properties
+        // can only be modified before sending the first request."). Build a
+        // fresh per-refresh handler that writes to the same trace file and
+        // shares the dump-suppression predicate. Same workaround used by
+        // BapCapacityClient — see its constructor xml-doc for the rationale.
+        var perRefreshDiag = new HttpDiagnosticsHandler
+        {
+            ShouldDumpFailure = _diagnostics.ShouldDumpFailure
+        };
+        handlers.Insert(0, perRefreshDiag); // outermost so it sees the final response
 
         var http = KiotaClientFactory.Create(handlers);
         http.Timeout = TimeSpan.FromSeconds(150);

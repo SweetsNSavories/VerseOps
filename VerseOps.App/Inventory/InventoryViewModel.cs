@@ -30,8 +30,23 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
     /// of <see cref="_membershipProbeStarted"/> because we want to populate
     /// the env grid's "Security Group" column on every refresh, regardless
     /// of whether the user has flipped the "Only my envs" toggle on.
+    /// <para>
+    /// IMPORTANT: this latch only protects the network call. Stamping is
+    /// driven by <see cref="_resolvedGroupNames"/> and runs on every reload,
+    /// because <see cref="ReloadFromCatalog"/> rebuilds <see cref="Environments"/>
+    /// with fresh row instances that have <c>SecurityGroupDisplayName == null</c>.
+    /// </para>
     /// </summary>
     private bool _groupNamesResolveStarted;
+
+    /// <summary>
+    /// Process-wide cache of resolved Microsoft Graph group display names
+    /// keyed by groupId. Populated by <see cref="EnsureSecurityGroupNamesAsync"/>
+    /// and re-applied to every fresh <see cref="EnvironmentRow"/> in
+    /// <see cref="StampGroupNames"/>.
+    /// </summary>
+    private readonly Dictionary<string, string> _resolvedGroupNames =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Backs the Cancel button on the toolbar. Created fresh per-refresh so a
@@ -93,6 +108,10 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
         ReloadCommand = new RelayCommand(_ => ReloadFromCatalog(), _ => !IsBusy);
         OpenTraceLogCommand = new RelayCommand(_ => OpenTraceLog());
         CopyErrorCommand = new RelayCommand(_ => CopyError(), _ => HasError);
+        // Dismiss the red error panel without re-running anything. Trace log
+        // and the underlying captured failure are kept; this only clears the
+        // bound LastError text so the panel collapses.
+        ClearErrorCommand = new RelayCommand(_ => { LastError = null; }, _ => HasError);
         OpenDrawerCommand = new RelayCommand(p => OpenDrawer(p as string));
         CloseDrawerCommand = new RelayCommand(_ => CloseDrawer());
         InspectJsonCommand = new RelayCommand(p => InspectJson(p));
@@ -139,6 +158,9 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
     public ICommand ReloadCommand { get; }
     public ICommand OpenTraceLogCommand { get; }
     public ICommand CopyErrorCommand { get; }
+
+    /// <summary>Dismisses the red error panel by clearing <see cref="LastError"/>.</summary>
+    public ICommand ClearErrorCommand { get; }
     public ICommand OpenDrawerCommand { get; }
     public ICommand CloseDrawerCommand { get; }
 
@@ -675,14 +697,24 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
     /// </summary>
     private async Task EnsureSecurityGroupNamesAsync()
     {
+        // Always re-stamp from the cache first so freshly-loaded EnvironmentRow
+        // instances (Reload rebuilds them per phase) pick up the names that
+        // the previous Graph call already resolved. Cheap: dictionary lookups
+        // over Environments. Without this, the latch below would short-circuit
+        // every reload after the first success and the column would fall back
+        // to the GUID-prefix display.
+        StampGroupNames();
+
         if (_groupNamesResolveStarted) return;
         _groupNamesResolveStarted = true;
         try
         {
+            // Only fetch ids that aren't already in the cache.
             var groupIds = Environments
                 .Select(e => e.SecurityGroupId)
                 .Where(id => !string.IsNullOrEmpty(id))
                 .Cast<string>()
+                .Where(id => !_resolvedGroupNames.ContainsKey(id))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
             if (groupIds.Count == 0) return;
@@ -692,18 +724,37 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
 
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
-                foreach (var row in Environments)
+                foreach (var kv in names)
                 {
-                    if (string.IsNullOrEmpty(row.SecurityGroupId)) continue;
-                    if (names.TryGetValue(row.SecurityGroupId, out var name) && !string.IsNullOrEmpty(name))
-                        row.SecurityGroupDisplayName = name;
+                    if (!string.IsNullOrEmpty(kv.Key) && !string.IsNullOrEmpty(kv.Value))
+                        _resolvedGroupNames[kv.Key] = kv.Value;
                 }
+                StampGroupNames();
             });
         }
         catch
         {
             // Best-effort. Allow a future retry on next refresh.
             _groupNamesResolveStarted = false;
+        }
+    }
+
+    /// <summary>
+    /// Apply <see cref="_resolvedGroupNames"/> to every <see cref="EnvironmentRow"/>
+    /// that has a security group id. Idempotent + cheap; called both as a
+    /// pre-step in <see cref="EnsureSecurityGroupNamesAsync"/> and after a
+    /// fresh Graph batch lands.
+    /// </summary>
+    private void StampGroupNames()
+    {
+        if (_resolvedGroupNames.Count == 0) return;
+        foreach (var row in Environments)
+        {
+            if (string.IsNullOrEmpty(row.SecurityGroupId)) continue;
+            if (!_resolvedGroupNames.TryGetValue(row.SecurityGroupId, out var name)) continue;
+            if (string.IsNullOrEmpty(name)) continue;
+            if (string.Equals(row.SecurityGroupDisplayName, name, StringComparison.Ordinal)) continue;
+            row.SecurityGroupDisplayName = name;
         }
     }
 
@@ -962,7 +1013,15 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
     public string? LastError
     {
         get => _lastError;
-        private set { if (_lastError == value) return; _lastError = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasError)); (CopyErrorCommand as RelayCommand)?.RaiseCanExecuteChanged(); }
+        private set
+        {
+            if (_lastError == value) return;
+            _lastError = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasError));
+            (CopyErrorCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (ClearErrorCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        }
     }
 
     public bool HasError => !string.IsNullOrEmpty(_lastError);
