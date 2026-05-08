@@ -1,8 +1,11 @@
-# Power Platform tenant inventory in 60 seconds — what becomes possible when the API tells the truth
+# Power Platform tenant inventory in 60 seconds — a community showcase of the API-first management surface
 
-> A community walk-through of **VerseOps**, an open-source WPF dashboard that pulls a live inventory of an entire Power Platform tenant — environments, capacity, solutions, apps, flows, agents, users, licenses — into one window using only the **official Microsoft Power Platform Management SDK** (`api.powerplatform.com`), the legacy **BAP capacity API** while it remains, **Microsoft Graph**, and the per-environment **Dataverse Web API**.
+> **VerseOps** is an open-source, MIT-licensed Windows desktop client that surfaces a complete Power Platform tenant inventory — environments, capacity, solutions, apps, flows, agents, users, and licenses — in a single window. It is built exclusively on official Microsoft surfaces: the **Power Platform Management SDK** (`api.powerplatform.com`), the **BAP capacity API** for the per-environment capacity view that has not yet migrated, **Microsoft Graph**, and the per-environment **Dataverse Web API**.
 >
-> No connectors, no service principals, no telemetry, no SaaS backend.
+> VerseOps is an independent community project. It is not a Microsoft product, is not endorsed by Microsoft, and carries no Microsoft support contract. It is published as a demonstration of what becomes possible the moment the Power Platform programmability surface is treated as the primary integration point — not as a finished governance suite. No connectors, no service principals, no telemetry, no SaaS backend.
+>
+> The repository is engineered to clear an enterprise security review on first pass: a CycloneDX SBOM, a CodeQL pipeline, a documented threat model, branch-protection rules, and read-only-by-design API usage are all in the box. Three Authenticode signing paths are documented (self-signed for development, Azure Trusted Signing, and OV/EV) so that adopting organizations can **re-sign the binary with their own enterprise code-signing certificate** before internal distribution.
+>
 > Source: [github.com/SweetsNSavories/VerseOps](https://github.com/SweetsNSavories/VerseOps) · MIT.
 
 ![VerseOps loaded against a real ~700-environment tenant. Single-window WPF FluentWindow with Mica backdrop. Five hero KPI tiles populated end-to-end: Environments=716 synced from PPAC, Tenant Database=383.7 GB and Tenant File=4,472.7 GB (both Healthy), Total Assets=146,462 (LIVE from the Power Platform Inventory API), Licensed Users tile loading async from Microsoft Graph. Identifying columns — Name, Security Group, Instance URL, Env ID — are pixelated; capacity numbers, SKU, region, and version are real.](images/02-loaded.png)
@@ -21,11 +24,11 @@
 
 ## Why this exists
 
-Every Power Platform admin I've talked to has the same problem at the start of every quarter:
+The recurring questions at the start of every governance cycle are well known:
 
 > *"How many environments do we actually have? Who owns the apps in them? How much Dataverse capacity is sitting in places no one remembers creating? Which makers left the company three months ago and still own production flows?"*
 
-The official answers — Power Platform admin center (PPAC), the **Power Platform inventory** page, and the **Usage** page — all already exist and are excellent for daily work. But there are still moments when an admin needs:
+The official answers — Power Platform admin center (PPAC), the **Power Platform inventory** page, and the **Usage** page — already exist and are the right starting point for daily work; they cover the common cases comprehensively. There are still moments, however, when an administrator needs:
 
 1. A **single offline snapshot** they can search, sort, filter, and ship to a stakeholder without exposing the live admin center.
 2. A **diff** between this morning and last Friday — *what changed?*
@@ -33,7 +36,7 @@ The official answers — Power Platform admin center (PPAC), the **Power Platfor
 4. The **raw JSON** behind every row, one click away, when something doesn't match what the portal shows.
 5. A **starting point** — code they can fork, instrument, and turn into the governance tool they actually wanted.
 
-That's what VerseOps is. The whole UI is ~5 files. The whole "what calls go out" is documented in [docs/network-endpoints.md](../network-endpoints.md). It's deliberately small, deliberately read-only-by-design, and deliberately unashamed about being a starting point — not a finished governance suite.
+VerseOps targets that long tail. The UI surface is roughly five files; every outbound call is enumerated in [docs/network-endpoints.md](../network-endpoints.md). The codebase is deliberately small, read-only by design, and positioned as a foundation that adopting teams are expected to fork, instrument, and extend.
 
 ---
 
@@ -109,11 +112,11 @@ flowchart LR
   GRAPH --> MGRAPH
 ```
 
-A few things this diagram makes obvious that aren't always obvious:
+Key architectural properties:
 
-- **One process, no agent / no server.** Everything runs in the user's logged-in security context. There is no daemon, no sync job, no message bus. The OS schedules the network calls; the user clicks Refresh.
-- **Two planes in the Microsoft cloud.** The "management plane" calls (`api.powerplatform.com`, `api.bap.microsoft.com`, `graph.microsoft.com`) and the "data plane" calls (`{org}.crm.dynamics.com` per environment). The app handles the audience switching for each, so you never have to think about it.
-- **The local SQLite database is the only state.** Wipe `%LOCALAPPDATA%\VerseOps\` and the app forgets everything. There is nowhere else for data to live.
+- **Single process, no server-side footprint.** Every call runs in the signed-in user's security context. There is no daemon, no sync job, no message bus. The operating system schedules the network calls; the user triggers a refresh.
+- **Two distinct cloud planes.** Management-plane calls (`api.powerplatform.com`, `api.bap.microsoft.com`, `graph.microsoft.com`) are kept separate from data-plane calls (`{org}.crm.dynamics.com` per environment), with audience switching handled centrally by the auth layer.
+- **The local SQLite database is the only state.** Removing `%LOCALAPPDATA%\VerseOps\` returns the application to a blank slate. No other persistence exists.
 
 ---
 
@@ -159,20 +162,20 @@ VerseOps reflects this exactly: every new feature added since April 2026 went to
 
 ## Who this helps
 
-If any of these describe your day, the source is yours under MIT — fork it, gut it, ship it under your team's name:
+The MIT license permits unrestricted internal adaptation; adopting teams are encouraged to fork, re-brand, and re-sign the binary with their own enterprise code-signing certificate as part of internal distribution. Typical adopters include:
 
-- **Power Platform admins** doing quarterly governance reviews who need a single defensible snapshot of "what we have right now".
-- **Center-of-Excellence (CoE) leads** who used to lean on the [CoE Starter Kit](https://learn.microsoft.com/power-platform/guidance/coe/) and are now [moving to the in-product Inventory + Usage pages](https://learn.microsoft.com/power-platform/admin/power-platform-inventory) but still want a code-level surface to extend.
-- **FinOps / capacity owners** chasing the ~5% of envs that consume 80% of Dataverse storage, with FinOps DB / FinOps File / Log GB visible on the same row as the env name.
-- **Mission-critical / regulated workloads** (financial services, healthcare, government) where a desktop tool that signs in as the human admin, ships zero telemetry, and stores everything locally is materially easier to risk-accept than a SaaS dashboard.
-- **Pen-test / security teams** who need a reproducible, auditable, signed Windows binary they can hand to an admin and know exactly what it touches (the [SBOM](../../sbom.cdx.json), [SECURITY.md](../../SECURITY.md), [SIGNING.md](../../SIGNING.md), and [CodeQL workflow](../../.github/workflows/codeql.yml) are all in the box).
-- **Developers learning the Power Platform API** who want a non-trivial, well-commented .NET sample that exercises every major namespace.
+- **Power Platform administrators** running quarterly governance reviews who need a single defensible snapshot of current tenant state.
+- **Center-of-Excellence (CoE) leads** who previously relied on the [CoE Starter Kit](https://learn.microsoft.com/power-platform/guidance/coe/) and are [moving to the in-product Inventory + Usage pages](https://learn.microsoft.com/power-platform/admin/power-platform-inventory), but still require a code-level surface to extend.
+- **FinOps and capacity owners** identifying the ~5% of environments that consume 80% of Dataverse storage, with FinOps DB / FinOps File / Log GB visible on the same row as the environment name.
+- **Mission-critical and regulated workloads** (financial services, healthcare, public sector) where a desktop tool that authenticates as the human administrator, emits zero telemetry, and stores all state locally is materially easier to risk-accept than a SaaS dashboard.
+- **Security and penetration-test teams** who require a reproducible, auditable, signed Windows binary and a clear inventory of what it touches. The [SBOM](../../sbom.cdx.json), [SECURITY.md](../../SECURITY.md), [SIGNING.md](../../SIGNING.md), and [CodeQL workflow](../../.github/workflows/codeql.yml) are committed to the repository.
+- **Engineering teams learning the Power Platform API** who want a non-trivial, well-commented .NET sample that exercises every major namespace.
 
 ---
 
-## Where this could go next — call for ideas
+## Where this could go next
 
-This is the bit I'd most like community feedback on. The same APIs powering VerseOps could power a much richer experience. A few obvious next steps:
+The same API surface that powers VerseOps today can support a substantially richer set of experiences. Candidate directions follow; community input on prioritization is welcome via the [issue tracker](https://github.com/SweetsNSavories/VerseOps/issues).
 
 ### 1. An *agentic* governance assistant
 Wrap the local SQLite cache + the same auth pipeline behind a Microsoft 365 Copilot agent (or a Foundry agent), and let an admin ask things like:
@@ -195,7 +198,7 @@ The Inventory API's `POST /resourcequery/resources/query` accepts arbitrary KQL-
 ### 5. Sister tools in Python / TypeScript
 The [Python SDK](https://pypi.org/project/powerplatform-management/) is GA; a Jupyter notebook that mirrors VerseOps' three core panels (env list + capacity + assets) would be ~200 lines and would land instantly with the data-science crowd.
 
-If any of these sound useful, **[open an issue](https://github.com/SweetsNSavories/VerseOps/issues)** with what you'd build and how. The repository is a good base because the boring 80% — auth, caching, paging, retry, redaction, error capture, theming — is already done and tested.
+The repository is intended as a working base for these explorations: the foundational ~80% — authentication, caching, paging, retry, redaction, error capture, and theming — is already implemented and exercised against a live ~700-environment tenant. Proposals for any of the directions above can be filed on the [issue tracker](https://github.com/SweetsNSavories/VerseOps/issues).
 
 ---
 
@@ -231,9 +234,9 @@ Sign in with a tenant admin account (Power Platform Administrator or Dynamics 36
 
 ## Closing thought
 
-The point of this post isn't *"here is a finished product"* — it's *"here is what becomes possible with ~3,000 lines of C# the moment Microsoft ships an API-first Power Platform management surface."* The official Inventory and Usage pages cover the daily-driver path. The SDK + Inventory API cover the long tail of *"my organization needs this exact join, and we need it offline, and we need it tomorrow."*
+The thesis behind this post is straightforward: an API-first Power Platform management surface puts a complete tenant inventory within reach in roughly 3,000 lines of C#. The official Inventory and Usage pages remain the right tool for daily-driver scenarios. The SDK and Inventory API together cover the long tail — the cases where an organization needs a specific join, requires offline operation, or needs the answer the same week.
 
-If your team builds something interesting on this base, [tell me about it](https://github.com/SweetsNSavories/VerseOps/issues). If you spot a security issue, [SECURITY.md](../../SECURITY.md) tells you how to reach me privately. And if you're inside Microsoft and reading this — please keep shipping to `api.powerplatform.com` first; the community is paying attention.
+VerseOps is offered to the community as that starting point. Issues and pull requests are welcome on the [public tracker](https://github.com/SweetsNSavories/VerseOps/issues); security disclosures should follow the process documented in [SECURITY.md](../../SECURITY.md).
 
 — *Pravin Thatipamula · maintainer, [VerseOps](https://github.com/SweetsNSavories/VerseOps)*
 
