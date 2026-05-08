@@ -238,7 +238,7 @@ The thesis behind this post is straightforward: an API-first Power Platform mana
 
 VerseOps is offered to the community as that starting point. Issues and pull requests are welcome on the [public tracker](https://github.com/SweetsNSavories/VerseOps/issues); security disclosures should follow the process documented in [SECURITY.md](../../SECURITY.md).
 
-— *Pravin Thatipamula · maintainer, [VerseOps](https://github.com/SweetsNSavories/VerseOps)*
+— *Praveen T · maintainer, [VerseOps](https://github.com/SweetsNSavories/VerseOps)*
 
 ---
 
