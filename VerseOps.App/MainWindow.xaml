@@ -6,6 +6,7 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:local="clr-namespace:VerseOps.App"
         xmlns:inventory="clr-namespace:VerseOps.App.Inventory"
+        xmlns:explorer="clr-namespace:VerseOps.App.Explorer"
         mc:Ignorable="d"
         Title="VerseOps — Power Platform Inventory Console"
         AutomationProperties.AutomationId="VerseOpsMainWindow"
@@ -19,13 +20,15 @@
         Foreground="{DynamicResource TokenTextPrimary}"
         FontFamily="{DynamicResource TokenFontFamilyBase}" FontSize="{DynamicResource TokenFontSizeBody1}">
 
-    <!-- Shell layout: a Fluent v2 title bar across the top + the
-         InventoryView consumes the rest of the window. The previous API
-         Explorer tab and the visible Authentication expander were removed
-         in the May 2026 refactor — that surface lives in a separate tool
-         now. AuthService is still wired up in code-behind so the inventory
-         pipeline can silently acquire tokens for PPAC, BAP, Microsoft
-         Graph and Dataverse on first use. -->
+    <!-- Shell layout: a Fluent v2 title bar across the top + a two-tab
+         workspace below it. The Inventory tab is the default surface
+         (cached, fast, demoable); the API Explorer tab is the restored
+         "build any request" surface for live PPAC / BAP exploration,
+         including a Register-SP control for app-only auth. AuthService is
+         constructed in code-behind for the inventory pipeline; the
+         Explorer hosts its own AuthService so flipping App-only mode in
+         the explorer never disturbs the inventory's silent delegated
+         token cache. -->
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -47,9 +50,13 @@
             </ui:TitleBar.Icon>
         </ui:TitleBar>
 
-        <!-- The inventory dashboard owns the entire client area. It carries
-             its own toolbar (refresh / cancel / search / filters) and
-             status bar so no chrome is needed at the window level. -->
-        <inventory:InventoryView Grid.Row="1" x:Name="InventoryDashboard"/>
+        <TabControl Grid.Row="1" Margin="0">
+            <TabItem Header="Inventory" IsSelected="True">
+                <inventory:InventoryView x:Name="InventoryDashboard"/>
+            </TabItem>
+            <TabItem Header="API Explorer">
+                <explorer:ApiExplorerView x:Name="ApiExplorer"/>
+            </TabItem>
+        </TabControl>
     </Grid>
 </ui:FluentWindow>

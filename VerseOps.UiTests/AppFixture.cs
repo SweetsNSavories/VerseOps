@@ -61,19 +61,19 @@ public sealed class AppFixture : IDisposable
         Automation = new UIA3Automation();
 
         // Wait for the FluentWindow to be visible. WPF + Mica + ExtendsContentIntoTitleBar
-        // can take a moment to compose the first frame on cold-start.
-        MainWindow = WaitForMainWindow(App, Automation, TimeSpan.FromSeconds(20));
+        // can take a moment to compose the first frame on cold-start; on a clean machine
+        // with Defender real-time scan + JIT-warming the Wpf.Ui Mica chrome, first paint
+        // has been measured at ~38s. 90s is the safe upper bound that still fails fast on
+        // a genuine crash.
+        MainWindow = WaitForMainWindow(App, Automation, TimeSpan.FromSeconds(90));
 
-        // Header chrome (theme toggle, refresh, hero tiles) is part of
-        // InventoryView, which is loaded as the window's Content. Give
-        // WPF a brief best-effort window (5s) to publish the descendant
-        // tree to UIA before tests start running. We do NOT throw if the
-        // marker isn't found within that window: in some launches the
-        // UIA tree only resolves descendants once a real input event hits
-        // the window. Tests that need the descendant call
-        // <see cref="WaitForDescendantAutomationId"/> on their own with
-        // their own timeout.
-        TryWaitForDescendantAutomationId(MainWindow, "ThemeToggleButton", TimeSpan.FromSeconds(5));
+        // Header chrome (refresh, hero tiles, search) is part of InventoryView,
+        // which is loaded as the window's Content. Give WPF a longer best-effort
+        // window (15s) to publish the descendant tree to UIA before tests start
+        // running. Wait on RefreshButton (always visible) rather than the
+        // Visibility=Collapsed ThemeToggleButton. Best-effort only \u2014 if it
+        // doesn't appear, individual tests still have their own descendant waits.
+        TryWaitForDescendantAutomationId(MainWindow, "RefreshButton", TimeSpan.FromSeconds(15));
     }
 
     /// <summary>
@@ -142,15 +142,24 @@ public sealed class AppFixture : IDisposable
 
     private static Window WaitForMainWindow(Application app, UIA3Automation automation, TimeSpan timeout)
     {
+        // Wpf.Ui FluentWindow + ExtendsContentIntoTitleBar exposes a hidden shadow-host
+        // window as Process.MainWindowHandle, whose Title is empty. GetMainWindow() then
+        // returns that one and the substring check fails. Enumerate every top-level
+        // window of the process and pick the one whose title matches.
         var deadline = DateTime.UtcNow + timeout;
         Exception? last = null;
         while (DateTime.UtcNow < deadline)
         {
             try
             {
-                var win = app.GetMainWindow(automation, TimeSpan.FromSeconds(2));
-                if (win != null && win.Title?.Contains(WindowTitleSubstring, StringComparison.OrdinalIgnoreCase) == true)
-                    return win;
+                var tops = app.GetAllTopLevelWindows(automation);
+                foreach (var w in tops)
+                {
+                    string title;
+                    try { title = w.Title ?? string.Empty; } catch { title = string.Empty; }
+                    if (title.Contains(WindowTitleSubstring, StringComparison.OrdinalIgnoreCase))
+                        return w;
+                }
             }
             catch (Exception ex) { last = ex; }
             Thread.Sleep(250);

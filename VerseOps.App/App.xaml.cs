@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Threading;
+using VerseOps.App.Configuration;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 // Disambiguate MessageBox / MessageBoxButton — both Wpf.Ui.Controls and
@@ -102,6 +103,12 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Load BYO-app-registration config (tenant id / public client id / app
+        // client id) before any window is constructed so AuthService field
+        // defaults pick up the customer values. Never throws — missing /
+        // corrupt files fall back to AppConstants defaults.
+        AppSettings.LoadFromDisk();
 
         // Pin a stable Win32 AppUserModelID BEFORE any window's HWND exists.
         // Without this, the Win11 shell groups VerseOps under the generic

@@ -1,5 +1,8 @@
+using System.IO;
 using Microsoft.Identity.Client;
 using Microsoft.Identity.Client.Broker;
+using Microsoft.Identity.Client.Extensions.Msal;
+using VerseOps.App.Configuration;
 
 namespace VerseOps.App.Auth;
 
@@ -16,15 +19,15 @@ public sealed class AuthService
 {
     public enum AuthMode { User, AppOnly }
 
-    private const string AzureCliClientId = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"; // public, well-known
     private IPublicClientApplication? _publicApp;
     private IConfidentialClientApplication? _confidentialApp;
 
     public AuthMode Mode { get; set; } = AuthMode.User;
 
-    // User-mode config
-    public string TenantId { get; set; } = "common";
-    public string PublicClientId { get; set; } = AzureCliClientId;
+    // User-mode config — defaults sourced from AppSettings so customer-supplied
+    // tenant id / client id in appsettings.json flow through automatically.
+    public string TenantId { get; set; } = AppSettings.Current.TenantId;
+    public string PublicClientId { get; set; } = AppSettings.Current.PublicClientId;
 
     /// <summary>
     /// When true, use the WAM broker on Windows (silent SSO via the OS account
@@ -47,8 +50,9 @@ public sealed class AuthService
     /// </summary>
     public Func<IntPtr>? WindowHandleProvider { get; set; }
 
-    // App-only config
-    public string AppOnlyClientId { get; set; } = string.Empty;
+    // App-only config — id defaults from AppSettings; secret is NEVER persisted
+    // and only lives in memory for the lifetime of the process.
+    public string AppOnlyClientId { get; set; } = AppSettings.Current.AppOnlyClientId;
     public string AppOnlyClientSecret { get; set; } = string.Empty;
 
     public string? LastSignedInUser { get; private set; }
@@ -126,6 +130,31 @@ public sealed class AuthService
         return result.AccessToken;
     }
 
+    /// <summary>
+    /// Silent-only token acquisition. Returns null when no cached account exists or
+    /// the cached refresh token can no longer be used silently. Never opens a browser.
+    /// Headless callers (test rigs, sweepers, CI) use this to honor a cached sign-in
+    /// without blocking on a UI prompt.
+    /// </summary>
+    public async Task<string?> TryGetTokenSilentAsync(string scope, CancellationToken ct = default)
+    {
+        Mode = AuthMode.User;
+        LastTokenAudience = scope;
+        EnsurePublicClient();
+        var accounts = await _publicApp!.GetAccountsAsync().ConfigureAwait(false);
+        var account = accounts.FirstOrDefault();
+        if (account is null) return null;
+        try
+        {
+            var result = await _publicApp.AcquireTokenSilent(new[] { scope }, account)
+                .ExecuteAsync(ct).ConfigureAwait(false);
+            LastSignedInUser = result.Account?.Username;
+            return result.AccessToken;
+        }
+        catch (MsalUiRequiredException) { return null; }
+        catch (MsalClientException) { return null; }
+    }
+
     private void EnsurePublicClient()
     {
         // Rebuild if the client id changed OR the broker mode changed since the last build.
@@ -149,6 +178,38 @@ public sealed class AuthService
         }
 
         _publicApp = builder.Build();
+        RegisterPersistentCache(_publicApp);
+    }
+
+    // Bind MSAL's serializable token cache to a file under %LOCALAPPDATA%\VerseOps,
+    // encrypted at rest with DPAPI (Windows current-user scope). Failure to bind
+    // is non-fatal — tokens still flow, they just don't survive a process restart.
+    private static volatile MsalCacheHelper? s_cacheHelper;
+    private static readonly object s_cacheHelperLock = new();
+    private static void RegisterPersistentCache(IPublicClientApplication app)
+    {
+        try
+        {
+            if (s_cacheHelper == null)
+            {
+                lock (s_cacheHelperLock)
+                {
+                    if (s_cacheHelper == null)
+                    {
+                        var dir = Path.GetDirectoryName(AppSettings.UserSettingsPath)
+                                  ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VerseOps");
+                        Directory.CreateDirectory(dir);
+                        var props = new StorageCreationPropertiesBuilder("msal_cache.bin", dir).Build();
+                        s_cacheHelper = MsalCacheHelper.CreateAsync(props).GetAwaiter().GetResult();
+                    }
+                }
+            }
+            s_cacheHelper!.RegisterCache(app.UserTokenCache);
+        }
+        catch
+        {
+            // Persistence is best-effort; in-memory cache still works.
+        }
     }
 
     private async Task<AuthenticationResult> AcquireInteractiveAsync(string scope, Prompt prompt, CancellationToken ct)

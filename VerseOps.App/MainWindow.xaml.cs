@@ -87,6 +87,17 @@ public partial class MainWindow : FluentWindow
         var inventoryService = new PpacInventoryService(_auth, sqliteCatalog);
         _inventoryVm         = new InventoryViewModel(inventoryService);
         InventoryDashboard.DataContext = _inventoryVm;
+
+        // API Explorer hosts its own AuthService (so flipping App-only mode
+        // there can't disturb the inventory's silent delegated token cache),
+        // but we hand it a window-handle provider + the same SQLite cache so
+        // its Environment dropdown is instant for demos.
+        ApiExplorer.SetWindowHandleProvider(() =>
+        {
+            try { return new WindowInteropHelper(this).EnsureHandle(); }
+            catch { return IntPtr.Zero; }
+        });
+        ApiExplorer.SeedFromCatalog(sqliteCatalog);
     }
 
     // ---------- Win32 taskbar icon push ------------------------------------

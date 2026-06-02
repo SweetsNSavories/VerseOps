@@ -67,3 +67,8 @@ Dynamics-365-icons*.zip
 Microsoft Entra*.zip
 Power-Platform-icons*.zip
 
+# ---- WPF MSBuild temporary side-project files (generated during build, never commit) ----
+**/*_wpftmp.csproj
+
+# ---- Ad-hoc UI test capture logs (debug scratch, may contain UI text) ----
+uitests*.out
