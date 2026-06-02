@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    VerseOps.SdkTests — headless probe suite over Microsoft.PowerPlatform.Management.
+
+    Goal: exercise every reflectable GET operation on the Kiota ServiceClient
+    (one xUnit Theory row per SDK op) so we can see the full pass/fail matrix
+    without clicking through the WPF UI. Tests share a single sign-in via
+    SdkAuthFixture (browser pops once per `dotnet test` run, MSAL caches the
+    token in-memory for the rest of the run).
+
+    Only safe ops run by default: HTTP GET, no required indexer, no request
+    body. Mutating verbs and parameterised paths are filtered out at theory
+    generation time so a green run cannot accidentally provision/delete.
+
+    Project references VerseOps.App directly (real assembly reference, not the
+    build-order-only one VerseOps.UiTests uses) so we can reuse the live
+    SdkCatalog / SdkExecutor / AuthService code paths — what the tests prove
+    is exactly what the UI will run.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>VerseOps.SdkTests</RootNamespace>
+    <Platforms>AnyCPU</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="Xunit.SkippableFact" Version="1.4.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VerseOps.App\VerseOps.App.csproj" />
+  </ItemGroup>
+
+</Project>

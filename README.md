@@ -73,6 +73,33 @@ The tool will silently skip panes it cannot read instead of failing the whole re
 
 ---
 
+## Configure (bring-your-own app registration)
+
+VerseOps signs in with the well-known **Azure CLI public client**
+(`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) by default — no Entra setup needed. For tenants
+that block unverified multi-tenant clients, want a tenant-issued audit trail, or want
+least-privilege scopes, register your own app and tell VerseOps to use it. Three settings,
+**highest priority first**:
+
+| # | Source | When to use |
+|---|---|---|
+| 1 | Environment variables `VERSEOPS_TENANT_ID`, `VERSEOPS_PUBLIC_CLIENT_ID`, `VERSEOPS_APP_CLIENT_ID` | CI / per-process overrides |
+| 2 | `%LOCALAPPDATA%\VerseOps\appsettings.json` | Per-user (written by the **Save defaults** button in the API Explorer) |
+| 3 | `appsettings.local.json` next to `VerseOps.App.exe` | Sysadmin pre-config (Intune / share) — `.gitignore`d |
+
+Field names: `tenantId`, `publicClientId`, `appOnlyClientId`. **Secrets are never
+written to disk** — the App-only client secret lives in memory for the session only.
+
+See [docs/byo-app-registration.md](docs/byo-app-registration.md) for the Entra portal
+walk-through (required API permissions: Power Platform API `user_impersonation`, Dynamics
+CRM `user_impersonation`, Graph `User.Read` + `Group.Read.All`). A starter file is at
+[appsettings.sample.json](appsettings.sample.json).
+
+For a one-page summary of what the app touches, stores, and never does, read
+[docs/threat-model.md](docs/threat-model.md).
+
+---
+
 ## Architecture
 
 ```

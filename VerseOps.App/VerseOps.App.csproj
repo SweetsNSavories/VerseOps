@@ -14,6 +14,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Identity.Client" Version="4.81.0" />
     <PackageReference Include="Microsoft.Identity.Client.Broker" Version="4.81.0" />
+    <!-- Persists the MSAL token cache to %LOCALAPPDATA%\VerseOps\msal_cache.bin
+         (encrypted at rest via DPAPI on Windows). Without this the token cache
+         is in-memory only and every fresh process forces an interactive sign-in. -->
+    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.81.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
     <PackageReference Include="Microsoft.PowerPlatform.Management" Version="2.0.3317.207" />
     <PackageReference Include="Microsoft.Kiota.Http.HttpClientLibrary" Version="1.22.0" />
