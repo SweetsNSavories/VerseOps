@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSIX manifest for VerseOps (unpackaged Win32 app wrapped in MSIX with
+  full-trust runtime). Version is rewritten in CI from the release tag
+  (Version="0.0.0.0" placeholder -> e.g. "0.1.2.0").
+
+  Publisher CN is a placeholder until the project is signed with the
+  SignPath.io Foundation OSS code-signing cert; at that point the
+  Publisher field MUST exactly match the cert subject or MakeAppx will
+  refuse to sign.
+-->
+<Package
+    xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+    xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+    xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+    IgnorableNamespaces="uap rescap">
+
+    <Identity
+        Name="SweetsNSavories.VerseOps"
+        Publisher="CN=Praveen Thonda, O=VerseOps OSS Project"
+        Version="0.0.0.0" />
+
+    <Properties>
+        <DisplayName>VerseOps</DisplayName>
+        <PublisherDisplayName>Praveen Thonda (Open Source)</PublisherDisplayName>
+        <Logo>Assets\MsixLogos\StoreLogo.png</Logo>
+        <Description>Power Platform inventory dashboard for tenant administrators. Independent open-source project — not a Microsoft product.</Description>
+    </Properties>
+
+    <Dependencies>
+        <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+    </Dependencies>
+
+    <Resources>
+        <Resource Language="en-us" />
+    </Resources>
+
+    <Applications>
+        <Application Id="VerseOpsApp" Executable="VerseOps.App.exe" EntryPoint="Windows.FullTrustApplication">
+            <uap:VisualElements
+                DisplayName="VerseOps"
+                Description="Power Platform inventory dashboard"
+                Square150x150Logo="Assets\MsixLogos\Square150x150Logo.png"
+                Square44x44Logo="Assets\MsixLogos\Square44x44Logo.png"
+                BackgroundColor="transparent">
+                <uap:DefaultTile
+                    Wide310x150Logo="Assets\MsixLogos\Wide310x150Logo.png"
+                    Square71x71Logo="Assets\MsixLogos\Square71x71Logo.png"
+                    Square310x310Logo="Assets\MsixLogos\Square310x310Logo.png" />
+                <uap:SplashScreen Image="Assets\MsixLogos\SplashScreen.png" />
+            </uap:VisualElements>
+        </Application>
+    </Applications>
+
+    <Capabilities>
+        <rescap:Capability Name="runFullTrust" />
+    </Capabilities>
+</Package>

@@ -7,8 +7,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # publish release assets
-  id-token: write   # required for Azure Trusted Signing federated login (when configured)
+  contents: write       # publish release assets
+  id-token: write       # required for Azure Trusted Signing federated login (when configured)
+  attestations: write   # actions/attest-build-provenance (supply-chain attestation)
 
 jobs:
   build:
@@ -102,6 +103,43 @@ jobs:
       #     timestamp-rfc3161:            http://timestamp.acs.microsoft.com
       #     timestamp-digest:             SHA256
 
+      # ----------------------------------------------------------------
+      # MSIX packaging (unsigned developer preview). Customers can sideload
+      # for cleaner per-user install / Add-Remove entry / clean uninstall,
+      # but Windows will warn until the package is signed with a
+      # publicly-trusted code-signing cert (planned via SignPath.io Foundation
+      # for OSS once approved).
+      # ----------------------------------------------------------------
+      - name: Stage MSIX layout
+        run: |
+          $stage = 'publish\msix'
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          # Use the self-contained build so the MSIX runs on machines without
+          # the .NET 10 Desktop Runtime pre-installed.
+          Copy-Item -Recurse -Force publish\win-x64-selfcontained\* $stage\
+          # MSIX visual assets live next to the EXE under Assets\MsixLogos\.
+          $logoDest = Join-Path $stage 'Assets\MsixLogos'
+          New-Item -ItemType Directory -Force -Path $logoDest | Out-Null
+          Copy-Item -Force VerseOps.App\Assets\MsixLogos\*.png $logoDest\
+          # Inject the four-part MSIX version from the git tag (v0.1.2 -> 0.1.2.0).
+          $ver = '${{ github.ref_name }}'.TrimStart('v') + '.0'
+          Write-Host "MSIX version: $ver"
+          (Get-Content VerseOps.App\Package.appxmanifest -Raw) `
+            -replace 'Version="0\.0\.0\.0"', "Version=`"$ver`"" `
+            | Set-Content "$stage\AppxManifest.xml" -Encoding utf8
+
+      - name: Pack MSIX
+        run: |
+          $sdkBin = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.*\x64" `
+            -ErrorAction SilentlyContinue `
+            | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $sdkBin) { throw 'Windows 10 SDK (MakeAppx.exe) not found on runner.' }
+          $makeAppx = Join-Path $sdkBin.FullName 'makeappx.exe'
+          $msix = "VerseOps.App-${{ github.ref_name }}-win-x64-unsigned.msix"
+          & $makeAppx pack /d publish\msix /p $msix /o
+          if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed with exit code $LASTEXITCODE" }
+          Write-Host "Built: $msix ($((Get-Item $msix).Length) bytes)"
+
       - name: Zip release archives
         run: |
           Compress-Archive -Path publish\win-x64\* `
@@ -123,6 +161,26 @@ jobs:
           path: VerseOps.App-${{ github.ref_name }}-win-x64-selfcontained.zip
           if-no-files-found: error
 
+      - name: Upload MSIX archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: VerseOps.App-${{ github.ref_name }}-win-x64-unsigned-msix
+          path: VerseOps.App-${{ github.ref_name }}-win-x64-unsigned.msix
+          if-no-files-found: error
+
+      # Generates a signed in-toto provenance attestation, cryptographically
+      # tying each release artifact back to this exact workflow run + commit
+      # SHA. Verifiable with `gh attestation verify <file> --repo SweetsNSavories/VerseOps`.
+      # Free supply-chain signal; does NOT replace code signing for Windows trust.
+      - name: Attest build provenance
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            VerseOps.App-${{ github.ref_name }}-win-x64.zip
+            VerseOps.App-${{ github.ref_name }}-win-x64-selfcontained.zip
+            VerseOps.App-${{ github.ref_name }}-win-x64-unsigned.msix
+
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -130,6 +188,7 @@ jobs:
           files: |
             VerseOps.App-${{ github.ref_name }}-win-x64.zip
             VerseOps.App-${{ github.ref_name }}-win-x64-selfcontained.zip
+            VerseOps.App-${{ github.ref_name }}-win-x64-unsigned.msix
             sbom\sbom.cdx.json
             publish\SHA256SUMS.txt
           generate_release_notes: true

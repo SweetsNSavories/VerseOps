@@ -9,9 +9,14 @@ licenses, security groups — into one place. It calls the official
 SDK, the BAP capacity API, and Microsoft Graph; everything is local-first (cached in SQLite at
 `%LOCALAPPDATA%\VerseOps\verseops.db`).
 
-> **VerseOps is not a Microsoft product.** It is an independent open-source utility for
-> Power Platform administrators. Trademarks belong to their owners — see
-> [ATTRIBUTIONS.md](ATTRIBUTIONS.md).
+> **VerseOps is not a Microsoft product.** It is an independent open-source
+> project, developed and maintained by **Praveen Thonda** in a personal
+> capacity under the [MIT License](LICENSE). It is **not** affiliated with,
+> endorsed by, sponsored by, or a product of Microsoft Corporation.
+> Power Platform, Dataverse, Dynamics 365, Microsoft Entra, and related names
+> are trademarks of Microsoft Corporation, used here solely to describe the
+> systems VerseOps interoperates with. See [ATTRIBUTIONS.md](ATTRIBUTIONS.md)
+> for full notices.
 
 ---
 
@@ -39,14 +44,28 @@ Two archives are published per release:
 
 | Archive | Size | .NET runtime required | When to choose |
 |---------|------|-----------------------|----------------|
-| `VerseOps.App-vX.Y.Z-win-x64.zip` | small (~10 MB) | yes — install [.NET 10 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/10.0) | you already manage .NET runtimes |
-| `VerseOps.App-vX.Y.Z-win-x64-selfcontained.zip` | large (~150 MB) | **no** — bundled | "download and run", no admin install needed |
+| `VerseOps.App-vX.Y.Z-win-x64.zip` | small (~7 MB) | yes — install [.NET 10 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/10.0) | you already manage .NET runtimes |
+| `VerseOps.App-vX.Y.Z-win-x64-selfcontained.zip` | large (~65 MB) | **no** — bundled | "download and run", no admin install needed |
+| `VerseOps.App-vX.Y.Z-win-x64-unsigned.msix` | ~65 MB | **no** — bundled | per-user install, Start-menu entry, clean uninstall via Settings → Apps |
 
-1. Download the appropriate `.zip` from [Releases](../../releases) (signed with the
-   publisher's code-signing certificate; see [SIGNING.md](SIGNING.md) for verification).
-2. Extract and run `VerseOps.App.exe`.
-3. Sign in with a tenant identity that holds **Power Platform Administrator** or
-   **Dynamics 365 Administrator** in Microsoft Entra ID.
+> **MSIX is currently an unsigned developer preview.** Windows will show an
+> "untrusted publisher" warning on install. A code-signing certificate from
+> SignPath.io Foundation (free for OSS) is in progress; once issued, signed
+> MSIX packages will install without warnings.
+
+1. Download the appropriate artifact from [Releases](../../releases).
+2. Extract a `.zip` and run `VerseOps.App.exe`, or double-click the `.msix`
+   (Settings → Privacy & security → For developers → Sideload apps).
+3. Sign in with a tenant identity that holds **Power Platform Administrator**
+   or **Dynamics 365 Administrator** in Microsoft Entra ID.
+
+Each release also ships a [SLSA build-provenance attestation](https://slsa.dev/spec/v1.0/)
+verifiable with the GitHub CLI:
+
+```powershell
+gh attestation verify VerseOps.App-vX.Y.Z-win-x64-selfcontained.zip `
+  --repo SweetsNSavories/VerseOps
+```
 
 ### Build from source
 
