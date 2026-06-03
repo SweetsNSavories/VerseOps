@@ -104,51 +104,11 @@ jobs:
       #     timestamp-digest:             SHA256
 
       # ----------------------------------------------------------------
-      # MSIX packaging (unsigned developer preview). Customers can sideload
-      # for cleaner per-user install / Add-Remove entry / clean uninstall,
-      # but Windows will warn until the package is signed with a
-      # publicly-trusted code-signing cert (planned via SignPath.io Foundation
-      # for OSS once approved).
+      # MSIX packaging is intentionally NOT performed by CI.
+      # Repo ships the manifest + logos + generator under VerseOps.App\ so
+      # downstream consumers (enterprises, IT) can build + sign an MSIX with
+      # their own publicly-trusted certificate. See SIGNING.md.
       # ----------------------------------------------------------------
-      - name: Stage MSIX layout
-        run: |
-          $stage = 'publish\msix'
-          New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          # Use the self-contained build so the MSIX runs on machines without
-          # the .NET 10 Desktop Runtime pre-installed.
-          Copy-Item -Recurse -Force publish\win-x64-selfcontained\* $stage\
-          # MSIX visual assets live next to the EXE under Assets\MsixLogos\.
-          $logoDest = Join-Path $stage 'Assets\MsixLogos'
-          New-Item -ItemType Directory -Force -Path $logoDest | Out-Null
-          Copy-Item -Force VerseOps.App\Assets\MsixLogos\*.png $logoDest\
-          # Inject the four-part MSIX version from the git tag (v0.1.2 -> 0.1.2.0).
-          $ver = '${{ github.ref_name }}'.TrimStart('v') + '.0'
-          Write-Host "MSIX version: $ver"
-          (Get-Content VerseOps.App\Package.appxmanifest -Raw) `
-            -replace 'Version="0\.0\.0\.0"', "Version=`"$ver`"" `
-            | Set-Content "$stage\AppxManifest.xml" -Encoding utf8
-
-      - name: Pack MSIX
-        run: |
-          # MakeAppx.exe lives under different paths depending on which Windows
-          # 10 SDK versions are pre-installed on the runner. Search broadly,
-          # prefer the newest SDK that actually contains the tool.
-          $candidates = @(
-            Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe" -ErrorAction SilentlyContinue
-            Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\x64\makeappx.exe"     -ErrorAction SilentlyContinue
-            Get-ChildItem "${env:ProgramFiles}\Windows Kits\10\bin\*\x64\makeappx.exe"        -ErrorAction SilentlyContinue
-          ) | Where-Object { $_ } | Sort-Object FullName -Descending
-          if (-not $candidates -or $candidates.Count -eq 0) {
-            Write-Host '--- Windows Kits layout ---'
-            Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
-            throw 'makeappx.exe not found on runner.'
-          }
-          $makeAppx = $candidates[0].FullName
-          Write-Host "Using: $makeAppx"
-          $msix = "VerseOps.App-${{ github.ref_name }}-win-x64-unsigned.msix"
-          & $makeAppx pack /d publish\msix /p $msix /o
-          if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed with exit code $LASTEXITCODE" }
-          Write-Host "Built: $msix ($((Get-Item $msix).Length) bytes)"
 
       - name: Zip release archives
         run: |
@@ -171,13 +131,6 @@ jobs:
           path: VerseOps.App-${{ github.ref_name }}-win-x64-selfcontained.zip
           if-no-files-found: error
 
-      - name: Upload MSIX archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: VerseOps.App-${{ github.ref_name }}-win-x64-unsigned-msix
-          path: VerseOps.App-${{ github.ref_name }}-win-x64-unsigned.msix
-          if-no-files-found: error
-
       # Generates a signed in-toto provenance attestation, cryptographically
       # tying each release artifact back to this exact workflow run + commit
       # SHA. Verifiable with `gh attestation verify <file> --repo SweetsNSavories/VerseOps`.
@@ -189,7 +142,6 @@ jobs:
           subject-path: |
             VerseOps.App-${{ github.ref_name }}-win-x64.zip
             VerseOps.App-${{ github.ref_name }}-win-x64-selfcontained.zip
-            VerseOps.App-${{ github.ref_name }}-win-x64-unsigned.msix
 
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -198,7 +150,6 @@ jobs:
           files: |
             VerseOps.App-${{ github.ref_name }}-win-x64.zip
             VerseOps.App-${{ github.ref_name }}-win-x64-selfcontained.zip
-            VerseOps.App-${{ github.ref_name }}-win-x64-unsigned.msix
             sbom\sbom.cdx.json
             publish\SHA256SUMS.txt
           generate_release_notes: true

@@ -46,16 +46,16 @@ Two archives are published per release:
 |---------|------|-----------------------|----------------|
 | `VerseOps.App-vX.Y.Z-win-x64.zip` | small (~7 MB) | yes — install [.NET 10 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/10.0) | you already manage .NET runtimes |
 | `VerseOps.App-vX.Y.Z-win-x64-selfcontained.zip` | large (~65 MB) | **no** — bundled | "download and run", no admin install needed |
-| `VerseOps.App-vX.Y.Z-win-x64-unsigned.msix` | ~65 MB | **no** — bundled | per-user install, Start-menu entry, clean uninstall via Settings → Apps |
 
-> **MSIX is currently an unsigned developer preview.** Windows will show an
-> "untrusted publisher" warning on install. A code-signing certificate from
-> SignPath.io Foundation (free for OSS) is in progress; once issued, signed
-> MSIX packages will install without warnings.
+> **Binaries are unsigned.** This is an OSS project with no commercial code-signing
+> certificate; published artifacts are reproducible from source and carry a [SLSA
+> build-provenance attestation](https://slsa.dev/spec/v1.0/) you can verify before
+> running. If your organisation requires a signed binary or an MSIX, build and sign
+> it yourself with your own certificate — see [SIGNING.md](SIGNING.md) for
+> `signtool`, MSIX packaging, and Azure Trusted Signing instructions.
 
-1. Download the appropriate artifact from [Releases](../../releases).
-2. Extract a `.zip` and run `VerseOps.App.exe`, or double-click the `.msix`
-   (Settings → Privacy & security → For developers → Sideload apps).
+1. Download a `.zip` from [Releases](../../releases).
+2. Extract and run `VerseOps.App.exe`.
 3. Sign in with a tenant identity that holds **Power Platform Administrator**
    or **Dynamics 365 Administrator** in Microsoft Entra ID.
 

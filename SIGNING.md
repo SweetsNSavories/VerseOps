@@ -190,3 +190,46 @@ Get-FileHash .\VerseOps.App\bin\Release\net10.0-windows\win-x64\publish\VerseOps
 
 The unsigned hash should match the one printed in the release notes (signature changes the
 hash; verify against the unsigned artifact).
+
+---
+
+## Building a signed MSIX (BYO certificate)
+
+The repo ships everything needed to package an MSIX downstream — it just
+doesn't publish one. To produce a per-user-installable, Start-menu-registered
+`.msix`:
+
+```powershell
+# 1. Self-contained publish (so the MSIX runs without a .NET runtime install).
+dotnet publish VerseOps.App\VerseOps.App.csproj `
+  -c Release -r win-x64 --self-contained true `
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+  -p:EnableCompressionInSingleFile=true `
+  -o publish\msix
+
+# 2. Drop the MSIX manifest + tiles next to the EXE.
+Copy-Item VerseOps.App\Package.appxmanifest publish\msix\AppxManifest.xml
+New-Item -ItemType Directory -Force -Path publish\msix\Assets\MsixLogos | Out-Null
+Copy-Item VerseOps.App\Assets\MsixLogos\*.png publish\msix\Assets\MsixLogos\
+
+# 3. (Optional) bump the four-part version inside the manifest before packing.
+#    Edit publish\msix\AppxManifest.xml — Identity Version="x.y.z.0".
+#    The Publisher attribute MUST exactly match the Subject of the cert you'll
+#    sign with (e.g. "CN=Contoso IT, O=Contoso Inc, C=US"). If they don't
+#    match, makeappx will succeed but signtool will reject the package.
+
+# 4. Pack.
+$makeAppx = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe" |
+             Sort-Object FullName -Descending | Select-Object -First 1).FullName
+& $makeAppx pack /d publish\msix /p VerseOps.App.msix /o
+
+# 5. Sign with your cert (same signtool invocation as for the EXE, see above).
+& "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe" sign `
+    /f .\your-cert.pfx /p <pwd> /fd SHA256 `
+    /tr http://timestamp.digicert.com /td SHA256 `
+    .\VerseOps.App.msix
+```
+
+Install with `Add-AppxPackage .\VerseOps.App.msix` (or double-click). Cert
+chain must be trusted on the target machine; otherwise import the public cert
+into LocalMachine\TrustedPeople.
