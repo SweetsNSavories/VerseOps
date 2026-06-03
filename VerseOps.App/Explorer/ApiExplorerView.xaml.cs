@@ -1,9 +1,11 @@
+using System.ComponentModel;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -742,6 +744,7 @@ public partial class ApiExplorerView : UserControl
         var cb = new ComboBox { IsEditable = true };
         foreach (var c in choices) cb.Items.Add(c);
         cb.Text = def ?? (choices.Count > 0 ? choices[0] : "");
+        EnableSubstringFilter(cb);
         return cb;
     }
 
@@ -753,6 +756,7 @@ public partial class ApiExplorerView : UserControl
         else
             cb.Items.Add(new ComboBoxItem { Content = "(click 'Load environments' to populate)", Tag = "" });
         cb.Text = def ?? "";
+        EnableSubstringFilter(cb);
         return cb;
     }
 
@@ -764,6 +768,7 @@ public partial class ApiExplorerView : UserControl
         else
             cb.Items.Add(new ComboBoxItem { Content = "(click 'Load groups' to populate)", Tag = "" });
         cb.Text = def ?? "";
+        EnableSubstringFilter(cb);
         return cb;
     }
 
@@ -775,7 +780,92 @@ public partial class ApiExplorerView : UserControl
         else
             cb.Items.Add(new ComboBoxItem { Content = $"(click '{loadHint}' to populate)", Tag = "" });
         cb.Text = def ?? "";
+        EnableSubstringFilter(cb);
         return cb;
+    }
+
+    // Turn an editable ComboBox into a substring-filtered picker: as the user
+    // types, the dropdown narrows to items whose display text contains the
+    // entered query (case-insensitive), instead of WPF's default "jump to
+    // first item starting with the typed character" TextSearch behavior.
+    private static void EnableSubstringFilter(ComboBox cb)
+    {
+        cb.IsTextSearchEnabled = false;
+        cb.StaysOpenOnEdit = true;
+        // Cap popup height so a 700-item dropdown doesn't fill the screen.
+        if (double.IsNaN(cb.MaxDropDownHeight) || cb.MaxDropDownHeight > 360)
+            cb.MaxDropDownHeight = 360;
+
+        // Move items off the local Items collection onto an ItemsSource so we
+        // can drive filtering through ICollectionView without rebuilding the
+        // visual list on every keystroke.
+        var snapshot = new List<object>(cb.Items.Count);
+        foreach (var it in cb.Items) snapshot.Add(it);
+        cb.Items.Clear();
+        cb.ItemsSource = snapshot;
+        var view = CollectionViewSource.GetDefaultView(cb.ItemsSource);
+
+        // Suppress filter-refresh when the text change is caused by the user
+        // *picking* an item (mouse click / Enter on a highlighted row), so the
+        // dropdown doesn't re-open on top of the just-made selection.
+        bool suppress = false;
+        cb.SelectionChanged += (_, e) =>
+        {
+            if (e.AddedItems.Count == 0) return;
+            suppress = true;
+            view.Filter = null;
+            cb.Dispatcher.BeginInvoke(new Action(() => suppress = false), DispatcherPriority.Background);
+        };
+
+        // Debounce keystrokes — re-filtering 700 items + re-laying the popup
+        // on every key fires a layout storm on slower machines.
+        var debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+        string lastQuery = string.Empty;
+
+        // PART_EditableTextBox doesn't exist until the template applies, which
+        // happens on Loaded for items added after construction.
+        RoutedEventHandler? hookup = null;
+        hookup = (_, __) =>
+        {
+            cb.Loaded -= hookup;
+            if (cb.Template.FindName("PART_EditableTextBox", cb) is not TextBox tb) return;
+
+            debounce.Tick += (_, _) =>
+            {
+                debounce.Stop();
+                if (suppress) return;
+                var q = (tb.Text ?? string.Empty).Trim();
+                if (string.Equals(q, lastQuery, StringComparison.Ordinal)) return;
+                lastQuery = q;
+
+                bool wasFiltered = view.Filter != null;
+                view.Filter = string.IsNullOrEmpty(q)
+                    ? null
+                    : o =>
+                    {
+                        var s = o switch
+                        {
+                            ComboBoxItem ci => ci.Content?.ToString() ?? string.Empty,
+                            _ => o?.ToString() ?? string.Empty
+                        };
+                        return s.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0;
+                    };
+
+                // Only force-open the dropdown when the filter just turned on
+                // (null -> non-null). After that, let the user's normal
+                // dropdown gesture govern open/close so we don't fight them.
+                if (!wasFiltered && view.Filter != null && !cb.IsDropDownOpen)
+                    cb.IsDropDownOpen = true;
+            };
+
+            tb.TextChanged += (_, _) =>
+            {
+                if (suppress) return;
+                debounce.Stop();
+                debounce.Start();
+            };
+        };
+        cb.Loaded += hookup;
     }
 
     private static TextBox MakeText(string? def, bool monospace = false)
