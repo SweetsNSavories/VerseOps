@@ -137,7 +137,7 @@ jobs:
       # Free supply-chain signal; does NOT replace code signing for Windows trust.
       - name: Attest build provenance
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             VerseOps.App-${{ github.ref_name }}-win-x64.zip
