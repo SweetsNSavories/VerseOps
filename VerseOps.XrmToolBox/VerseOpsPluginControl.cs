@@ -88,8 +88,8 @@ namespace VerseOps.XrmToolBox
         private async void BtnSignInDeviceCode_Click(object sender, EventArgs e)
         {
             using (var dlg = new DeviceCodeDialog())
+            using (var cts = new CancellationTokenSource())
             {
-                var cts = new CancellationTokenSource();
                 dlg.Cancelled += (_, __) => cts.Cancel();
 
                 SetStatus("Requesting device code\u2026", busy: true);
