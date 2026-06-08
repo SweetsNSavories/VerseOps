@@ -38,6 +38,17 @@ namespace VerseOps.XrmToolBox
         private bool _isSignedIn;
         private CancellationTokenSource? _executeCts;
 
+        // Per-kind dynamic dropdown caches. null = never loaded; an empty list
+        // means the load completed but returned no rows (still better than null
+        // so we don't show the "click Load" hint after a real call). Shared
+        // across the lifetime of the control so switching operations doesn't
+        // re-fetch the same list. Same shape as ApiExplorerView in VerseOps.App.
+        private List<(string Id, string DisplayName)>? _envCache;
+        private List<(string Id, string DisplayName)>? _groupCache;
+        private List<(string Id, string DisplayName)>? _dlpCache;
+        private List<(string Id, string DisplayName)>? _billingCache;
+        private CancellationTokenSource? _loaderCts;
+
         // One ToolTip provider for every parameter-form row. ToolTip is IDisposable;
         // creating one per row leaks a native handle on each operation switch.
         private readonly ToolTip _paramTooltip = new ToolTip
@@ -61,6 +72,8 @@ namespace VerseOps.XrmToolBox
             if (disposing)
             {
                 _paramTooltip.Dispose();
+                _loaderCts?.Cancel();
+                _loaderCts?.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -386,6 +399,7 @@ namespace VerseOps.XrmToolBox
                 (string.IsNullOrEmpty(op.Description) ? string.Empty : op.Description);
 
             BuildParamInputs(op);
+            UpdateLoadButtonVisibility(op);
             _bodyEditor.Text = op.RequestBodyTemplate ?? string.Empty;
 
             // Drive the editable controls from the catalog so the user can
@@ -458,7 +472,7 @@ namespace VerseOps.XrmToolBox
             _paramTable.ResumeLayout();
         }
 
-        private static Control BuildInput(OpParam p)
+        private Control BuildInput(OpParam p)
         {
             switch (p.Kind)
             {
@@ -495,9 +509,23 @@ namespace VerseOps.XrmToolBox
                         Text = p.Default ?? string.Empty
                     };
 
-                // Dynamic kinds (Environment / EnvironmentGroup / DlpPolicy /
-                // BillingPolicy / Template) are wired to live pickers in PR #5.
-                // For now the user pastes the id/name as text — same as curl.
+                case ParamKind.Environment:
+                    return MakePickerCombo(_envCache, "Load environments", p.Default);
+                case ParamKind.EnvironmentGroup:
+                    return MakePickerCombo(_groupCache, "Load groups", p.Default);
+                case ParamKind.DlpPolicy:
+                    return MakePickerCombo(_dlpCache, "Load DLP", p.Default);
+                case ParamKind.BillingPolicy:
+                    return MakePickerCombo(_billingCache, "Load billing", p.Default);
+                case ParamKind.Template:
+                    // No catalog-wide loader yet (templates are per-location);
+                    // accept free text so the user can paste a name.
+                    return new TextBox
+                    {
+                        Font = new Font("Segoe UI", 9F),
+                        Text = p.Default ?? string.Empty
+                    };
+
                 default:
                     return new TextBox
                     {
@@ -512,6 +540,10 @@ namespace VerseOps.XrmToolBox
             return control switch
             {
                 NumericUpDown n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                // Picker combos store a PickerItem in SelectedItem whose Id
+                // (Tag-equivalent) is the value we want to substitute. Fall
+                // back to typed text if the user hasn't picked anything.
+                ComboBox c when c.SelectedItem is PickerItem pi && !string.IsNullOrEmpty(pi.Id) => pi.Id,
                 ComboBox c     => (c.SelectedItem?.ToString() ?? c.Text) ?? string.Empty,
                 TextBox t      => t.Text ?? string.Empty,
                 _              => control.Text ?? string.Empty
@@ -942,6 +974,334 @@ namespace VerseOps.XrmToolBox
         {
             _respSearchInfo.Text = string.Empty;
             _lastSearchAnchor = -1;
+        }
+
+        // ============================================================
+        // Dynamic dropdowns (Environment / Group / DLP / Billing)
+        // ============================================================
+
+        // Tiny carrier so the ComboBox displays "name (id)" but ReadInputValue
+        // can recover the raw id for token substitution. ToString() drives both
+        // the dropdown label and what shows in the edit area after selection.
+        private sealed class PickerItem
+        {
+            public string Id { get; }
+            public string DisplayName { get; }
+            public PickerItem(string id, string displayName) { Id = id; DisplayName = displayName ?? id; }
+            public override string ToString() => string.IsNullOrEmpty(Id) ? DisplayName : DisplayName + "  (" + Id + ")";
+        }
+
+        // Build a filterable editable ComboBox seeded from a cached list, or
+        // a single placeholder row when the cache is still null. We always
+        // attach the substring filter so a typed query narrows the dropdown
+        // immediately; preset _default is shown as Text only (not selected).
+        private ComboBox MakePickerCombo(List<(string Id, string DisplayName)>? cache, string loadHint, string? def)
+        {
+            var cb = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDown,
+                Font = new Font("Segoe UI", 9F),
+                AutoCompleteMode = AutoCompleteMode.None,
+                AutoCompleteSource = AutoCompleteSource.None,
+                MaxDropDownItems = 14
+            };
+            if (cache != null)
+            {
+                foreach (var (id, name) in cache) cb.Items.Add(new PickerItem(id, name));
+            }
+            else
+            {
+                cb.Items.Add(new PickerItem(string.Empty, "(click '" + loadHint + "' to populate)"));
+            }
+            cb.Text = def ?? string.Empty;
+            EnableSubstringFilter(cb);
+            return cb;
+        }
+
+        // Turn an editable ComboBox into a substring-filtered picker: as the
+        // user types, the dropdown narrows to items whose ToString() contains
+        // the entered query (case-insensitive). WinForms equivalent of the WPF
+        // ICollectionView filter in VerseOps.App.Explorer.ApiExplorerView.
+        private static void EnableSubstringFilter(ComboBox cb)
+        {
+            // Snapshot the full item set once on Load (or now if already alive).
+            // We rewrite Items on every keystroke; without the snapshot we'd
+            // lose rows the first time the filter eliminates them.
+            object[]? full = null;
+            bool suppress = false;
+
+            void EnsureSnapshot()
+            {
+                if (full != null) return;
+                full = new object[cb.Items.Count];
+                cb.Items.CopyTo(full, 0);
+            }
+
+            cb.HandleCreated += (_, __) => EnsureSnapshot();
+            EnsureSnapshot();
+
+            cb.TextUpdate += (_, __) =>
+            {
+                if (suppress || full == null) return;
+                suppress = true;
+                try
+                {
+                    var q = (cb.Text ?? string.Empty).Trim();
+                    var caret = cb.SelectionStart;
+                    var selLen = cb.SelectionLength;
+                    var preserved = cb.Text;
+
+                    cb.BeginUpdate();
+                    cb.Items.Clear();
+                    if (q.Length == 0)
+                    {
+                        cb.Items.AddRange(full);
+                    }
+                    else
+                    {
+                        foreach (var o in full)
+                        {
+                            var s = o?.ToString() ?? string.Empty;
+                            if (s.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)
+                                cb.Items.Add(o);
+                        }
+                    }
+                    cb.EndUpdate();
+
+                    // TextUpdate writes don't fire SelectedIndexChanged, so we
+                    // can restore the typed query and cursor without recursion.
+                    cb.Text = preserved;
+                    cb.SelectionStart = Math.Min(caret, cb.Text?.Length ?? 0);
+                    cb.SelectionLength = selLen;
+
+                    // Auto-open the dropdown when the filter has hits; close
+                    // when filter eliminates everything (otherwise an empty
+                    // dropdown briefly flashes).
+                    if (cb.Items.Count > 0 && !cb.DroppedDown)
+                    {
+                        cb.DroppedDown = true;
+                        // DroppedDown=true steals the caret; put it back.
+                        cb.SelectionStart = Math.Min(caret, cb.Text?.Length ?? 0);
+                        cb.SelectionLength = selLen;
+                    }
+                    else if (cb.Items.Count == 0 && cb.DroppedDown)
+                    {
+                        cb.DroppedDown = false;
+                    }
+                }
+                finally
+                {
+                    suppress = false;
+                }
+            };
+
+            // When the user picks a row, replace any filtered Items collection
+            // with the full snapshot so the next time they open the dropdown
+            // they see everything again.
+            cb.SelectionChangeCommitted += (_, __) =>
+            {
+                if (full == null) return;
+                suppress = true;
+                try
+                {
+                    var picked = cb.SelectedItem;
+                    cb.BeginUpdate();
+                    cb.Items.Clear();
+                    cb.Items.AddRange(full);
+                    cb.EndUpdate();
+                    if (picked != null)
+                    {
+                        var idx = cb.Items.IndexOf(picked);
+                        if (idx >= 0) cb.SelectedIndex = idx;
+                    }
+                }
+                finally
+                {
+                    suppress = false;
+                }
+            };
+        }
+
+        // Show only the loader buttons that match parameters declared by the
+        // current op. Mirrors UpdateLoadButtonVisibility in the WPF explorer.
+        private void UpdateLoadButtonVisibility(ApiOperation? op)
+        {
+            bool needEnv = false, needGroup = false, needDlp = false, needBilling = false;
+            var ps = op?.Parameters;
+            if (ps != null)
+            {
+                foreach (var p in ps)
+                {
+                    switch (p.Kind)
+                    {
+                        case ParamKind.Environment: needEnv = true; break;
+                        case ParamKind.EnvironmentGroup: needGroup = true; break;
+                        case ParamKind.DlpPolicy: needDlp = true; break;
+                        case ParamKind.BillingPolicy: needBilling = true; break;
+                    }
+                }
+            }
+            _btnLoadEnvs.Visible    = needEnv;
+            _btnLoadGroups.Visible  = needGroup;
+            _btnLoadDlp.Visible     = needDlp;
+            _btnLoadBilling.Visible = needBilling;
+            _formLoadersStrip.Visible = needEnv || needGroup || needDlp || needBilling;
+        }
+
+        // ---------- Loader button handlers ----------
+
+        private async void BtnLoadEnvs_Click(object sender, EventArgs e)
+        {
+            await LoadDropdownAsync(
+                label: "environments",
+                url: "https://api.powerplatform.com/environmentmanagement/environments?api-version=2022-03-01-preview",
+                scope: ApiCatalog.ScopePpac,
+                assignCache: list => _envCache = list,
+                extraArrayProps: null,
+                triggeringButton: _btnLoadEnvs);
+        }
+
+        private async void BtnLoadGroups_Click(object sender, EventArgs e)
+        {
+            await LoadDropdownAsync(
+                label: "environment groups",
+                url: "https://api.powerplatform.com/environmentmanagement/environmentGroups?api-version=2022-03-01-preview",
+                scope: ApiCatalog.ScopePpac,
+                assignCache: list => _groupCache = list,
+                extraArrayProps: null,
+                triggeringButton: _btnLoadGroups);
+        }
+
+        private async void BtnLoadDlp_Click(object sender, EventArgs e)
+        {
+            await LoadDropdownAsync(
+                label: "DLP policies",
+                url: "https://api.bap.microsoft.com/providers/PowerPlatform.Governance/v2/policies?api-version=2018-01-01",
+                scope: ApiCatalog.ScopePowerApps,
+                assignCache: list => _dlpCache = list,
+                extraArrayProps: new[] { "value", "policies" },
+                triggeringButton: _btnLoadDlp);
+        }
+
+        private async void BtnLoadBilling_Click(object sender, EventArgs e)
+        {
+            await LoadDropdownAsync(
+                label: "billing policies",
+                url: "https://api.powerplatform.com/licensing/billingPolicies?api-version=2022-03-01-preview",
+                scope: ApiCatalog.ScopePpac,
+                assignCache: list => _billingCache = list,
+                extraArrayProps: null,
+                triggeringButton: _btnLoadBilling);
+        }
+
+        // Shared async loader. Hits a list endpoint, parses out (id, name)
+        // tuples, caches the result, and rebuilds the form so the matching
+        // picker swaps from "(click Load...)" to a populated, filterable
+        // dropdown. Same JSON-shape tolerance as the WPF Explorer's
+        // LoadDropdownAsync: top-level array, .value, or any extra-named prop.
+        private async Task LoadDropdownAsync(
+            string label,
+            string url,
+            string scope,
+            Action<List<(string Id, string DisplayName)>> assignCache,
+            string[]? extraArrayProps,
+            Button triggeringButton)
+        {
+            // One loader at a time; the button is disabled while in flight.
+            _loaderCts?.Cancel();
+            _loaderCts = new CancellationTokenSource();
+            var ct = _loaderCts.Token;
+
+            triggeringButton.Enabled = false;
+            _formLoaderStatus.Text = "Loading " + label + "\u2026";
+            SetStatus("Loading " + label + "\u2026", busy: true);
+            try
+            {
+                if (!_isSignedIn)
+                {
+                    _formLoaderStatus.Text = "Sign in first to load " + label + ".";
+                    SetStatus("Sign in required.", busy: false);
+                    return;
+                }
+
+                var result = await Task.Run(() => _executor.ExecuteAsync("GET", url, null, scope, ct), ct).ConfigureAwait(true);
+                if (ct.IsCancellationRequested) return;
+
+                var items = new List<(string Id, string DisplayName)>();
+                if (!string.IsNullOrWhiteSpace(result.ResponseBody))
+                {
+                    using var doc = JsonDocument.Parse(result.ResponseBody);
+                    JsonElement arr = default;
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        arr = doc.RootElement;
+                    }
+                    else
+                    {
+                        foreach (var prop in extraArrayProps ?? new[] { "value" })
+                        {
+                            if (doc.RootElement.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Array)
+                            { arr = v; break; }
+                        }
+                    }
+                    if (arr.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in arr.EnumerateArray())
+                        {
+                            string id =
+                                TryGuidFromArmId(el)
+                                ?? TryStr(el, "policyId")
+                                ?? TryStr(el, "name")
+                                ?? TryStr(el, "id")
+                                ?? string.Empty;
+                            string name =
+                                TryStr(el, "displayName")
+                                ?? (el.TryGetProperty("properties", out var pp) ? (TryStr(pp, "displayName") ?? id) : id);
+                            if (string.IsNullOrEmpty(name)) name = id;
+                            if (!string.IsNullOrEmpty(id)) items.Add((id, name));
+                        }
+                    }
+                }
+                var sorted = items.OrderBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+                assignCache(sorted);
+                _formLoaderStatus.Text = sorted.Count > 0
+                    ? "Loaded " + sorted.Count + " " + label + "."
+                    : "No " + label + " returned (HTTP " + (int)result.StatusCode + ").";
+                SetStatus(_formLoaderStatus.Text, busy: false);
+
+                // Rebuild the form so any matching kind shows the populated picker.
+                if (_currentOp != null)
+                {
+                    BuildParamInputs(_currentOp);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _formLoaderStatus.Text = "Cancelled.";
+                SetStatus("Cancelled.", busy: false);
+            }
+            catch (Exception ex)
+            {
+                _formLoaderStatus.Text = "Load failed: " + ex.Message;
+                SetStatus("Load " + label + " failed.", busy: false);
+            }
+            finally
+            {
+                triggeringButton.Enabled = true;
+            }
+        }
+
+        private static string? TryStr(JsonElement el, string prop)
+            => el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+        // ARM-style ids end in "/<guid>"; strip the trailing segment when it
+        // parses as a Guid. Mirrors the WPF Explorer helper of the same name.
+        private static string? TryGuidFromArmId(JsonElement el)
+        {
+            var s = TryStr(el, "id");
+            if (string.IsNullOrEmpty(s)) return null;
+            var tail = s!.TrimEnd('/').Split('/').Last();
+            return Guid.TryParse(tail, out _) ? tail : null;
         }
     }
 }

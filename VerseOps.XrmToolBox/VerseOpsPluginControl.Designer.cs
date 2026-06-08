@@ -40,6 +40,16 @@ namespace VerseOps.XrmToolBox
         private System.Windows.Forms.TabPage _bodyTabForm;
         private System.Windows.Forms.TabPage _bodyTabRaw;
         private System.Windows.Forms.Panel _formScrollHost;
+        // Form-tab loader strip: hidden by default, made visible per-op when
+        // the operation declares Environment/EnvironmentGroup/DlpPolicy/BillingPolicy
+        // parameters. Pressing a button calls the matching List endpoint and rebuilds
+        // the form with a populated, filterable ComboBox.
+        private System.Windows.Forms.FlowLayoutPanel _formLoadersStrip;
+        private System.Windows.Forms.Button _btnLoadEnvs;
+        private System.Windows.Forms.Button _btnLoadGroups;
+        private System.Windows.Forms.Button _btnLoadDlp;
+        private System.Windows.Forms.Button _btnLoadBilling;
+        private System.Windows.Forms.Label _formLoaderStatus;
         private System.Windows.Forms.TableLayoutPanel _paramTable;
         private System.Windows.Forms.TextBox _bodyEditor;
 
@@ -101,6 +111,12 @@ namespace VerseOps.XrmToolBox
             _bodyTabForm          = new System.Windows.Forms.TabPage();
             _bodyTabRaw           = new System.Windows.Forms.TabPage();
             _formScrollHost       = new System.Windows.Forms.Panel();
+            _formLoadersStrip     = new System.Windows.Forms.FlowLayoutPanel();
+            _btnLoadEnvs          = new System.Windows.Forms.Button();
+            _btnLoadGroups        = new System.Windows.Forms.Button();
+            _btnLoadDlp           = new System.Windows.Forms.Button();
+            _btnLoadBilling       = new System.Windows.Forms.Button();
+            _formLoaderStatus     = new System.Windows.Forms.Label();
             _paramTable           = new System.Windows.Forms.TableLayoutPanel();
             _bodyEditor           = new System.Windows.Forms.TextBox();
 
@@ -143,6 +159,7 @@ namespace VerseOps.XrmToolBox
             _bodyTabForm.SuspendLayout();
             _bodyTabRaw.SuspendLayout();
             _formScrollHost.SuspendLayout();
+            _formLoadersStrip.SuspendLayout();
             _responsePanel.SuspendLayout();
             _respSearchPanel.SuspendLayout();
             _responseTabs.SuspendLayout();
@@ -366,6 +383,61 @@ namespace VerseOps.XrmToolBox
             _formScrollHost.Padding = new System.Windows.Forms.Padding(0);
             _formScrollHost.Name = "_formScrollHost";
 
+            // ---- Loaders strip (env / group / dlp / billing) -----------
+            _formLoadersStrip.Dock = System.Windows.Forms.DockStyle.Top;
+            _formLoadersStrip.AutoSize = true;
+            _formLoadersStrip.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            _formLoadersStrip.FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight;
+            _formLoadersStrip.WrapContents = true;
+            _formLoadersStrip.Margin = new System.Windows.Forms.Padding(0);
+            _formLoadersStrip.Padding = new System.Windows.Forms.Padding(0, 0, 0, 6);
+            _formLoadersStrip.Name = "_formLoadersStrip";
+            _formLoadersStrip.Visible = false;
+
+            _btnLoadEnvs.Text = "Load environments";
+            _btnLoadEnvs.AutoSize = true;
+            _btnLoadEnvs.Height = 26;
+            _btnLoadEnvs.Margin = new System.Windows.Forms.Padding(0, 0, 6, 0);
+            _btnLoadEnvs.UseVisualStyleBackColor = true;
+            _btnLoadEnvs.Visible = false;
+            _btnLoadEnvs.Click += BtnLoadEnvs_Click;
+
+            _btnLoadGroups.Text = "Load groups";
+            _btnLoadGroups.AutoSize = true;
+            _btnLoadGroups.Height = 26;
+            _btnLoadGroups.Margin = new System.Windows.Forms.Padding(0, 0, 6, 0);
+            _btnLoadGroups.UseVisualStyleBackColor = true;
+            _btnLoadGroups.Visible = false;
+            _btnLoadGroups.Click += BtnLoadGroups_Click;
+
+            _btnLoadDlp.Text = "Load DLP";
+            _btnLoadDlp.AutoSize = true;
+            _btnLoadDlp.Height = 26;
+            _btnLoadDlp.Margin = new System.Windows.Forms.Padding(0, 0, 6, 0);
+            _btnLoadDlp.UseVisualStyleBackColor = true;
+            _btnLoadDlp.Visible = false;
+            _btnLoadDlp.Click += BtnLoadDlp_Click;
+
+            _btnLoadBilling.Text = "Load billing";
+            _btnLoadBilling.AutoSize = true;
+            _btnLoadBilling.Height = 26;
+            _btnLoadBilling.Margin = new System.Windows.Forms.Padding(0, 0, 6, 0);
+            _btnLoadBilling.UseVisualStyleBackColor = true;
+            _btnLoadBilling.Visible = false;
+            _btnLoadBilling.Click += BtnLoadBilling_Click;
+
+            _formLoaderStatus.AutoSize = true;
+            _formLoaderStatus.Margin = new System.Windows.Forms.Padding(8, 6, 0, 0);
+            _formLoaderStatus.ForeColor = System.Drawing.SystemColors.GrayText;
+            _formLoaderStatus.Text = string.Empty;
+            _formLoaderStatus.Name = "_formLoaderStatus";
+
+            _formLoadersStrip.Controls.Add(_btnLoadEnvs);
+            _formLoadersStrip.Controls.Add(_btnLoadGroups);
+            _formLoadersStrip.Controls.Add(_btnLoadDlp);
+            _formLoadersStrip.Controls.Add(_btnLoadBilling);
+            _formLoadersStrip.Controls.Add(_formLoaderStatus);
+
             _paramTable.Dock = System.Windows.Forms.DockStyle.Top;
             _paramTable.AutoSize = true;
             _paramTable.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
@@ -375,7 +447,11 @@ namespace VerseOps.XrmToolBox
             _paramTable.Padding = new System.Windows.Forms.Padding(0);
             _paramTable.Name = "_paramTable";
 
+            // Order matters: add Fill (table) first, Top (loaders) last so the
+            // strip docks above the table. Top-docked controls stack
+            // last-added-closest-to-edge.
             _formScrollHost.Controls.Add(_paramTable);
+            _formScrollHost.Controls.Add(_formLoadersStrip);
 
             _bodyTabRaw.Text = "Raw body";
             _bodyTabRaw.Padding = new System.Windows.Forms.Padding(0);
@@ -576,6 +652,8 @@ namespace VerseOps.XrmToolBox
             _respSearchPanel.ResumeLayout(false);
             _responsePanel.ResumeLayout(false);
             _formScrollHost.ResumeLayout(false);
+            _formLoadersStrip.ResumeLayout(false);
+            _formLoadersStrip.PerformLayout();
             _bodyTabRaw.ResumeLayout(false);
             _bodyTabForm.ResumeLayout(false);
             _bodyTabs.ResumeLayout(false);
