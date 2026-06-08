@@ -399,8 +399,11 @@
                 </Grid>
             </Border>
 
-            <!-- Hero KPI tiles (now clickable buttons that open the right drawer). -->
-            <Grid Grid.Row="1">
+            <!-- Hero KPI tiles + capacity banner. Both stack into Grid.Row=1
+                 via a wrapping StackPanel so the banner sits flush under
+                 the tiles without disturbing the outer 6-row layout. -->
+            <StackPanel Grid.Row="1">
+            <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
@@ -568,6 +571,159 @@
                     </Border>
                 </Button>
             </Grid>
+
+            <!-- ====================================================================
+                 TENANT CAPACITY BANNER. One row per headline capacity bucket
+                 (Database / File / Log / API calls) showing consumed-of-max
+                 with a percent-fill bar. Color tier: ok (green), warn (amber
+                 >= 80%), over (red >= 95% or PPAC-reported "over"). Bound
+                 directly to InventoryViewModel.BannerCapacityRows which is
+                 a pre-formatted projection of TenantCapacity.
+                 Below the bars: two link buttons that open the right-side
+                 drawer with the per-currency report (Option 2) and the pay-
+                 as-you-go billing policy list (Option 3).
+                 ==================================================================== -->
+            <Border Margin="4,2,4,4" Padding="12,8" CornerRadius="3"
+                    Background="{DynamicResource TokenSurfacePrimary}"
+                    BorderBrush="{DynamicResource TokenStrokeSubtle}" BorderThickness="1">
+                <DockPanel LastChildFill="True">
+                    <!-- Header row: title + the two flyout link buttons. -->
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ui:SymbolIcon Grid.Column="0" Symbol="Gauge24" FontSize="18"
+                                       Foreground="{DynamicResource TokenBrandForeground}"
+                                       Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="TENANT CAPACITY"
+                                   FontSize="11" FontWeight="Bold"
+                                   Foreground="{DynamicResource TokenTextSecondary}"
+                                   VerticalAlignment="Center"
+                                   ToolTip="PPAC Licensing.TenantCapacity rollup. Click a chip on the right for per-currency report or pay-as-you-go billing policies."/>
+                        <!-- Option 2 link: opens the per-currency drawer. -->
+                        <Button Grid.Column="2" Margin="6,0"
+                                AutomationProperties.AutomationId="OpenCurrencyReportsButton"
+                                AutomationProperties.Name="Currency reports"
+                                Background="{DynamicResource TokenNeutralPillBg}"
+                                BorderBrush="{DynamicResource TokenNeutralPillBorder}"
+                                Foreground="{DynamicResource TokenTextPrimary}"
+                                Padding="8,2" Cursor="Hand"
+                                Command="{Binding OpenDrawerCommand}" CommandParameter="currency"
+                                ToolTip="Per-currency tenant capacity report (PPAC Licensing.TenantCapacity.CurrencyReports).">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Money24" FontSize="14" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Currency reports" FontSize="11" VerticalAlignment="Center"/>
+                                <Border Background="{DynamicResource TokenStrokeSubtle}" CornerRadius="8"
+                                        Padding="6,1" Margin="6,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding CurrencyReportsCountDisplay}" FontSize="10"
+                                               Foreground="{DynamicResource TokenTextSecondary}"/>
+                                </Border>
+                            </StackPanel>
+                        </Button>
+                        <!-- Option 3 link: opens the billing-policies drawer. -->
+                        <Button Grid.Column="3" Margin="6,0,0,0"
+                                AutomationProperties.AutomationId="OpenBillingPoliciesButton"
+                                AutomationProperties.Name="Billing policies"
+                                Background="{DynamicResource TokenNeutralPillBg}"
+                                BorderBrush="{DynamicResource TokenNeutralPillBorder}"
+                                Foreground="{DynamicResource TokenTextPrimary}"
+                                Padding="8,2" Cursor="Hand"
+                                Command="{Binding OpenDrawerCommand}" CommandParameter="billing"
+                                ToolTip="Pay-as-you-go billing policies (PPAC Licensing.BillingPolicies) with attached-env counts.">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="DocumentBulletList24" FontSize="14" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Billing policies" FontSize="11" VerticalAlignment="Center"/>
+                                <Border Background="{DynamicResource TokenStrokeSubtle}" CornerRadius="8"
+                                        Padding="6,1" Margin="6,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding BillingPoliciesCountDisplay}" FontSize="10"
+                                               Foreground="{DynamicResource TokenTextSecondary}"/>
+                                </Border>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                    <!-- One ItemsControl row per band (Database/File/Log/API).
+                         Empty state (no rows yet) hides the entire control. -->
+                    <ItemsControl ItemsSource="{Binding BannerCapacityRows}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="4" Rows="1"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,0,8,0" Padding="8,4"
+                                        Background="{DynamicResource TokenSurfaceSubtle}"
+                                        BorderBrush="{DynamicResource TokenStrokeSubtle}" BorderThickness="1"
+                                        CornerRadius="2"
+                                        ToolTip="{Binding TooltipText}">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <!-- Top row: label + used/max -->
+                                        <Grid Grid.Row="0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding Label}"
+                                                       FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TokenTextSecondary}"
+                                                       VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding UsedOfMaxDisplay}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TokenTextPrimary}"
+                                                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <!-- Percent-fill bar. ProgressBar.Value is 0-100. Color
+                                             follows the precomputed Tier (ok / warn / over). -->
+                                        <ProgressBar Grid.Row="1" Margin="0,4,0,2" Height="6"
+                                                     Minimum="0" Maximum="100"
+                                                     Value="{Binding PercentUsed, Mode=OneWay}"
+                                                     Background="{DynamicResource TokenStrokeSubtle}"
+                                                     BorderThickness="0">
+                                            <ProgressBar.Style>
+                                                <Style TargetType="ProgressBar">
+                                                    <Setter Property="Foreground" Value="#107C41"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Tier}" Value="warn">
+                                                            <Setter Property="Foreground" Value="#B7791F"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Tier}" Value="over">
+                                                            <Setter Property="Foreground" Value="#C4314B"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ProgressBar.Style>
+                                        </ProgressBar>
+                                        <!-- Percent text under the bar, right-aligned. -->
+                                        <TextBlock Grid.Row="2"
+                                                   Text="{Binding PercentUsed, StringFormat={}{0:N1}% used}"
+                                                   FontSize="10"
+                                                   Foreground="{DynamicResource TokenTextSecondary}"
+                                                   HorizontalAlignment="Right"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                        <ItemsControl.Style>
+                            <Style TargetType="ItemsControl">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding BannerCapacityRows.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ItemsControl.Style>
+                    </ItemsControl>
+                </DockPanel>
+            </Border>
+            </StackPanel>
 
             <!-- Toolbar -->
             <Border Grid.Row="2" Background="{DynamicResource TokenSurfacePrimary}" BorderBrush="{DynamicResource TokenStrokeSubtle}" BorderThickness="1" CornerRadius="3" Padding="6" Margin="4,2">

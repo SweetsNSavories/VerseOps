@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json;
 using VerseOps.App.Auth;
 using VerseOps.App.Configuration;
@@ -82,8 +83,32 @@ public sealed class SdkAuthFixture : IAsyncLifetime
                     return;
                 }
 
-                // 3) Last resort: interactive sign-in (pops the system browser).
-                await Auth.SignInInteractiveAsync(PpacScope, CancellationToken.None).ConfigureAwait(false);
+                // 3) Last resort: device-code sign-in. The test rig is a console
+                //    host with no parent window — system-browser interactive
+                //    flows have no reliable way to bring the browser to the
+                //    foreground here, so we print a code the user types into
+                //    https://microsoft.com/devicelogin from any browser/device.
+                //    Code is written to BOTH stderr (visible if tests stream
+                //    live) AND a fixed file under %LOCALAPPDATA%\VerseOps so
+                //    `dotnet test` runs that capture output to a log still let
+                //    the user see the code.
+                var codeFile = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "VerseOps", "devicecode.txt");
+                Directory.CreateDirectory(Path.GetDirectoryName(codeFile)!);
+
+                await Auth.SignInDeviceCodeAsync(PpacScope, dc =>
+                {
+                    var msg =
+                        "================ VerseOps test harness sign-in ================\n" +
+                        $"Open:  {dc.VerificationUrl}\n" +
+                        $"Code:  {dc.UserCode}\n" +
+                        $"Expires: {dc.ExpiresOn:O}\n" +
+                        "===============================================================";
+                    Console.Error.WriteLine(msg);
+                    try { File.WriteAllText(codeFile, msg); } catch { /* best-effort */ }
+                    return Task.CompletedTask;
+                }, CancellationToken.None).ConfigureAwait(false);
                 SignedIn = true;
             }
         }
@@ -167,6 +192,70 @@ public sealed class SdkAuthFixture : IAsyncLifetime
                 },
                 ct: ct).ConfigureAwait(false);
         }
+
+        // Licensing.BillingPolicies — top-level list under the Licensing namespace.
+        // Empty on most tenants; LicensingSdkCoverageTests skips the indexed rows
+        // cleanly when no seed is produced.
+        await TrySeedFromList(executor,
+            pathText: "ServiceClient.Licensing.BillingPolicies",
+            seedKey:  "BillingPolicies",
+            indexerValues: new Dictionary<string, string>(),
+            ct: ct).ConfigureAwait(false);
+
+        // ---- Phase 3: auto-discovery sweep ----
+        // Walk every top-level GET list endpoint that takes no indexer and no body
+        // (i.e. ServiceClient.<Namespace>.<Collection> with no required input) and
+        // seed _seeds[<Collection>] with the first id. Without this, any namespace
+        // we haven't curated above (Connectivity, Workflow, Analytics, etc.) would
+        // skip every indexed sub-path with "no warmup seed", which masks real
+        // wiring bugs as data gaps. Best-effort: per-call failures are logged and
+        // skipped so a single 403/404 doesn't abort warmup.
+        var seenSeedKeys = new HashSet<string>(_seeds.Keys, StringComparer.OrdinalIgnoreCase);
+        foreach (var op in SdkCatalog.Operations)
+        {
+            if (op.HttpMethod != "GET") continue;
+            if (op.BodyType != null) continue;
+            if (op.HasIndexer) continue;
+            if (op.Path.Count < 2) continue;
+            // Seed key is the collection step name (last segment of the path).
+            var seedKey = op.Path[^1].PropertyName;
+            if (string.IsNullOrEmpty(seedKey)) continue;
+            if (seenSeedKeys.Contains(seedKey)) continue;
+            seenSeedKeys.Add(seedKey);
+            await TrySeedFromList(executor, op.PathText, seedKey,
+                indexerValues: new Dictionary<string, string>(),
+                ct: ct).ConfigureAwait(false);
+        }
+
+        // ---- Phase 4: nested-indexer auto-discovery ----
+        // For every Environments[envId].<Collection> GET list, seed the inner
+        // collection name. Lets indexed children (e.g. .Settings, .Users)
+        // resolve their inner indexer slots without per-namespace curation.
+        if (_seeds.TryGetValue("Environments", out var envIdForNested))
+        {
+            foreach (var op in SdkCatalog.Operations)
+            {
+                if (op.HttpMethod != "GET") continue;
+                if (op.BodyType != null) continue;
+                if (op.Path.Count < 4) continue;
+                // Path shape: ServiceClient.<Ns>.Environments.Item[environmentId].<Coll>
+                if (op.Path[2].PropertyName != "Environments") continue;
+                if (!op.Path[3].IsIndexer) continue;
+                // Last step must be a non-indexer collection name.
+                var tail = op.Path[^1];
+                if (tail.IsIndexer) continue;
+                var seedKey = tail.PropertyName;
+                if (string.IsNullOrEmpty(seedKey)) continue;
+                if (seenSeedKeys.Contains(seedKey)) continue;
+                seenSeedKeys.Add(seedKey);
+                await TrySeedFromList(executor, op.PathText, seedKey,
+                    indexerValues: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["Environments"] = envIdForNested
+                    },
+                    ct: ct).ConfigureAwait(false);
+            }
+        }
     }
 
     private async Task TrySeedFromList(
@@ -224,7 +313,7 @@ public sealed class SdkAuthFixture : IAsyncLifetime
                 // Priority matters: PPAC operation objects have BOTH `Name` (a type label
                 // like "Promote") AND `OperationId` (the GUID we actually need). Prefer
                 // the explicit *Id keys before the generic Name fallback.
-                foreach (var idKey in new[] { "OperationId", "EnvironmentGroupOperationId", "Id", "Name" })
+                foreach (var idKey in new[] { "OperationId", "EnvironmentGroupOperationId", "BillingPolicyId", "Id", "Name" })
                 {
                     if (item.TryGetProperty(idKey, out var v) && v.ValueKind == JsonValueKind.String)
                     {

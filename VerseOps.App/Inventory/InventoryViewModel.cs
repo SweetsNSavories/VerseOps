@@ -78,6 +78,9 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
         _service = service;
         Environments = new ObservableCollection<EnvironmentRow>();
         TenantCapacity = new ObservableCollection<TenantCapacityEntry>();
+        BannerCapacityRows = new ObservableCollection<CapacityBandRow>();
+        CurrencyReports = new ObservableCollection<TenantCurrencyReportEntry>();
+        BillingPolicies = new ObservableCollection<BillingPolicyRow>();
         Assets = new ObservableCollection<AssetRow>();
         DrawerItems = new ObservableCollection<DrawerItem>();
 
@@ -147,6 +150,35 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
     public ICollectionView EnvironmentsView { get; }
 
     public ObservableCollection<TenantCapacityEntry> TenantCapacity { get; }
+
+    /// <summary>
+    /// Display-only projection of <see cref="TenantCapacity"/> filtered to
+    /// the headline storage + API rows (Database / File / Log / ApiCallCount),
+    /// pre-formatted for the capacity banner above the env grid. Recomputed
+    /// every <see cref="ReloadFromCatalog"/>.
+    /// </summary>
+    public ObservableCollection<CapacityBandRow> BannerCapacityRows { get; }
+
+    /// <summary>
+    /// Per-currency capacity report rows from PPAC
+    /// <c>Licensing.TenantCapacity.CurrencyReports</c>. Drives the
+    /// "Currency reports" flyout under the capacity banner.
+    /// </summary>
+    public ObservableCollection<TenantCurrencyReportEntry> CurrencyReports { get; }
+
+    /// <summary>
+    /// Pay-as-you-go billing policies (PPAC <c>Licensing.BillingPolicies</c>)
+    /// with attached-env counts. Drives the "Billing policies" flyout.
+    /// </summary>
+    public ObservableCollection<BillingPolicyRow> BillingPolicies { get; }
+
+    /// <summary>Display rollup for the small "N policies" link in the banner.</summary>
+    public string BillingPoliciesCountDisplay =>
+        BillingPolicies.Count == 0 ? "no policies" : $"{BillingPolicies.Count:N0} policies";
+
+    /// <summary>Display rollup for the small "N currencies" link in the banner.</summary>
+    public string CurrencyReportsCountDisplay =>
+        CurrencyReports.Count == 0 ? "no currencies" : $"{CurrencyReports.Count:N0} currencies";
 
     /// <summary>Tenant-wide asset cache (apps + flows + agents) from the Inventory API.</summary>
     public ObservableCollection<AssetRow> Assets { get; }
@@ -970,6 +1002,70 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
                 _ = LoadLicenseDrawerAsync();
                 break;
 
+            case "currency":
+                // Per-currency tenant capacity from PPAC
+                // Licensing.TenantCapacity.CurrencyReports. One row per
+                // ISO currency code (USD / EUR / GBP / ...) with what's
+                // been purchased, allocated to envs, and what's free.
+                DrawerTitle    = "Currency Reports";
+                DrawerSubtitle = $"{CurrencyReports.Count:N0} currency code(s) reported by " +
+                                 "PPAC Licensing.TenantCapacity.CurrencyReports.";
+                if (CurrencyReports.Count == 0)
+                {
+                    DrawerItems.Add(new DrawerItem(
+                        "No currency report data yet",
+                        "Click Refresh to fetch from PPAC. Requires Power Platform admin scope.",
+                        string.Empty));
+                    break;
+                }
+                foreach (var c in CurrencyReports.OrderBy(c => c.CurrencyCode, StringComparer.OrdinalIgnoreCase))
+                {
+                    var parts = new List<string>(4);
+                    if (c.Purchased.HasValue) parts.Add($"purchased {c.Purchased.Value:N0}");
+                    if (c.Allocated.HasValue) parts.Add($"allocated {c.Allocated.Value:N0}");
+                    if (c.Available.HasValue) parts.Add($"available {c.Available.Value:N0}");
+                    if (c.Consumed.HasValue)  parts.Add($"consumed {c.Consumed.Value:N0}");
+                    var subtitle = parts.Count > 0 ? string.Join(" · ", parts) : "(no totals reported)";
+                    var badge = c.Available.HasValue
+                        ? (c.Available.Value < 0 ? "DEFICIT" : c.CurrencyCode)
+                        : c.CurrencyCode;
+                    DrawerItems.Add(new DrawerItem(c.CurrencyCode, subtitle, badge));
+                }
+                break;
+
+            case "billing":
+                // Pay-as-you-go billing policies. Refreshed alongside
+                // tenant capacity; each row already carries its attached-
+                // env count from the per-policy /environments fan-out
+                // during refresh.
+                DrawerTitle    = "Billing Policies";
+                DrawerSubtitle = $"{BillingPolicies.Count:N0} pay-as-you-go billing policy(ies) " +
+                                 "from PPAC Licensing.BillingPolicies, with attached-env counts.";
+                if (BillingPolicies.Count == 0)
+                {
+                    DrawerItems.Add(new DrawerItem(
+                        "No billing policies",
+                        "This tenant has no pay-as-you-go billing policies. " +
+                        "Create one in the Power Platform admin center to bill premium consumption to an Azure subscription.",
+                        string.Empty));
+                    break;
+                }
+                foreach (var p in BillingPolicies
+                            .OrderByDescending(p => p.AttachedEnvironmentCount)
+                            .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    var subParts = new List<string>(5);
+                    if (!string.IsNullOrWhiteSpace(p.Location))                       subParts.Add(p.Location!);
+                    if (!string.IsNullOrWhiteSpace(p.BillingInstrumentSubscriptionId)) subParts.Add($"sub {p.BillingInstrumentSubscriptionId}");
+                    if (!string.IsNullOrWhiteSpace(p.BillingInstrumentResourceGroup))  subParts.Add($"rg {p.BillingInstrumentResourceGroup}");
+                    subParts.Add($"{p.AttachedEnvironmentCount:N0} env(s) attached");
+                    DrawerItems.Add(new DrawerItem(
+                        p.Name ?? p.PolicyId,
+                        string.Join(" · ", subParts),
+                        p.Status ?? string.Empty));
+                }
+                break;
+
             case "environments":
             default:
                 DrawerTitle    = "Environments";
@@ -1165,6 +1261,16 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
             foreach (var t in _service.LoadTenantCapacity().OrderBy(t => t.CapacityType, StringComparer.OrdinalIgnoreCase))
                 TenantCapacity.Add(t);
 
+            CurrencyReports.Clear();
+            foreach (var c in _service.LoadTenantCurrencyReports().OrderBy(c => c.CurrencyCode, StringComparer.OrdinalIgnoreCase))
+                CurrencyReports.Add(c);
+
+            BillingPolicies.Clear();
+            foreach (var p in _service.LoadBillingPolicies().OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
+                BillingPolicies.Add(p);
+
+            RebuildBannerCapacityRows();
+
             Assets.Clear();
             foreach (var a in assetRows.OrderBy(a => a.DisplayName, StringComparer.OrdinalIgnoreCase))
                 Assets.Add(a);
@@ -1320,6 +1426,92 @@ public sealed class InventoryViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(DatabaseGbDisplay));
         OnPropertyChanged(nameof(FileGbDisplay));
         OnPropertyChanged(nameof(LogGbDisplay));
+        OnPropertyChanged(nameof(BillingPoliciesCountDisplay));
+        OnPropertyChanged(nameof(CurrencyReportsCountDisplay));
+    }
+
+    /// <summary>
+    /// Rebuild the headline capacity strip rendered above the env grid.
+    /// Picks the four most informative tenant-wide rows (Database, File,
+    /// Log, ApiCallCount) and pre-formats them for declarative XAML
+    /// binding (used / max + percent + color tier).
+    /// </summary>
+    private void RebuildBannerCapacityRows()
+    {
+        BannerCapacityRows.Clear();
+        if (TenantCapacity.Count == 0) return;
+
+        // Pick the rows we want to show in order. PPAC names are PascalCase.
+        var preferred = new[] { "Database", "File", "Log", "ApiCallCount" };
+        foreach (var name in preferred)
+        {
+            var row = TenantCapacity.FirstOrDefault(t =>
+                string.Equals(t.CapacityType, name, StringComparison.OrdinalIgnoreCase));
+            if (row is null) continue;
+            BannerCapacityRows.Add(ToBand(row));
+        }
+    }
+
+    private static CapacityBandRow ToBand(TenantCapacityEntry t)
+    {
+        // PPAC reports storage in MB (Units == "Mb"), API calls as raw
+        // counts. Convert storage to GB for display; leave counts alone.
+        bool isStorage = string.Equals(t.Units, "Mb", StringComparison.OrdinalIgnoreCase)
+                         || string.Equals(t.Units, "MB", StringComparison.OrdinalIgnoreCase);
+
+        double? consumed = t.Consumed;
+        double? max      = t.MaxCapacity ?? t.TotalCapacity;
+
+        string label = t.CapacityType switch
+        {
+            "Database"     => "Database",
+            "File"         => "File",
+            "Log"          => "Log",
+            "ApiCallCount" => "API calls (24h)",
+            _              => t.CapacityType
+        };
+
+        string used;
+        if (isStorage)
+        {
+            var usedGb = (consumed ?? 0) / 1024.0;
+            var maxGb  = (max      ?? 0) / 1024.0;
+            used = maxGb > 0
+                ? $"{usedGb:N1} / {maxGb:N0} GB"
+                : $"{usedGb:N1} GB";
+        }
+        else
+        {
+            used = max.HasValue && max.Value > 0
+                ? $"{(consumed ?? 0):N0} / {max.Value:N0}"
+                : $"{(consumed ?? 0):N0}";
+        }
+
+        double pct = max.HasValue && max.Value > 0 && consumed.HasValue
+            ? Math.Clamp(consumed.Value / max.Value * 100.0, 0, 100)
+            : 0;
+
+        string tier = (t.Status ?? string.Empty).ToLowerInvariant() switch
+        {
+            "over" or "exceeded" => "over",
+            "warn" or "warning" or "near" => "warn",
+            _ => pct >= 95 ? "over" : pct >= 80 ? "warn" : "ok"
+        };
+
+        var tooltip = $"PPAC tenant capacity: {t.CapacityType}\n" +
+                      $"Consumed: {(consumed?.ToString("N1") ?? "?")} {t.Units ?? string.Empty}\n" +
+                      $"Max:      {(max?.ToString("N1") ?? "?")} {t.Units ?? string.Empty}\n" +
+                      $"Status:   {t.Status ?? "(none)"}\n" +
+                      $"Synced:   {t.LastSyncedUtc:yyyy-MM-dd HH:mm} UTC";
+
+        return new CapacityBandRow
+        {
+            Label = label,
+            UsedOfMaxDisplay = used,
+            PercentUsed = pct,
+            Tier = tier,
+            TooltipText = tooltip
+        };
     }
 
     /// <summary>

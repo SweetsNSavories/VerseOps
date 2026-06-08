@@ -131,6 +131,31 @@ public sealed class AuthService
     }
 
     /// <summary>
+    /// Device-code sign-in for headless / no-browser hosts (test rigs, SSH sessions,
+    /// kiosk machines). MSAL invokes <paramref name="onMessage"/> with the user code
+    /// + verification URL; the caller is responsible for surfacing it (write to a
+    /// file, print to stderr, pop a notification, etc.). MSAL then polls AAD until
+    /// the user finishes the flow on another device or the timeout elapses.
+    /// </summary>
+    public async Task<string> SignInDeviceCodeAsync(
+        string scope,
+        Func<DeviceCodeResult, Task> onMessage,
+        CancellationToken ct = default)
+    {
+        Mode = AuthMode.User;
+        LastTokenAudience = scope;
+        EnsurePublicClient();
+
+        foreach (var a in await _publicApp!.GetAccountsAsync().ConfigureAwait(false))
+            await _publicApp.RemoveAsync(a).ConfigureAwait(false);
+
+        var result = await _publicApp.AcquireTokenWithDeviceCode(new[] { scope }, onMessage)
+            .ExecuteAsync(ct).ConfigureAwait(false);
+        LastSignedInUser = result.Account?.Username;
+        return result.AccessToken;
+    }
+
+    /// <summary>
     /// Silent-only token acquisition. Returns null when no cached account exists or
     /// the cached refresh token can no longer be used silently. Never opens a browser.
     /// Headless callers (test rigs, sweepers, CI) use this to honor a cached sign-in

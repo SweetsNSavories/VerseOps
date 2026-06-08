@@ -82,3 +82,31 @@ CREATE TABLE IF NOT EXISTS gov_env_details (
     last_synced_utc TEXT NOT NULL
 );
 
+-- Per-currency tenant capacity report from PPAC
+-- Licensing.TenantCapacity.CurrencyReports. One row per ISO currency
+-- code (USD / EUR / GBP / etc.) describing what's been purchased,
+-- allocated to envs, and still free to allocate.
+CREATE TABLE IF NOT EXISTS gov_tenant_currency_report (
+    currency_code   TEXT NOT NULL PRIMARY KEY,
+    purchased       REAL,
+    allocated       REAL,
+    consumed        REAL,
+    last_synced_utc TEXT NOT NULL
+);
+
+-- Pay-as-you-go billing policies from PPAC Licensing.BillingPolicies.
+-- AttachedEnvironmentCount is populated by a follow-up per-policy
+-- /environments call (one round-trip per policy, fanned out in
+-- parallel during refresh).
+CREATE TABLE IF NOT EXISTS gov_billing_policy (
+    policy_id                         TEXT NOT NULL PRIMARY KEY,
+    name                              TEXT,
+    location                          TEXT,
+    status                            TEXT,
+    bi_subscription_id                TEXT,
+    bi_resource_group                 TEXT,
+    bi_resource_id                    TEXT,
+    attached_environment_count        INTEGER NOT NULL DEFAULT 0,
+    last_synced_utc                   TEXT NOT NULL
+);
+
