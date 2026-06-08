@@ -147,6 +147,28 @@ public sealed class SqliteCatalog
         tx.Commit();
     }
 
+    /// <summary>Replace just the per-currency tenant capacity report rows.</summary>
+    public void ReplaceCurrencyReports(IReadOnlyList<TenantCurrencyReportEntry> rows)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+        ExecNonQuery(conn, tx, "DELETE FROM gov_tenant_currency_report");
+        InsertCurrencyReports(conn, tx, rows);
+        tx.Commit();
+    }
+
+    /// <summary>Replace just the billing-policy rows.</summary>
+    public void ReplaceBillingPolicies(IReadOnlyList<BillingPolicyRow> rows)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+        ExecNonQuery(conn, tx, "DELETE FROM gov_billing_policy");
+        InsertBillingPolicies(conn, tx, rows);
+        tx.Commit();
+    }
+
     // ------------------------------------------------------------------
     // Per-environment Dataverse drill-down cache. Solutions / Power Pages
     // / users / per-asset enrichments for one env, persisted as a JSON
@@ -325,6 +347,72 @@ public sealed class SqliteCatalog
         }
     }
 
+    private static void InsertCurrencyReports(SqliteConnection conn, SqliteTransaction tx, IReadOnlyList<TenantCurrencyReportEntry> rows)
+    {
+        if (rows.Count == 0) return;
+        using var ins = conn.CreateCommand();
+        ins.Transaction = tx;
+        ins.CommandText = @"
+            INSERT OR REPLACE INTO gov_tenant_currency_report
+                (currency_code, purchased, allocated, consumed, last_synced_utc)
+            VALUES (@currency_code, @purchased, @allocated, @consumed, @last_synced_utc);";
+        var p = ins.Parameters;
+        p.Add("@currency_code",   SqliteType.Text);
+        p.Add("@purchased",       SqliteType.Real);
+        p.Add("@allocated",       SqliteType.Real);
+        p.Add("@consumed",        SqliteType.Real);
+        p.Add("@last_synced_utc", SqliteType.Text);
+
+        foreach (var r in rows)
+        {
+            p["@currency_code"].Value   = r.CurrencyCode;
+            p["@purchased"].Value       = (object?)r.Purchased ?? DBNull.Value;
+            p["@allocated"].Value       = (object?)r.Allocated ?? DBNull.Value;
+            p["@consumed"].Value        = (object?)r.Consumed  ?? DBNull.Value;
+            p["@last_synced_utc"].Value = r.LastSyncedUtc.ToString("o", CultureInfo.InvariantCulture);
+            ins.ExecuteNonQuery();
+        }
+    }
+
+    private static void InsertBillingPolicies(SqliteConnection conn, SqliteTransaction tx, IReadOnlyList<BillingPolicyRow> rows)
+    {
+        if (rows.Count == 0) return;
+        using var ins = conn.CreateCommand();
+        ins.Transaction = tx;
+        ins.CommandText = @"
+            INSERT OR REPLACE INTO gov_billing_policy
+                (policy_id, name, location, status,
+                 bi_subscription_id, bi_resource_group, bi_resource_id,
+                 attached_environment_count, last_synced_utc)
+            VALUES (@policy_id, @name, @location, @status,
+                    @bi_subscription_id, @bi_resource_group, @bi_resource_id,
+                    @attached_environment_count, @last_synced_utc);";
+        var p = ins.Parameters;
+        p.Add("@policy_id",                  SqliteType.Text);
+        p.Add("@name",                       SqliteType.Text);
+        p.Add("@location",                   SqliteType.Text);
+        p.Add("@status",                     SqliteType.Text);
+        p.Add("@bi_subscription_id",         SqliteType.Text);
+        p.Add("@bi_resource_group",          SqliteType.Text);
+        p.Add("@bi_resource_id",             SqliteType.Text);
+        p.Add("@attached_environment_count", SqliteType.Integer);
+        p.Add("@last_synced_utc",            SqliteType.Text);
+
+        foreach (var r in rows)
+        {
+            p["@policy_id"].Value                  = r.PolicyId;
+            p["@name"].Value                       = (object?)r.Name ?? DBNull.Value;
+            p["@location"].Value                   = (object?)r.Location ?? DBNull.Value;
+            p["@status"].Value                     = (object?)r.Status ?? DBNull.Value;
+            p["@bi_subscription_id"].Value         = (object?)r.BillingInstrumentSubscriptionId ?? DBNull.Value;
+            p["@bi_resource_group"].Value          = (object?)r.BillingInstrumentResourceGroup ?? DBNull.Value;
+            p["@bi_resource_id"].Value             = (object?)r.BillingInstrumentResourceId ?? DBNull.Value;
+            p["@attached_environment_count"].Value = r.AttachedEnvironmentCount;
+            p["@last_synced_utc"].Value            = r.LastSyncedUtc.ToString("o", CultureInfo.InvariantCulture);
+            ins.ExecuteNonQuery();
+        }
+    }
+
     private static void InsertAssets(SqliteConnection conn, SqliteTransaction tx, IReadOnlyList<AssetRow> assets)
     {
         if (assets.Count == 0) return;
@@ -467,6 +555,64 @@ public sealed class SqliteCatalog
                 Status         = rdr.IsDBNull(5) ? null : rdr.GetString(5),
                 LastSyncedUtc  = DateTime.Parse(rdr.GetString(6), CultureInfo.InvariantCulture,
                                                 DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal)
+            });
+        }
+        return list;
+    }
+
+    /// <summary>Read every cached per-currency tenant capacity report row.</summary>
+    public IReadOnlyList<TenantCurrencyReportEntry> ReadAllCurrencyReports()
+    {
+        var list = new List<TenantCurrencyReportEntry>();
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT currency_code, purchased, allocated, consumed, last_synced_utc
+            FROM   gov_tenant_currency_report;";
+        using var rdr = cmd.ExecuteReader();
+        while (rdr.Read())
+        {
+            list.Add(new TenantCurrencyReportEntry
+            {
+                CurrencyCode   = rdr.GetString(0),
+                Purchased      = rdr.IsDBNull(1) ? (double?)null : rdr.GetDouble(1),
+                Allocated      = rdr.IsDBNull(2) ? (double?)null : rdr.GetDouble(2),
+                Consumed       = rdr.IsDBNull(3) ? (double?)null : rdr.GetDouble(3),
+                LastSyncedUtc  = DateTime.Parse(rdr.GetString(4), CultureInfo.InvariantCulture,
+                                                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal)
+            });
+        }
+        return list;
+    }
+
+    /// <summary>Read every cached pay-as-you-go billing policy row.</summary>
+    public IReadOnlyList<BillingPolicyRow> ReadAllBillingPolicies()
+    {
+        var list = new List<BillingPolicyRow>();
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT policy_id, name, location, status,
+                   bi_subscription_id, bi_resource_group, bi_resource_id,
+                   attached_environment_count, last_synced_utc
+            FROM   gov_billing_policy;";
+        using var rdr = cmd.ExecuteReader();
+        while (rdr.Read())
+        {
+            list.Add(new BillingPolicyRow
+            {
+                PolicyId                        = rdr.GetString(0),
+                Name                            = rdr.IsDBNull(1) ? null : rdr.GetString(1),
+                Location                        = rdr.IsDBNull(2) ? null : rdr.GetString(2),
+                Status                          = rdr.IsDBNull(3) ? null : rdr.GetString(3),
+                BillingInstrumentSubscriptionId = rdr.IsDBNull(4) ? null : rdr.GetString(4),
+                BillingInstrumentResourceGroup  = rdr.IsDBNull(5) ? null : rdr.GetString(5),
+                BillingInstrumentResourceId     = rdr.IsDBNull(6) ? null : rdr.GetString(6),
+                AttachedEnvironmentCount        = rdr.IsDBNull(7) ? 0 : (int)rdr.GetInt64(7),
+                LastSyncedUtc                   = DateTime.Parse(rdr.GetString(8), CultureInfo.InvariantCulture,
+                                                                  DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal)
             });
         }
         return list;

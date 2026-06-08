@@ -91,10 +91,10 @@ public static class PpacGeneratedCatalog
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/connectivity/environments/{environmentId}/connections  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/connectivity/connections/list-connections", ApiSurface.Ppac, new OpParam[] { EnvParam }, SubCategory: "Connections"),
         // --- Connectors ---
         new("Connectivity", "Get Connector By Id", "GET",
-            "https://api.powerplatform.com/connectivity/environments/{environmentId}/connectors/{connectorId}?$filter={$filter}&amp;api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/connectivity/environments/{environmentId}/connectors/{connectorId}?api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/connectivity/environments/{environmentId}/connectors/{connectorId}  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/connectivity/connectors/get-connector-by-id", ApiSurface.Ppac, new OpParam[] { EnvParam, new("connectorId", "Connector Id", ParamKind.Text, Help: "ID of the connector.") }, SubCategory: "Connectors"),
         new("Connectivity", "List Connectors", "GET",
-            "https://api.powerplatform.com/connectivity/environments/{environmentId}/connectors?$filter={$filter}&amp;api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/connectivity/environments/{environmentId}/connectors?api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/connectivity/environments/{environmentId}/connectors  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/connectivity/connectors/list-connectors", ApiSurface.Ppac, new OpParam[] { EnvParam }, SubCategory: "Connectors"),
 
         // ===== Copilot Studio =====
@@ -118,10 +118,10 @@ public static class PpacGeneratedCatalog
         // ===== Dynamics =====
         // --- Finance And Operations Maintenance Settings ---
         new("Dynamics", "Get Fin Ops Maintenance Settings", "GET",
-            "https://api.powerplatform.com/dynamics/environments/{environmentId}/finopsadminsettings?api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/dynamics/environments/{environmentId}/finopsadminsettings?api-version=2024-10-01",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/dynamics/environments/{environmentId}/finopsadminsettings  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/dynamics/finance-and-operations-maintenance-settings/get-fin-ops-maintenance-settings", ApiSurface.Ppac, new OpParam[] { EnvParam }, SubCategory: "Finance And Operations Maintenance Settings"),
         new("Dynamics", "Update Fin Ops Maintenance Settings", "PUT",
-            "https://api.powerplatform.com/dynamics/environments/{environmentId}/finopsadminsettings?api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/dynamics/environments/{environmentId}/finopsadminsettings?api-version=2024-10-01",
             ScopePpac, @"{ ""updatedMaintenanceWindowCadence"": {}, ""updatedMaintenanceWindowDaysOfWeek"": [] }", "PPAC: PUT https://api.powerplatform.com/dynamics/environments/{environmentId}/finopsadminsettings  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/dynamics/finance-and-operations-maintenance-settings/update-fin-ops-maintenance-settings", ApiSurface.Ppac, new OpParam[] { EnvParam }, SubCategory: "Finance And Operations Maintenance Settings"),
 
         // ===== Environment management =====
@@ -262,16 +262,16 @@ public static class PpacGeneratedCatalog
             "https://api.powerplatform.com/governance/ruleBasedPolicies/{policyId}?api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/governance/ruleBasedPolicies/{policyId}  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/governance/rule-based-policies/get-rule-based-policy-by-id", ApiSurface.Ppac, new OpParam[] { BillingParam }, SubCategory: "Rule Based Policies"),
         new("Governance", "List Rule Assignments", "GET",
-            "https://api.powerplatform.com/governance/ruleBasedPolicies/assignments?includeRuleSetCounts={includeRuleSetCounts}&amp;api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/governance/ruleBasedPolicies/assignments?includeRuleSetCounts={includeRuleSetCounts}&api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/governance/ruleBasedPolicies/assignments  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/governance/rule-based-policies/list-rule-assignments", ApiSurface.Ppac, new OpParam[] { new("includeRuleSetCounts", "Include Rule Set Counts", ParamKind.Text, Help: "Flag to include rule set counts in the response.") }, SubCategory: "Rule Based Policies"),
         new("Governance", "List Rule Assignments By Environment Group Id", "GET",
-            "https://api.powerplatform.com/governance/ruleBasedPolicies/environmentGroups/{environmentGroupId}/assignments?includeRuleSetCounts={includeRuleSetCounts}&amp;api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/governance/ruleBasedPolicies/environmentGroups/{environmentGroupId}/assignments?includeRuleSetCounts={includeRuleSetCounts}&api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/governance/ruleBasedPolicies/environmentGroups/{environmentGroupId}/assignments  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/governance/rule-based-policies/list-rule-assignments-by-environment-group-id", ApiSurface.Ppac, new OpParam[] { GroupParam, new("includeRuleSetCounts", "Include Rule Set Counts", ParamKind.Text, Help: "Flag to include rule set counts in the response.") }, SubCategory: "Rule Based Policies"),
         new("Governance", "List Rule Assignments By Environment Id", "GET",
-            "https://api.powerplatform.com/governance/ruleBasedPolicies/environments/{environmentId}/assignments?includeRuleSetCounts={includeRuleSetCounts}&amp;api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/governance/ruleBasedPolicies/environments/{environmentId}/assignments?includeRuleSetCounts={includeRuleSetCounts}&api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/governance/ruleBasedPolicies/environments/{environmentId}/assignments  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/governance/rule-based-policies/list-rule-assignments-by-environment-id", ApiSurface.Ppac, new OpParam[] { EnvParam, new("includeRuleSetCounts", "Include Rule Set Counts", ParamKind.Text, Help: "Flag to include rule set counts in the response.") }, SubCategory: "Rule Based Policies"),
         new("Governance", "List Rule Assignments By Policy Id", "GET",
-            "https://api.powerplatform.com/governance/ruleBasedPolicies/{policyId}/assignments?includeRuleSetCounts={includeRuleSetCounts}&amp;api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/governance/ruleBasedPolicies/{policyId}/assignments?includeRuleSetCounts={includeRuleSetCounts}&api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/governance/ruleBasedPolicies/{policyId}/assignments  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/governance/rule-based-policies/list-rule-assignments-by-policy-id", ApiSurface.Ppac, new OpParam[] { BillingParam, new("includeRuleSetCounts", "Include Rule Set Counts", ParamKind.Text, Help: "Flag to include rule set counts in the response.") }, SubCategory: "Rule Based Policies"),
         new("Governance", "List Rule Based Policies", "GET",
             "https://api.powerplatform.com/governance/ruleBasedPolicies?api-version=2022-03-01-preview",
@@ -380,22 +380,22 @@ public static class PpacGeneratedCatalog
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/licensing/tenantCapacity  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/licensing/tenant-capacity-details/get-tenant-capacity-details", ApiSurface.Ppac, SubCategory: "Tenant Capacity Details"),
         // --- User Per Flow Capacity Source ---
         new("Licensing", "Get User Per Flow Capacity Source", "GET",
-            "https://api.powerplatform.com/licensing/UserPerFlowCapacitySource?startDate={startDate}&amp;api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/licensing/UserPerFlowCapacitySource?startDate={startDate}&api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/licensing/UserPerFlowCapacitySource  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/licensing/user-per-flow-capacity-source/get-user-per-flow-capacity-source", ApiSurface.Ppac, new OpParam[] { new("startDate", "Start Date", ParamKind.Text, Help: "The start date for the query range.") }, SubCategory: "User Per Flow Capacity Source"),
         new("Licensing", "Get User Per Flow Capacity Source Flow Context Summary", "GET",
-            "https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/FlowContextSummary?startDate={startDate}&amp;api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/FlowContextSummary?startDate={startDate}&api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/FlowContextSummary  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/licensing/user-per-flow-capacity-source/get-user-per-flow-capacity-source-flow-context-summary", ApiSurface.Ppac, new OpParam[] { new("startDate", "Start Date", ParamKind.Text, Help: "The start date for the query range.") }, SubCategory: "User Per Flow Capacity Source"),
         new("Licensing", "Get User Per Flow Capacity Source Flow Context Summary For User Id", "GET",
-            "https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/FlowContextSummary/{userId}?startDate={startDate}&amp;api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/FlowContextSummary/{userId}?startDate={startDate}&api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/FlowContextSummary/{userId}  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/licensing/user-per-flow-capacity-source/get-user-per-flow-capacity-source-flow-context-summary-for-user-id", ApiSurface.Ppac, new OpParam[] { new("userId", "User Id", ParamKind.Text, Help: "The user identifier."), new("startDate", "Start Date", ParamKind.Text, Help: "The start date for the query range.") }, SubCategory: "User Per Flow Capacity Source"),
         new("Licensing", "Get User Per Flow Capacity Source Tenant Context Summary", "GET",
-            "https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/TenantContextSummary?startDate={startDate}&amp;api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/TenantContextSummary?startDate={startDate}&api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/TenantContextSummary  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/licensing/user-per-flow-capacity-source/get-user-per-flow-capacity-source-tenant-context-summary", ApiSurface.Ppac, new OpParam[] { new("startDate", "Start Date", ParamKind.Text, Help: "The start date for the query range.") }, SubCategory: "User Per Flow Capacity Source"),
         new("Licensing", "Get User Per Flow Capacity Source User Context Summary", "GET",
-            "https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/UserContextSummary?startDate={startDate}&amp;api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/UserContextSummary?startDate={startDate}&api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/UserContextSummary  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/licensing/user-per-flow-capacity-source/get-user-per-flow-capacity-source-user-context-summary", ApiSurface.Ppac, new OpParam[] { new("startDate", "Start Date", ParamKind.Text, Help: "The start date for the query range.") }, SubCategory: "User Per Flow Capacity Source"),
         new("Licensing", "Get User Per Flow Capacity Source User Context Summary For User Id", "GET",
-            "https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/UserContextSummary/{userId}?startDate={startDate}&amp;api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/UserContextSummary/{userId}?startDate={startDate}&api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/licensing/UserPerFlowCapacitySource/UserContextSummary/{userId}  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/licensing/user-per-flow-capacity-source/get-user-per-flow-capacity-source-user-context-summary-for-user-id", ApiSurface.Ppac, new OpParam[] { new("userId", "User Id", ParamKind.Text, Help: "The user identifier."), new("startDate", "Start Date", ParamKind.Text, Help: "The start date for the query range.") }, SubCategory: "User Per Flow Capacity Source"),
 
         // ===== Power Apps =====
@@ -418,7 +418,7 @@ public static class PpacGeneratedCatalog
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/powerautomate/environments/{environmentId}/flowActions  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/powerautomate/flow-actions/list-flow-actions", ApiSurface.Ppac, new OpParam[] { EnvParam }, SubCategory: "Flow Actions"),
         // --- Flow Runs ---
         new("Power Automate", "List Flow Runs", "GET",
-            "https://api.powerplatform.com/powerautomate/environments/{environmentId}/flowRuns?workflowId={workflowId}&amp;api-version=2022-03-01-preview",
+            "https://api.powerplatform.com/powerautomate/environments/{environmentId}/flowRuns?workflowId={workflowId}&api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/powerautomate/environments/{environmentId}/flowRuns  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/powerautomate/flow-runs/list-flow-runs", ApiSurface.Ppac, new OpParam[] { EnvParam, new("workflowId", "Workflow Id", ParamKind.Text, Help: "The workflow ID.") }, SubCategory: "Flow Runs"),
 
         // ===== Power Pages =====
@@ -525,9 +525,6 @@ public static class PpacGeneratedCatalog
         new("Workflows agent", "Get Connections", "GET",
             "https://api.powerplatform.com/workflowsagent/connections?api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/workflowsagent/connections  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/workflowsagent/dsr-compliance/get-connections", ApiSurface.Ppac, SubCategory: "Dsr Compliance"),
-        new("Workflows agent", "Get Conversation Transcripts For Dsr", "GET",
-            "https://api.powerplatform.com/workflowsagent/conversationTranscripts?api-version=2022-03-01-preview",
-            ScopePpac, null, "PPAC: GET https://api.powerplatform.com/workflowsagent/conversationTranscripts  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/workflowsagent/dsr-compliance/get-conversation-transcripts-for-dsr", ApiSurface.Ppac, SubCategory: "Dsr Compliance"),
         new("Workflows agent", "Get Conversation Transcripts With Environment", "GET",
             "https://api.powerplatform.com/workflowsagent/environments/{environmentId}/conversationTranscripts?api-version=2022-03-01-preview",
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/workflowsagent/environments/{environmentId}/conversationTranscripts  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/workflowsagent/dsr-compliance/get-conversation-transcripts-with-environment", ApiSurface.Ppac, new OpParam[] { EnvParam }, SubCategory: "Dsr Compliance"),
@@ -557,9 +554,6 @@ public static class PpacGeneratedCatalog
             ScopePpac, null, "PPAC: GET https://api.powerplatform.com/workflowsagent/environments/{environmentId}/flows/{flowId}/runs/{runId}/runHistoryData  |  Docs: https://learn.microsoft.com/en-us/rest/api/power-platform/workflowsagent/dsr-compliance/get-run-history-data-non-singleton", ApiSurface.Ppac, new OpParam[] { EnvParam, new("flowId", "Flow Id", ParamKind.Text, Help: "The flow ID."), new("runId", "Run Id", ParamKind.Text, Help: "The run ID.") }, SubCategory: "Dsr Compliance"),
 
         // ===== SDK-only (not in docs TOC) =====
-        new("Governance", "List Shared Connectors (SDK)", "GET",
-            "https://api.powerplatform.com/governance/sharedConnectors?api-version=2022-03-01-preview",
-            ScopePpac, null, "SDK-only: shared connectors across the tenant. Found via Microsoft.PowerPlatform.Management reflection; not in the public docs TOC yet.", ApiSurface.Ppac, SubCategory: "Shared Connectors (SDK)"),
         new("User management", "List Plugins (SDK)", "GET",
             "https://api.powerplatform.com/usermanagement/environments/{environmentId}/plugins?api-version=2022-03-01-preview",
             ScopePpac, null, "SDK-only: per-environment plugin inventory exposed by the SDK Usermanagement namespace. Not in the public docs TOC yet.", ApiSurface.Ppac, new OpParam[] { EnvParam }, SubCategory: "Plugins (SDK)"),

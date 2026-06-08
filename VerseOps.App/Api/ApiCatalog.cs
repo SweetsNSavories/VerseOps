@@ -245,9 +245,8 @@ public static class ApiCatalog
             ScopePowerApps, TenantSettingsBody, "Patch tenant settings (only set fields you want to change)."),
 
         // ----- Capacity -----
-        new("Capacity", "Tenant capacity", "GET",
-            "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/tenant/capacity?api-version=2021-04-01",
-            ScopePowerApps, null, "Storage / file / log capacity used at tenant level."),
+        // NOTE: legacy BAP "/scopes/admin/tenant/capacity" route returns 404 NotFound — superseded by
+        // PPAC "/licensing/tenantCapacity" (see PpacGeneratedCatalog "Get Tenant Capacity Details").
 
         new("Capacity", "Environment capacity", "GET",
             "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/{environmentId}/capacity?api-version=2021-04-01",

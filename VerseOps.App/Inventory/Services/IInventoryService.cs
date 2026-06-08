@@ -18,6 +18,19 @@ public interface IInventoryService
     IReadOnlyList<TenantCapacityEntry> LoadTenantCapacity();
 
     /// <summary>
+    /// Per-currency tenant capacity report (purchased vs allocated vs
+    /// available) from PPAC <c>Licensing.TenantCapacity.CurrencyReports</c>.
+    /// </summary>
+    IReadOnlyList<TenantCurrencyReportEntry> LoadTenantCurrencyReports();
+
+    /// <summary>
+    /// Pay-as-you-go billing policies from PPAC <c>Licensing.BillingPolicies</c>,
+    /// each annotated with its current attached-env count (from the
+    /// per-policy <c>/environments</c> fan-out at refresh time).
+    /// </summary>
+    IReadOnlyList<BillingPolicyRow> LoadBillingPolicies();
+
+    /// <summary>
     /// Tenant-wide asset catalog (apps + flows + agents) from the
     /// Power Platform Inventory API. View-model groups by env_id for the
     /// per-env expander UI.
@@ -148,6 +161,10 @@ public enum RefreshPhase
     EnvironmentsAndCapacity,
     /// <summary>Tenant-wide capacity rollup just landed.</summary>
     TenantCapacity,
+    /// <summary>Per-currency tenant capacity report just landed.</summary>
+    CurrencyReports,
+    /// <summary>Pay-as-you-go billing policies + attached-env counts just landed.</summary>
+    BillingPolicies,
     /// <summary>Inventory API asset catalog just landed.</summary>
     Assets
 }

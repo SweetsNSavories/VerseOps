@@ -58,6 +58,12 @@ public sealed class PpacInventoryService : IInventoryService
     public IReadOnlyList<TenantCapacityEntry> LoadTenantCapacity()
         => _catalog.ReadAllTenantCapacity();
 
+    public IReadOnlyList<TenantCurrencyReportEntry> LoadTenantCurrencyReports()
+        => _catalog.ReadAllCurrencyReports();
+
+    public IReadOnlyList<BillingPolicyRow> LoadBillingPolicies()
+        => _catalog.ReadAllBillingPolicies();
+
     public IReadOnlyList<AssetRow> LoadAssets()
         => _catalog.ReadAllAssets();
 
@@ -420,6 +426,73 @@ public sealed class PpacInventoryService : IInventoryService
             }
         }, ct);
 
+        // Phase B2: per-currency tenant capacity report. Same domain as
+        // tenant capacity but a separate SDK endpoint — runs in parallel.
+        var currencyPhase = Task.Run(async () =>
+        {
+            try
+            {
+                progress?.Report("Fetching tenant capacity currency reports...");
+                var currencyResp = await sc.Licensing.TenantCapacity.CurrencyReports.GetAsync(cancellationToken: ct).ConfigureAwait(false);
+                var rows = MapCurrencyReports(currencyResp, now).ToList();
+                _catalog.ReplaceCurrencyReports(rows);
+                if (onPhaseReady is not null)
+                    await onPhaseReady(RefreshPhase.CurrencyReports).ConfigureAwait(false);
+                progress?.Report($"Currency reports: {rows.Count} currency code(s).");
+                return rows.Count;
+            }
+            catch (Exception ex)
+            {
+                progress?.Report($"  (currency reports failed: {ex.GetType().Name}: {ex.Message})");
+                return 0;
+            }
+        }, ct);
+
+        // Phase B3: pay-as-you-go billing policies + their attached-env
+        // counts. The list call is one round-trip; the per-policy
+        // /environments fan-out runs in parallel with bounded concurrency.
+        var billingPhase = Task.Run(async () =>
+        {
+            try
+            {
+                progress?.Report("Fetching billing policies...");
+                var bpResp = await sc.Licensing.BillingPolicies.GetAsync(cancellationToken: ct).ConfigureAwait(false);
+                var rows = MapBillingPolicies(bpResp, now).ToList();
+                if (rows.Count > 0)
+                {
+                    progress?.Report($"Billing policies: {rows.Count} found; fetching attached envs...");
+                    using var gate = new SemaphoreSlim(6);
+                    var tasks = rows.Select(async r =>
+                    {
+                        await gate.WaitAsync(ct).ConfigureAwait(false);
+                        try
+                        {
+                            var envResp = await sc.Licensing.BillingPolicies[r.PolicyId].Environments
+                                .GetAsync(cancellationToken: ct).ConfigureAwait(false);
+                            r.AttachedEnvironmentCount = CountList(envResp);
+                        }
+                        catch
+                        {
+                            // 404 / 403 on per-policy envs (e.g. policy
+                            // has no envs, or caller lacks rights) — leave
+                            // count at 0, don't fail the whole phase.
+                        }
+                        finally { gate.Release(); }
+                    }).ToArray();
+                    await Task.WhenAll(tasks).ConfigureAwait(false);
+                }
+                _catalog.ReplaceBillingPolicies(rows);
+                if (onPhaseReady is not null)
+                    await onPhaseReady(RefreshPhase.BillingPolicies).ConfigureAwait(false);
+                return rows.Count;
+            }
+            catch (Exception ex)
+            {
+                progress?.Report($"  (billing policies failed: {ex.GetType().Name}: {ex.Message})");
+                return 0;
+            }
+        }, ct);
+
         // Phase C: tenant-wide asset catalog (Inventory API). Slowest phase
         // by far. Runs concurrently with phases A and B so the user sees the
         // env grid + tiles populate while assets stream in the background.
@@ -444,6 +517,8 @@ public sealed class PpacInventoryService : IInventoryService
 
         var (envCount, capCount) = await envPhase.ConfigureAwait(false);
         await tenantPhase.ConfigureAwait(false);
+        await currencyPhase.ConfigureAwait(false);
+        await billingPhase.ConfigureAwait(false);
         var assetCount = await assetPhase.ConfigureAwait(false);
 
         sw.Stop();
@@ -603,6 +678,120 @@ public sealed class PpacInventoryService : IInventoryService
                 LastSyncedUtc = now
             };
         }
+    }
+
+    /// <summary>
+    /// Map the per-currency tenant capacity report response into our
+    /// flattened <see cref="TenantCurrencyReportEntry"/> rows. The SDK
+    /// returns one item per currency code with purchased / allocated /
+    /// consumed totals (units depend on the underlying SKU). Reflection-
+    /// based so we tolerate SDK field renames.
+    /// </summary>
+    private static IEnumerable<TenantCurrencyReportEntry> MapCurrencyReports(object? root, DateTime now)
+    {
+        if (root is null) yield break;
+        // Response shape varies: sometimes top-level "Value" list,
+        // sometimes a wrapper with "CurrencyReports" list. Try both.
+        var items = ExtractList(root);
+        if (items.Count == 0)
+        {
+            var rt = root.GetType();
+            var listProp = rt.GetProperty("CurrencyReports", BindingFlags.Public | BindingFlags.Instance)
+                           ?? rt.GetProperty("Reports",       BindingFlags.Public | BindingFlags.Instance);
+            if (listProp?.GetValue(root) is System.Collections.IEnumerable e)
+            {
+                var l = new List<object>();
+                foreach (var x in e) if (x is not null) l.Add(x);
+                items = l;
+            }
+        }
+
+        foreach (var item in items)
+        {
+            if (item is null) continue;
+            var it = item.GetType();
+            var code = ToStringOrNull(Get<object>(item, it, "CurrencyCode"))
+                       ?? ToStringOrNull(Get<object>(item, it, "Currency"))
+                       ?? ReadAdditionalString(item, it, "currencyCode")
+                       ?? ReadAdditionalString(item, it, "currency");
+            if (string.IsNullOrWhiteSpace(code)) code = "Unknown";
+
+            yield return new TenantCurrencyReportEntry
+            {
+                CurrencyCode  = code,
+                Purchased     = AsDouble(Get<object>(item, it, "PurchasedCapacity"))
+                                ?? AsDouble(Get<object>(item, it, "Purchased"))
+                                ?? AsDouble(Get<object>(item, it, "MaxCapacity")),
+                Allocated     = AsDouble(Get<object>(item, it, "AllocatedCapacity"))
+                                ?? AsDouble(Get<object>(item, it, "Allocated"))
+                                ?? AsDouble(Get<object>(item, it, "TotalCapacity")),
+                Consumed      = AsDouble(Get<object>(item, it, "ConsumedCapacity"))
+                                ?? AsDouble(Get<object>(item, it, "Consumed"))
+                                ?? AsDouble(Get<object>(item, it, "TotalConsumption")),
+                LastSyncedUtc = now
+            };
+        }
+    }
+
+    /// <summary>
+    /// Map the billing policies list response into our flattened
+    /// <see cref="BillingPolicyRow"/> rows. Reads BillingInstrument as a
+    /// nested object — its sub-fields name the Azure subscription / RG
+    /// the policy bills against.
+    /// </summary>
+    private static IEnumerable<BillingPolicyRow> MapBillingPolicies(object? root, DateTime now)
+    {
+        if (root is null) yield break;
+        foreach (var item in ExtractList(root))
+        {
+            var it = item.GetType();
+            var id = Get<string>(item, it, "Id") ?? ReadAdditionalString(item, it, "id");
+            if (string.IsNullOrWhiteSpace(id)) continue;
+
+            string? subId = null, rg = null, resId = null;
+            var bi = Get<object>(item, it, "BillingInstrument");
+            if (bi is not null)
+            {
+                var bt = bi.GetType();
+                subId = Get<string>(bi, bt, "SubscriptionId") ?? ReadAdditionalString(bi, bt, "subscriptionId");
+                rg    = Get<string>(bi, bt, "ResourceGroup")  ?? ReadAdditionalString(bi, bt, "resourceGroup");
+                resId = Get<string>(bi, bt, "ResourceId")
+                        ?? Get<string>(bi, bt, "Id")
+                        ?? ReadAdditionalString(bi, bt, "resourceId");
+            }
+
+            yield return new BillingPolicyRow
+            {
+                PolicyId                        = id,
+                Name                            = Get<string>(item, it, "Name"),
+                Location                        = Get<string>(item, it, "Location"),
+                Status                          = ToStringOrNull(Get<object>(item, it, "Status")),
+                BillingInstrumentSubscriptionId = subId,
+                BillingInstrumentResourceGroup  = rg,
+                BillingInstrumentResourceId     = resId,
+                AttachedEnvironmentCount        = 0,
+                LastSyncedUtc                   = now
+            };
+        }
+    }
+
+    /// <summary>
+    /// Counts items in a Kiota list response (Value enumerable). Used by
+    /// the billing-policy /environments fan-out where we only care about
+    /// the attached env count, not the env contents.
+    /// </summary>
+    private static int CountList(object? response)
+    {
+        if (response is null) return 0;
+        var t = response.GetType();
+        var valueProp = t.GetProperty("Value", BindingFlags.Public | BindingFlags.Instance);
+        if (valueProp?.GetValue(response) is System.Collections.IEnumerable e)
+        {
+            int n = 0;
+            foreach (var _ in e) n++;
+            return n;
+        }
+        return 0;
     }
 
     private static T? Get<T>(object instance, Type t, string propName)
