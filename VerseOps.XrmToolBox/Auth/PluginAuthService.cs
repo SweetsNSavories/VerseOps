@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -234,15 +235,18 @@ namespace VerseOps.XrmToolBox.Auth
                 }
                 s_cacheHelper!.RegisterCache(app.UserTokenCache);
             }
-            catch (IOException)
+            catch (IOException ex)
             {
                 // Non-fatal — in-memory cache still works for this session.
+                Debug.WriteLine($"VerseOps MSAL cache: IOException ({ex.Message}); using in-memory cache only.");
             }
-            catch (UnauthorizedAccessException)
+            catch (UnauthorizedAccessException ex)
             {
+                Debug.WriteLine($"VerseOps MSAL cache: UnauthorizedAccessException ({ex.Message}); using in-memory cache only.");
             }
-            catch (MsalCachePersistenceException)
+            catch (MsalCachePersistenceException ex)
             {
+                Debug.WriteLine($"VerseOps MSAL cache: MsalCachePersistenceException ({ex.Message}); using in-memory cache only.");
             }
         }
     }

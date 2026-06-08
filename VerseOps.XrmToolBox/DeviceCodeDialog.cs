@@ -107,9 +107,9 @@ namespace VerseOps.XrmToolBox
             {
                 if (string.IsNullOrEmpty(_verificationUrl)) return;
                 try { Process.Start(new ProcessStartInfo(_verificationUrl) { UseShellExecute = true }); }
-                catch (System.ComponentModel.Win32Exception) { }
-                catch (InvalidOperationException) { }
-                catch (System.IO.FileNotFoundException) { }
+                catch (System.ComponentModel.Win32Exception ex) { Debug.WriteLine($"VerseOps DeviceCode: LinkClicked Win32Exception: {ex.Message}"); }
+                catch (InvalidOperationException ex) { Debug.WriteLine($"VerseOps DeviceCode: LinkClicked InvalidOperationException: {ex.Message}"); }
+                catch (System.IO.FileNotFoundException ex) { Debug.WriteLine($"VerseOps DeviceCode: LinkClicked FileNotFoundException: {ex.Message}"); }
             };
 
             _cancelBtn = new Button
@@ -158,13 +158,14 @@ namespace VerseOps.XrmToolBox
         }
 
         // Last-ditch fallback when ShellExecute via ProcessStartInfo fails;
-        // try the bare Process.Start overload and swallow the same narrow set.
+        // try the bare Process.Start overload and log failures so debuggers
+        // can see them (still non-fatal — user can manually copy the URL).
         private void TryStartFallback()
         {
             try { Process.Start(_verificationUrl); }
-            catch (System.ComponentModel.Win32Exception) { }
-            catch (InvalidOperationException) { }
-            catch (System.IO.FileNotFoundException) { }
+            catch (System.ComponentModel.Win32Exception ex) { Debug.WriteLine($"VerseOps DeviceCode: fallback Process.Start Win32Exception: {ex.Message}"); }
+            catch (InvalidOperationException ex) { Debug.WriteLine($"VerseOps DeviceCode: fallback Process.Start InvalidOperationException: {ex.Message}"); }
+            catch (System.IO.FileNotFoundException ex) { Debug.WriteLine($"VerseOps DeviceCode: fallback Process.Start FileNotFoundException: {ex.Message}"); }
         }
     }
 }
