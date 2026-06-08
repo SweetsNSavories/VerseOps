@@ -5,6 +5,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -207,6 +208,7 @@ namespace VerseOps.XrmToolBox
             _btnSignIn.Enabled = !busy;
             _btnSignInDeviceCode.Enabled = !busy;
             _btnSignOut.Enabled = false;
+            SetBusy(busy, text);
             UpdateExecuteEnabled();
         }
 
@@ -217,6 +219,7 @@ namespace VerseOps.XrmToolBox
             _btnSignInDeviceCode.Enabled = true;
             _btnSignOut.Enabled = true;
             _isSignedIn = true;
+            SetBusy(false, "Signed in.");
             UpdateExecuteEnabled();
         }
 
@@ -227,15 +230,30 @@ namespace VerseOps.XrmToolBox
             _btnSignInDeviceCode.Enabled = true;
             _btnSignOut.Enabled = false;
             _isSignedIn = false;
+            SetBusy(false, note);
             UpdateExecuteEnabled();
+        }
+
+        // Status-bar toggle. Indeterminate marquee + status text update; elapsed
+        // is cleared on entry and re-populated by RenderResult on completion.
+        private void SetBusy(bool busy, string statusText)
+        {
+            _statusBarLabel.Text = statusText;
+            _statusBarProgress.Visible = busy;
+            if (busy) _statusBarElapsed.Text = string.Empty;
         }
 
         private void UpdateExecuteEnabled()
         {
-            _btnExecute.Enabled = _isSignedIn && _currentOp != null && _executeCts == null;
-            _executeHint.Text = _isSignedIn
-                ? (_currentOp == null ? "Pick an operation on the left." : string.Empty)
-                : "Sign in to enable Execute.";
+            var canSend = _isSignedIn && _currentOp != null && _executeCts == null;
+            _btnExecute.Enabled = canSend;
+            _btnCancel.Enabled  = _executeCts != null;
+            // Decode bearer needs a token (i.e. signed in) but doesn't need a selected op.
+            _btnDecode.Enabled  = _isSignedIn && _executeCts == null;
+            if (!_isSignedIn)
+                _statusBarLabel.Text = "Sign in to enable Send.";
+            else if (_currentOp == null)
+                _statusBarLabel.Text = "Pick an operation on the left.";
         }
 
         // ============================================================
@@ -353,6 +371,8 @@ namespace VerseOps.XrmToolBox
                 _paramTable.RowCount = 0;
                 _paramInputs.Clear();
                 _bodyEditor.Text = string.Empty;
+                _urlBox.Text = string.Empty;
+                _descriptionBox.Text = string.Empty;
                 UpdateExecuteEnabled();
             }
         }
@@ -367,7 +387,35 @@ namespace VerseOps.XrmToolBox
 
             BuildParamInputs(op);
             _bodyEditor.Text = op.RequestBodyTemplate ?? string.Empty;
+
+            // Drive the editable controls from the catalog so the user can
+            // tweak method / URL / scope without losing the catalog defaults.
+            SelectComboValue(_methodCombo, op.HttpMethod);
+            _urlBox.Text = op.UrlTemplate;
+            SelectComboValue(_scopeCombo, op.TokenScope);
+
+            _descriptionBox.Text = string.IsNullOrEmpty(op.Description)
+                ? "(no description in catalog)"
+                : op.HttpMethod + "  " + op.UrlTemplate + "\r\n" +
+                  "scope: " + op.TokenScope + "\r\n\r\n" +
+                  op.Description;
+
             UpdateExecuteEnabled();
+        }
+
+        private static void SelectComboValue(ComboBox combo, string value)
+        {
+            if (combo.DropDownStyle == ComboBoxStyle.DropDownList)
+            {
+                var idx = combo.FindStringExact(value);
+                if (idx >= 0) combo.SelectedIndex = idx;
+            }
+            else
+            {
+                var idx = combo.FindStringExact(value);
+                if (idx >= 0) combo.SelectedIndex = idx;
+                else combo.Text = value ?? string.Empty;
+            }
         }
 
         private void BuildParamInputs(ApiOperation op)
@@ -500,43 +548,101 @@ namespace VerseOps.XrmToolBox
                 return;
             }
 
-            var url = SubstituteTokens(op.UrlTemplate, values);
+            // Read method/URL/scope from the editable controls so the user can
+            // override the catalog defaults inline. Body still substitutes tokens.
+            var method = (_methodCombo.SelectedItem?.ToString() ?? _methodCombo.Text ?? op.HttpMethod).Trim();
+            var urlTemplate = string.IsNullOrWhiteSpace(_urlBox.Text) ? op.UrlTemplate : _urlBox.Text;
+            var scope = (_scopeCombo.SelectedItem?.ToString() ?? _scopeCombo.Text ?? op.TokenScope).Trim();
+            var url = SubstituteTokens(urlTemplate, values);
             var body = string.IsNullOrEmpty(_bodyEditor.Text) ? null : SubstituteTokens(_bodyEditor.Text, values);
 
-            // `using var` keeps the CTS lifetime scoped to this method; we still
-            // expose it via _executeCts so UpdateExecuteEnabled() can tell that
-            // a call is in flight (and a future Cancel button would have a handle).
             using var cts = new CancellationTokenSource();
             _executeCts = cts;
             UpdateExecuteEnabled();
             _btnExecute.Text = "Running\u2026";
             _responseHeader.Text = "Response \u2014 sending\u2026";
             _responseBox.Text = string.Empty;
+            _headersBox.Text = string.Empty;
+            _jsonTree.Nodes.Clear();
+            SetBusy(true, method + " " + url);
 
             try
             {
-                var result = await _executor.ExecuteAsync(op.HttpMethod, url, body, op.TokenScope, cts.Token)
+                var result = await _executor.ExecuteAsync(method, url, body, scope, cts.Token)
                                             .ConfigureAwait(true);
-                RenderResult(op, url, result);
+                RenderResult(op, method, url, scope, result);
             }
             catch (OperationCanceledException)
             {
                 _responseHeader.Text = "Response \u2014 cancelled.";
+                SetBusy(false, "Cancelled.");
             }
             catch (MsalException ex)
             {
                 _responseHeader.Text = "Response \u2014 sign-in error.";
                 _responseBox.Text = "MSAL error: " + ex.Message;
+                SetBusy(false, "Sign-in error.");
             }
             catch (System.Net.Http.HttpRequestException ex)
             {
                 _responseHeader.Text = "Response \u2014 network error.";
                 _responseBox.Text = "HTTP error: " + ex.Message;
+                SetBusy(false, "Network error.");
             }
             finally
             {
                 _executeCts = null;
-                _btnExecute.Text = "Execute";
+                _btnExecute.Text = "Send";
+                UpdateExecuteEnabled();
+            }
+        }
+
+        private void BtnCancel_Click(object sender, EventArgs e)
+        {
+            try { _executeCts?.Cancel(); } catch (ObjectDisposedException) { }
+        }
+
+        // Decode the current bearer (for the selected scope, or PPAC default)
+        // into header+payload+expiry. Pure local op — no HTTP. Routed through
+        // ApiExecutor's special URL so we reuse its decode + pretty-print logic.
+        private async void BtnDecode_Click(object sender, EventArgs e)
+        {
+            var scope = (_scopeCombo.SelectedItem?.ToString() ?? _scopeCombo.Text ?? PluginAuthService.ScopePpac).Trim();
+            if (string.IsNullOrEmpty(scope)) scope = PluginAuthService.ScopePpac;
+
+            using var cts = new CancellationTokenSource();
+            _executeCts = cts;
+            UpdateExecuteEnabled();
+            _responseHeader.Text = "Response \u2014 decoding bearer\u2026";
+            _responseBox.Text = string.Empty;
+            _headersBox.Text = string.Empty;
+            _jsonTree.Nodes.Clear();
+            SetBusy(true, "Decoding bearer\u2026");
+            try
+            {
+                var result = await _executor.ExecuteAsync("GET", "local://decode-token", null, scope, cts.Token)
+                                            .ConfigureAwait(true);
+                _responseHeader.Text = "Response  \u2014  decoded JWT for scope: " + scope;
+                _responseBox.Text = "// scope: " + scope + "\r\n// (local decode \u2014 no network call)\r\n\r\n" + result.ResponseBody;
+                PopulateJsonTree(_jsonTree, result.ResponseBody);
+                PopulateHeaders(result.ResponseHeaders);
+                SetBusy(false, "Decoded.");
+                _responseTabs.SelectedTab = _respTabBody;
+            }
+            catch (OperationCanceledException)
+            {
+                _responseHeader.Text = "Response \u2014 decode cancelled.";
+                SetBusy(false, "Cancelled.");
+            }
+            catch (MsalException ex)
+            {
+                _responseHeader.Text = "Response \u2014 sign-in error.";
+                _responseBox.Text = "MSAL error: " + ex.Message;
+                SetBusy(false, "Sign-in error.");
+            }
+            finally
+            {
+                _executeCts = null;
                 UpdateExecuteEnabled();
             }
         }
@@ -550,7 +656,7 @@ namespace VerseOps.XrmToolBox
             });
         }
 
-        private void RenderResult(ApiOperation op, string url, ApiCallResult result)
+        private void RenderResult(ApiOperation op, string method, string url, string scope, ApiCallResult result)
         {
             _responseHeader.Text =
                 "Response  \u2014  " + result.StatusCode + " " + result.ReasonPhrase +
@@ -560,8 +666,8 @@ namespace VerseOps.XrmToolBox
             // Show the resolved URL in a header comment so the user can copy
             // the exact call back into curl/Postman without re-substituting tokens.
             var sb = new StringBuilder();
-            sb.Append("// ").Append(op.HttpMethod).Append("  ").AppendLine(url);
-            sb.Append("// scope: ").AppendLine(op.TokenScope);
+            sb.Append("// ").Append(method).Append("  ").AppendLine(url);
+            sb.Append("// scope: ").AppendLine(scope);
             if (!string.IsNullOrEmpty(result.OperationLocation))
             {
                 sb.Append("// operation-location: ").AppendLine(result.OperationLocation);
@@ -569,6 +675,273 @@ namespace VerseOps.XrmToolBox
             sb.AppendLine();
             sb.Append(result.ResponseBody);
             _responseBox.Text = sb.ToString();
+
+            PopulateHeaders(result.ResponseHeaders);
+            PopulateJsonTree(_jsonTree, result.ResponseBody);
+
+            _statusBarElapsed.Text = result.ElapsedMs + " ms  \u2022  " + result.StatusCode + " " + result.ReasonPhrase;
+            SetBusy(false, "Ready.");
+        }
+
+        // ============================================================
+        // Headers tab
+        // ============================================================
+
+        private void PopulateHeaders(IReadOnlyDictionary<string, string> headers)
+        {
+            if (headers == null || headers.Count == 0)
+            {
+                _headersBox.Text = "(no response headers)";
+                return;
+            }
+            var sb = new StringBuilder();
+            foreach (var kv in headers.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                sb.Append(kv.Key).Append(": ").AppendLine(kv.Value);
+            }
+            _headersBox.Text = sb.ToString();
+        }
+
+        // ============================================================
+        // JSON tree tab
+        // ============================================================
+
+        // Parse `body` as JSON and project it into the TreeView. Failures are
+        // non-fatal — we just show a single "(not JSON)" placeholder so the
+        // user knows the body wasn't structured.
+        private static void PopulateJsonTree(TreeView tree, string body)
+        {
+            tree.BeginUpdate();
+            try
+            {
+                tree.Nodes.Clear();
+                if (string.IsNullOrWhiteSpace(body))
+                {
+                    tree.Nodes.Add(new TreeNode("(empty body)"));
+                    return;
+                }
+                // The body often has a `// VerseOps diagnosis: ...` preamble from
+                // ApiExecutor; strip leading comment lines before parsing.
+                var trimmed = StripLeadingComments(body).TrimStart();
+                if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '['))
+                {
+                    tree.Nodes.Add(new TreeNode("(not JSON)"));
+                    return;
+                }
+                using var doc = JsonDocument.Parse(trimmed);
+                var root = BuildJsonNode("root", doc.RootElement);
+                tree.Nodes.Add(root);
+                root.Expand();
+            }
+            catch (JsonException ex)
+            {
+                tree.Nodes.Add(new TreeNode("(JSON parse error: " + ex.Message + ")"));
+            }
+            finally
+            {
+                tree.EndUpdate();
+            }
+        }
+
+        private static string StripLeadingComments(string s)
+        {
+            using var reader = new StringReader(s);
+            var sb = new StringBuilder();
+            string? line;
+            var inLeading = true;
+            while ((line = reader.ReadLine()) != null)
+            {
+                if (inLeading && (line.StartsWith("//") || string.IsNullOrWhiteSpace(line))) continue;
+                inLeading = false;
+                sb.AppendLine(line);
+            }
+            return sb.ToString();
+        }
+
+        private static TreeNode BuildJsonNode(string name, JsonElement element)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                {
+                    var n = new TreeNode(name + " : {} (" + CountObjectProps(element) + ")");
+                    foreach (var prop in element.EnumerateObject())
+                        n.Nodes.Add(BuildJsonNode(prop.Name, prop.Value));
+                    return n;
+                }
+                case JsonValueKind.Array:
+                {
+                    var len = element.GetArrayLength();
+                    var n = new TreeNode(name + " : [] (" + len + ")");
+                    var i = 0;
+                    foreach (var item in element.EnumerateArray())
+                        n.Nodes.Add(BuildJsonNode("[" + (i++) + "]", item));
+                    return n;
+                }
+                case JsonValueKind.String:
+                    return new TreeNode(name + " : \"" + Truncate(element.GetString() ?? "") + "\"");
+                case JsonValueKind.Number:
+                    return new TreeNode(name + " : " + element.GetRawText());
+                case JsonValueKind.True:
+                case JsonValueKind.False:
+                    return new TreeNode(name + " : " + element.GetRawText());
+                case JsonValueKind.Null:
+                    return new TreeNode(name + " : null");
+                default:
+                    return new TreeNode(name + " : " + element.GetRawText());
+            }
+        }
+
+        private static int CountObjectProps(JsonElement obj)
+        {
+            var n = 0;
+            foreach (var _ in obj.EnumerateObject()) n++;
+            return n;
+        }
+
+        private static string Truncate(string s, int max = 200)
+        {
+            if (s.Length <= max) return s;
+            return s.Substring(0, max) + "\u2026";
+        }
+
+        // ============================================================
+        // Response search (find-next in body / live filter in tree)
+        // ============================================================
+
+        private int _lastSearchAnchor = -1;
+
+        private void RespSearchBox_TextChanged(object sender, EventArgs e)
+        {
+            // Reset the find-next anchor whenever the term changes.
+            _lastSearchAnchor = -1;
+            // Live-filter the JSON tree when that tab is active.
+            if (_responseTabs.SelectedTab == _respTabTree)
+            {
+                ApplyTreeFilter(_respSearchBox.Text);
+            }
+            else
+            {
+                _respSearchInfo.Text = string.Empty;
+            }
+        }
+
+        private void RespSearchBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+                BtnRespSearchNext_Click(sender, e);
+            }
+        }
+
+        private void BtnRespSearchNext_Click(object sender, EventArgs e)
+        {
+            var term = _respSearchBox.Text;
+            if (string.IsNullOrEmpty(term)) return;
+            if (_responseTabs.SelectedTab == _respTabTree)
+            {
+                ApplyTreeFilter(term);
+                return;
+            }
+            // Determine target body (Body tab or Headers tab).
+            var target = _responseTabs.SelectedTab == _respTabHeaders ? _headersBox : _responseBox;
+            if (string.IsNullOrEmpty(target.Text))
+            {
+                _respSearchInfo.Text = "(empty)";
+                return;
+            }
+            var start = _lastSearchAnchor < 0 ? 0 : _lastSearchAnchor;
+            var idx = target.Text.IndexOf(term, start, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0 && start > 0)
+            {
+                // Wrap around to top.
+                idx = target.Text.IndexOf(term, 0, StringComparison.OrdinalIgnoreCase);
+                _respSearchInfo.Text = idx >= 0 ? "(wrapped)" : "no matches";
+            }
+            else
+            {
+                _respSearchInfo.Text = idx >= 0 ? "match" : "no matches";
+            }
+            if (idx >= 0)
+            {
+                target.Select(idx, term.Length);
+                target.ScrollToCaret();
+                _lastSearchAnchor = idx + term.Length;
+                target.Focus();
+            }
+            else
+            {
+                _lastSearchAnchor = -1;
+            }
+        }
+
+        private void BtnRespSearchClear_Click(object sender, EventArgs e)
+        {
+            _respSearchBox.Text = string.Empty;
+            _respSearchInfo.Text = string.Empty;
+            _lastSearchAnchor = -1;
+            // Repopulate the tree from the current body to undo any filtering.
+            if (_responseTabs.SelectedTab == _respTabTree)
+            {
+                PopulateJsonTree(_jsonTree, _responseBox.Text);
+            }
+        }
+
+        // Tree filter: rebuild the tree from the current body, then prune branches
+        // whose subtree contains no node whose text matches the term.
+        private void ApplyTreeFilter(string term)
+        {
+            // Always rebuild from source so successive edits don't compound.
+            PopulateJsonTree(_jsonTree, _responseBox.Text);
+            if (string.IsNullOrEmpty(term))
+            {
+                _respSearchInfo.Text = string.Empty;
+                return;
+            }
+            _jsonTree.BeginUpdate();
+            try
+            {
+                var kept = 0;
+                for (var i = _jsonTree.Nodes.Count - 1; i >= 0; i--)
+                {
+                    var n = _jsonTree.Nodes[i];
+                    if (!PruneTree(n, term)) _jsonTree.Nodes.RemoveAt(i);
+                    else { kept++; ExpandAll(n); }
+                }
+                _respSearchInfo.Text = kept > 0 ? "filtered" : "no matches";
+            }
+            finally
+            {
+                _jsonTree.EndUpdate();
+            }
+        }
+
+        // Recursive prune: keep node if its own text matches OR any descendant matches.
+        private static bool PruneTree(TreeNode node, string term)
+        {
+            var selfMatch = node.Text.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0;
+            var anyChild = false;
+            for (var i = node.Nodes.Count - 1; i >= 0; i--)
+            {
+                if (PruneTree(node.Nodes[i], term)) anyChild = true;
+                else node.Nodes.RemoveAt(i);
+            }
+            return selfMatch || anyChild;
+        }
+
+        private static void ExpandAll(TreeNode node)
+        {
+            node.Expand();
+            foreach (TreeNode c in node.Nodes) ExpandAll(c);
+        }
+
+        // When the active response tab changes, the search-info label can
+        // become misleading (e.g. "(wrapped)" on a different surface). Clear it.
+        private void ResponseTabs_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            _respSearchInfo.Text = string.Empty;
+            _lastSearchAnchor = -1;
         }
     }
 }

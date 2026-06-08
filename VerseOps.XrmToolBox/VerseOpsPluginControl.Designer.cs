@@ -19,17 +19,56 @@ namespace VerseOps.XrmToolBox
         private System.Windows.Forms.SplitContainer _rightSplit;     // top = request, bottom = response
         private System.Windows.Forms.TextBox _searchBox;
         private System.Windows.Forms.TreeView _opsTree;
+
+        // ---- Request panel (PR #5 redesign) ---------------------------
         private System.Windows.Forms.Panel _requestPanel;
         private System.Windows.Forms.Label _opMetaLabel;
-        private System.Windows.Forms.TableLayoutPanel _paramTable;
-        private System.Windows.Forms.Label _bodyHeader;
-        private System.Windows.Forms.TextBox _bodyEditor;
-        private System.Windows.Forms.Panel _executeBar;
+        // Top strip: row 0 = Method | Scope | Send/Cancel/Decode, row 1 = URL spanning.
+        private System.Windows.Forms.TableLayoutPanel _requestTopStrip;
+        private System.Windows.Forms.Label _methodLbl;
+        private System.Windows.Forms.ComboBox _methodCombo;
+        private System.Windows.Forms.Label _scopeLbl;
+        private System.Windows.Forms.ComboBox _scopeCombo;
+        private System.Windows.Forms.FlowLayoutPanel _requestButtons;
         private System.Windows.Forms.Button _btnExecute;
-        private System.Windows.Forms.Label _executeHint;
+        private System.Windows.Forms.Button _btnCancel;
+        private System.Windows.Forms.Button _btnDecode;
+        private System.Windows.Forms.Label _urlLbl;
+        private System.Windows.Forms.TextBox _urlBox;
+        // Body as Form/Raw tabs (Form keeps existing TableLayoutPanel).
+        private System.Windows.Forms.TabControl _bodyTabs;
+        private System.Windows.Forms.TabPage _bodyTabForm;
+        private System.Windows.Forms.TabPage _bodyTabRaw;
+        private System.Windows.Forms.Panel _formScrollHost;
+        private System.Windows.Forms.TableLayoutPanel _paramTable;
+        private System.Windows.Forms.TextBox _bodyEditor;
+
+        // ---- Response panel (PR #5 redesign) --------------------------
         private System.Windows.Forms.Panel _responsePanel;
         private System.Windows.Forms.Label _responseHeader;
+        // Search bar: find-next (body tab) / live filter (tree tab).
+        private System.Windows.Forms.Panel _respSearchPanel;
+        private System.Windows.Forms.Label _respSearchLbl;
+        private System.Windows.Forms.TextBox _respSearchBox;
+        private System.Windows.Forms.Button _btnRespSearchNext;
+        private System.Windows.Forms.Button _btnRespSearchClear;
+        private System.Windows.Forms.Label _respSearchInfo;
+        // Response tabs.
+        private System.Windows.Forms.TabControl _responseTabs;
+        private System.Windows.Forms.TabPage _respTabBody;
+        private System.Windows.Forms.TabPage _respTabTree;
+        private System.Windows.Forms.TabPage _respTabHeaders;
+        private System.Windows.Forms.TabPage _respTabDescription;
         private System.Windows.Forms.TextBox _responseBox;
+        private System.Windows.Forms.TreeView _jsonTree;
+        private System.Windows.Forms.TextBox _headersBox;
+        private System.Windows.Forms.TextBox _descriptionBox;
+
+        // ---- App-wide status strip (PR #5) ----------------------------
+        private System.Windows.Forms.StatusStrip _statusStrip;
+        private System.Windows.Forms.ToolStripStatusLabel _statusBarLabel;
+        private System.Windows.Forms.ToolStripStatusLabel _statusBarElapsed;
+        private System.Windows.Forms.ToolStripProgressBar _statusBarProgress;
 
         private void InitializeComponent()
         {
@@ -44,17 +83,49 @@ namespace VerseOps.XrmToolBox
             _rightSplit           = new System.Windows.Forms.SplitContainer();
             _searchBox            = new System.Windows.Forms.TextBox();
             _opsTree              = new System.Windows.Forms.TreeView();
+
             _requestPanel         = new System.Windows.Forms.Panel();
             _opMetaLabel          = new System.Windows.Forms.Label();
-            _paramTable           = new System.Windows.Forms.TableLayoutPanel();
-            _bodyHeader           = new System.Windows.Forms.Label();
-            _bodyEditor           = new System.Windows.Forms.TextBox();
-            _executeBar           = new System.Windows.Forms.Panel();
+            _requestTopStrip      = new System.Windows.Forms.TableLayoutPanel();
+            _methodLbl            = new System.Windows.Forms.Label();
+            _methodCombo          = new System.Windows.Forms.ComboBox();
+            _scopeLbl             = new System.Windows.Forms.Label();
+            _scopeCombo           = new System.Windows.Forms.ComboBox();
+            _requestButtons       = new System.Windows.Forms.FlowLayoutPanel();
             _btnExecute           = new System.Windows.Forms.Button();
-            _executeHint          = new System.Windows.Forms.Label();
+            _btnCancel            = new System.Windows.Forms.Button();
+            _btnDecode            = new System.Windows.Forms.Button();
+            _urlLbl               = new System.Windows.Forms.Label();
+            _urlBox               = new System.Windows.Forms.TextBox();
+            _bodyTabs             = new System.Windows.Forms.TabControl();
+            _bodyTabForm          = new System.Windows.Forms.TabPage();
+            _bodyTabRaw           = new System.Windows.Forms.TabPage();
+            _formScrollHost       = new System.Windows.Forms.Panel();
+            _paramTable           = new System.Windows.Forms.TableLayoutPanel();
+            _bodyEditor           = new System.Windows.Forms.TextBox();
+
             _responsePanel        = new System.Windows.Forms.Panel();
             _responseHeader       = new System.Windows.Forms.Label();
+            _respSearchPanel      = new System.Windows.Forms.Panel();
+            _respSearchLbl        = new System.Windows.Forms.Label();
+            _respSearchBox        = new System.Windows.Forms.TextBox();
+            _btnRespSearchNext    = new System.Windows.Forms.Button();
+            _btnRespSearchClear   = new System.Windows.Forms.Button();
+            _respSearchInfo       = new System.Windows.Forms.Label();
+            _responseTabs         = new System.Windows.Forms.TabControl();
+            _respTabBody          = new System.Windows.Forms.TabPage();
+            _respTabTree          = new System.Windows.Forms.TabPage();
+            _respTabHeaders       = new System.Windows.Forms.TabPage();
+            _respTabDescription   = new System.Windows.Forms.TabPage();
             _responseBox          = new System.Windows.Forms.TextBox();
+            _jsonTree             = new System.Windows.Forms.TreeView();
+            _headersBox           = new System.Windows.Forms.TextBox();
+            _descriptionBox       = new System.Windows.Forms.TextBox();
+
+            _statusStrip          = new System.Windows.Forms.StatusStrip();
+            _statusBarLabel       = new System.Windows.Forms.ToolStripStatusLabel();
+            _statusBarElapsed     = new System.Windows.Forms.ToolStripStatusLabel();
+            _statusBarProgress    = new System.Windows.Forms.ToolStripProgressBar();
 
             _toolStrip.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)_outerSplit).BeginInit();
@@ -66,8 +137,20 @@ namespace VerseOps.XrmToolBox
             _rightSplit.Panel2.SuspendLayout();
             _rightSplit.SuspendLayout();
             _requestPanel.SuspendLayout();
-            _executeBar.SuspendLayout();
+            _requestTopStrip.SuspendLayout();
+            _requestButtons.SuspendLayout();
+            _bodyTabs.SuspendLayout();
+            _bodyTabForm.SuspendLayout();
+            _bodyTabRaw.SuspendLayout();
+            _formScrollHost.SuspendLayout();
             _responsePanel.SuspendLayout();
+            _respSearchPanel.SuspendLayout();
+            _responseTabs.SuspendLayout();
+            _respTabBody.SuspendLayout();
+            _respTabTree.SuspendLayout();
+            _respTabHeaders.SuspendLayout();
+            _respTabDescription.SuspendLayout();
+            _statusStrip.SuspendLayout();
             SuspendLayout();
 
             // ---- Toolbar (PR #3) ------------------------------------------
@@ -138,22 +221,150 @@ namespace VerseOps.XrmToolBox
             // Right pane: nested vertical split (request top, response bottom)
             _rightSplit.Dock = System.Windows.Forms.DockStyle.Fill;
             _rightSplit.Orientation = System.Windows.Forms.Orientation.Horizontal;
-            _rightSplit.SplitterDistance = 320;
+            _rightSplit.SplitterDistance = 300;
             _rightSplit.SplitterWidth = 5;
             _rightSplit.Name = "_rightSplit";
 
-            // Request panel ------------------------------------------------
+            // ============================================================
+            // REQUEST PANEL
+            // ============================================================
             _requestPanel.Dock = System.Windows.Forms.DockStyle.Fill;
             _requestPanel.Padding = new System.Windows.Forms.Padding(8);
             _requestPanel.Name = "_requestPanel";
 
             _opMetaLabel.Dock = System.Windows.Forms.DockStyle.Top;
             _opMetaLabel.AutoSize = false;
-            _opMetaLabel.Height = 56;
+            _opMetaLabel.Height = 52;
             _opMetaLabel.Padding = new System.Windows.Forms.Padding(0, 0, 0, 4);
             _opMetaLabel.Font = new System.Drawing.Font("Segoe UI", 9F);
             _opMetaLabel.Text = "Select an operation from the tree on the left.";
             _opMetaLabel.Name = "_opMetaLabel";
+
+            // ---- Request top strip (Method/URL/Scope + buttons) ---------
+            // 5 cols × 2 rows.
+            //   Row 0: Method lbl | Method combo | Scope lbl | Scope combo (Fill) | Buttons (auto)
+            //   Row 1: URL    lbl | URL textbox spanning cols 1..4
+            _requestTopStrip.Dock = System.Windows.Forms.DockStyle.Top;
+            _requestTopStrip.AutoSize = true;
+            _requestTopStrip.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            _requestTopStrip.ColumnCount = 5;
+            _requestTopStrip.RowCount = 2;
+            _requestTopStrip.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
+            _requestTopStrip.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 96F));
+            _requestTopStrip.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
+            _requestTopStrip.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            _requestTopStrip.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
+            _requestTopStrip.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            _requestTopStrip.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            _requestTopStrip.Padding = new System.Windows.Forms.Padding(0, 2, 0, 6);
+            _requestTopStrip.Name = "_requestTopStrip";
+
+            _methodLbl.Text = "Method:";
+            _methodLbl.AutoSize = true;
+            _methodLbl.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            _methodLbl.Anchor = System.Windows.Forms.AnchorStyles.Left;
+            _methodLbl.Margin = new System.Windows.Forms.Padding(0, 6, 6, 4);
+
+            _methodCombo.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            _methodCombo.Items.AddRange(new object[] { "GET", "POST", "PATCH", "PUT", "DELETE" });
+            _methodCombo.SelectedIndex = 0;
+            _methodCombo.Dock = System.Windows.Forms.DockStyle.Fill;
+            _methodCombo.Margin = new System.Windows.Forms.Padding(0, 3, 12, 3);
+            _methodCombo.Font = new System.Drawing.Font("Segoe UI", 9F);
+
+            _scopeLbl.Text = "Scope:";
+            _scopeLbl.AutoSize = true;
+            _scopeLbl.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            _scopeLbl.Anchor = System.Windows.Forms.AnchorStyles.Left;
+            _scopeLbl.Margin = new System.Windows.Forms.Padding(0, 6, 6, 4);
+
+            _scopeCombo.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDown;
+            _scopeCombo.Items.AddRange(new object[]
+            {
+                "https://api.powerplatform.com/.default",
+                "https://service.powerapps.com/.default",
+                "https://api.bap.microsoft.com/.default",
+                "https://graph.microsoft.com/.default"
+            });
+            _scopeCombo.SelectedIndex = 0;
+            _scopeCombo.Dock = System.Windows.Forms.DockStyle.Fill;
+            _scopeCombo.Margin = new System.Windows.Forms.Padding(0, 3, 8, 3);
+            _scopeCombo.Font = new System.Drawing.Font("Segoe UI", 9F);
+
+            _requestButtons.FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight;
+            _requestButtons.AutoSize = true;
+            _requestButtons.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            _requestButtons.WrapContents = false;
+            _requestButtons.Margin = new System.Windows.Forms.Padding(0);
+            _requestButtons.Padding = new System.Windows.Forms.Padding(0);
+
+            _btnExecute.Text = "Send";
+            _btnExecute.Width = 84;
+            _btnExecute.Height = 26;
+            _btnExecute.Enabled = false;
+            _btnExecute.Name = "_btnExecute";
+            _btnExecute.UseVisualStyleBackColor = true;
+            _btnExecute.Margin = new System.Windows.Forms.Padding(0, 0, 6, 0);
+            _btnExecute.Click += BtnExecute_Click;
+
+            _btnCancel.Text = "Cancel";
+            _btnCancel.Width = 70;
+            _btnCancel.Height = 26;
+            _btnCancel.Enabled = false;
+            _btnCancel.Name = "_btnCancel";
+            _btnCancel.UseVisualStyleBackColor = true;
+            _btnCancel.Margin = new System.Windows.Forms.Padding(0, 0, 6, 0);
+            _btnCancel.Click += BtnCancel_Click;
+
+            _btnDecode.Text = "Decode bearer";
+            _btnDecode.Width = 110;
+            _btnDecode.Height = 26;
+            _btnDecode.Enabled = false;
+            _btnDecode.Name = "_btnDecode";
+            _btnDecode.UseVisualStyleBackColor = true;
+            _btnDecode.Margin = new System.Windows.Forms.Padding(0);
+            _btnDecode.Click += BtnDecode_Click;
+
+            _requestButtons.Controls.Add(_btnExecute);
+            _requestButtons.Controls.Add(_btnCancel);
+            _requestButtons.Controls.Add(_btnDecode);
+
+            _urlLbl.Text = "URL:";
+            _urlLbl.AutoSize = true;
+            _urlLbl.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            _urlLbl.Anchor = System.Windows.Forms.AnchorStyles.Left;
+            _urlLbl.Margin = new System.Windows.Forms.Padding(0, 6, 6, 4);
+
+            _urlBox.Dock = System.Windows.Forms.DockStyle.Fill;
+            _urlBox.Font = new System.Drawing.Font("Cascadia Mono, Consolas", 9F);
+            _urlBox.Margin = new System.Windows.Forms.Padding(0, 3, 0, 3);
+            _urlBox.Name = "_urlBox";
+
+            _requestTopStrip.Controls.Add(_methodLbl,      0, 0);
+            _requestTopStrip.Controls.Add(_methodCombo,    1, 0);
+            _requestTopStrip.Controls.Add(_scopeLbl,       2, 0);
+            _requestTopStrip.Controls.Add(_scopeCombo,     3, 0);
+            _requestTopStrip.Controls.Add(_requestButtons, 4, 0);
+            _requestTopStrip.Controls.Add(_urlLbl,         0, 1);
+            _requestTopStrip.Controls.Add(_urlBox,         1, 1);
+            _requestTopStrip.SetColumnSpan(_urlBox, 4);
+
+            // ---- Body tabs (Form / Raw) ---------------------------------
+            _bodyTabs.Dock = System.Windows.Forms.DockStyle.Fill;
+            _bodyTabs.Font = new System.Drawing.Font("Segoe UI", 9F);
+            _bodyTabs.Name = "_bodyTabs";
+            _bodyTabs.TabPages.Add(_bodyTabForm);
+            _bodyTabs.TabPages.Add(_bodyTabRaw);
+
+            _bodyTabForm.Text = "Form";
+            _bodyTabForm.Padding = new System.Windows.Forms.Padding(6);
+            _bodyTabForm.UseVisualStyleBackColor = true;
+            _bodyTabForm.Controls.Add(_formScrollHost);
+
+            _formScrollHost.Dock = System.Windows.Forms.DockStyle.Fill;
+            _formScrollHost.AutoScroll = true;
+            _formScrollHost.Padding = new System.Windows.Forms.Padding(0);
+            _formScrollHost.Name = "_formScrollHost";
 
             _paramTable.Dock = System.Windows.Forms.DockStyle.Top;
             _paramTable.AutoSize = true;
@@ -161,59 +372,36 @@ namespace VerseOps.XrmToolBox
             _paramTable.ColumnCount = 2;
             _paramTable.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 160F));
             _paramTable.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
-            _paramTable.Padding = new System.Windows.Forms.Padding(0, 4, 0, 4);
+            _paramTable.Padding = new System.Windows.Forms.Padding(0);
             _paramTable.Name = "_paramTable";
 
-            _bodyHeader.Dock = System.Windows.Forms.DockStyle.Top;
-            _bodyHeader.AutoSize = true;
-            _bodyHeader.Padding = new System.Windows.Forms.Padding(0, 8, 0, 2);
-            _bodyHeader.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
-            _bodyHeader.Text = "Request body (JSON)";
-            _bodyHeader.Name = "_bodyHeader";
+            _formScrollHost.Controls.Add(_paramTable);
+
+            _bodyTabRaw.Text = "Raw body";
+            _bodyTabRaw.Padding = new System.Windows.Forms.Padding(0);
+            _bodyTabRaw.UseVisualStyleBackColor = true;
+            _bodyTabRaw.Controls.Add(_bodyEditor);
 
             _bodyEditor.Dock = System.Windows.Forms.DockStyle.Fill;
             _bodyEditor.Multiline = true;
-            _bodyEditor.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
+            _bodyEditor.ScrollBars = System.Windows.Forms.ScrollBars.Both;
             _bodyEditor.AcceptsReturn = true;
             _bodyEditor.AcceptsTab = true;
             _bodyEditor.WordWrap = false;
-            _bodyEditor.Font = new System.Drawing.Font("Consolas", 9.5F);
+            _bodyEditor.Font = new System.Drawing.Font("Cascadia Mono, Consolas", 9.5F);
             _bodyEditor.Name = "_bodyEditor";
 
-            _executeBar.Dock = System.Windows.Forms.DockStyle.Bottom;
-            _executeBar.Height = 36;
-            _executeBar.Name = "_executeBar";
-
-            _btnExecute.Dock = System.Windows.Forms.DockStyle.Right;
-            _btnExecute.Width = 120;
-            _btnExecute.Height = 30;
-            _btnExecute.Text = "Execute";
-            _btnExecute.Enabled = false;
-            _btnExecute.Name = "_btnExecute";
-            _btnExecute.UseVisualStyleBackColor = true;
-            _btnExecute.Click += BtnExecute_Click;
-
-            _executeHint.Dock = System.Windows.Forms.DockStyle.Fill;
-            _executeHint.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            _executeHint.ForeColor = System.Drawing.SystemColors.GrayText;
-            _executeHint.Name = "_executeHint";
-            _executeHint.Text = "";
-
-            _executeBar.Controls.Add(_executeHint);
-            _executeBar.Controls.Add(_btnExecute);
-
-            // Order matters with DockStyle.Fill + Top + Bottom siblings: the
-            // Fill control must be added BEFORE the Top/Bottom docked controls
-            // so it ends up underneath them in z-order.
-            _requestPanel.Controls.Add(_bodyEditor);
-            _requestPanel.Controls.Add(_bodyHeader);
-            _requestPanel.Controls.Add(_paramTable);
-            _requestPanel.Controls.Add(_opMetaLabel);
-            _requestPanel.Controls.Add(_executeBar);
+            // Add request-panel children. Fill first (z-order: underneath),
+            // Top docks stack last-added-closest-to-edge.
+            _requestPanel.Controls.Add(_bodyTabs);          // Fill
+            _requestPanel.Controls.Add(_requestTopStrip);   // Top (below opMeta)
+            _requestPanel.Controls.Add(_opMetaLabel);       // Top (edge)
 
             _rightSplit.Panel1.Controls.Add(_requestPanel);
 
-            // Response panel ----------------------------------------------
+            // ============================================================
+            // RESPONSE PANEL
+            // ============================================================
             _responsePanel.Dock = System.Windows.Forms.DockStyle.Fill;
             _responsePanel.Padding = new System.Windows.Forms.Padding(8);
             _responsePanel.Name = "_responsePanel";
@@ -225,32 +413,176 @@ namespace VerseOps.XrmToolBox
             _responseHeader.Text = "Response";
             _responseHeader.Name = "_responseHeader";
 
+            // ---- Search bar above response tabs -------------------------
+            _respSearchPanel.Dock = System.Windows.Forms.DockStyle.Top;
+            _respSearchPanel.Height = 30;
+            _respSearchPanel.Padding = new System.Windows.Forms.Padding(0, 2, 0, 4);
+            _respSearchPanel.Name = "_respSearchPanel";
+
+            _respSearchLbl.Text = "Search:";
+            _respSearchLbl.AutoSize = false;
+            _respSearchLbl.Width = 52;
+            _respSearchLbl.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            _respSearchLbl.Dock = System.Windows.Forms.DockStyle.Left;
+
+            _respSearchBox.Dock = System.Windows.Forms.DockStyle.Fill;
+            _respSearchBox.Font = new System.Drawing.Font("Cascadia Mono, Consolas", 9F);
+            _respSearchBox.Name = "_respSearchBox";
+            _respSearchBox.TextChanged += RespSearchBox_TextChanged;
+            _respSearchBox.KeyDown += RespSearchBox_KeyDown;
+
+            _btnRespSearchNext.Text = "Find next";
+            _btnRespSearchNext.Width = 78;
+            _btnRespSearchNext.Dock = System.Windows.Forms.DockStyle.Right;
+            _btnRespSearchNext.UseVisualStyleBackColor = true;
+            _btnRespSearchNext.Click += BtnRespSearchNext_Click;
+
+            _btnRespSearchClear.Text = "Clear";
+            _btnRespSearchClear.Width = 60;
+            _btnRespSearchClear.Dock = System.Windows.Forms.DockStyle.Right;
+            _btnRespSearchClear.UseVisualStyleBackColor = true;
+            _btnRespSearchClear.Click += BtnRespSearchClear_Click;
+
+            _respSearchInfo.Text = "";
+            _respSearchInfo.AutoSize = false;
+            _respSearchInfo.Width = 150;
+            _respSearchInfo.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            _respSearchInfo.ForeColor = System.Drawing.SystemColors.GrayText;
+            _respSearchInfo.Dock = System.Windows.Forms.DockStyle.Right;
+
+            // Fill first so docked Left/Right siblings layer above it.
+            _respSearchPanel.Controls.Add(_respSearchBox);     // Fill
+            _respSearchPanel.Controls.Add(_respSearchInfo);    // Right
+            _respSearchPanel.Controls.Add(_btnRespSearchClear);// Right
+            _respSearchPanel.Controls.Add(_btnRespSearchNext); // Right
+            _respSearchPanel.Controls.Add(_respSearchLbl);     // Left
+
+            // ---- Response tabs ------------------------------------------
+            _responseTabs.Dock = System.Windows.Forms.DockStyle.Fill;
+            _responseTabs.Font = new System.Drawing.Font("Segoe UI", 9F);
+            _responseTabs.Name = "_responseTabs";
+            _responseTabs.TabPages.Add(_respTabBody);
+            _responseTabs.TabPages.Add(_respTabTree);
+            _responseTabs.TabPages.Add(_respTabHeaders);
+            _responseTabs.TabPages.Add(_respTabDescription);
+            _responseTabs.SelectedIndexChanged += ResponseTabs_SelectedIndexChanged;
+
+            _respTabBody.Text = "Body";
+            _respTabBody.Padding = new System.Windows.Forms.Padding(0);
+            _respTabBody.UseVisualStyleBackColor = true;
+            _respTabBody.Controls.Add(_responseBox);
+
             _responseBox.Dock = System.Windows.Forms.DockStyle.Fill;
             _responseBox.Multiline = true;
             _responseBox.ReadOnly = true;
             _responseBox.ScrollBars = System.Windows.Forms.ScrollBars.Both;
             _responseBox.WordWrap = false;
-            _responseBox.Font = new System.Drawing.Font("Consolas", 9.5F);
+            _responseBox.Font = new System.Drawing.Font("Cascadia Mono, Consolas", 9.5F);
+            _responseBox.HideSelection = false;
             _responseBox.Name = "_responseBox";
             _responseBox.BackColor = System.Drawing.SystemColors.Window;
 
-            _responsePanel.Controls.Add(_responseBox);
-            _responsePanel.Controls.Add(_responseHeader);
+            _respTabTree.Text = "JSON tree";
+            _respTabTree.Padding = new System.Windows.Forms.Padding(0);
+            _respTabTree.UseVisualStyleBackColor = true;
+            _respTabTree.Controls.Add(_jsonTree);
+
+            _jsonTree.Dock = System.Windows.Forms.DockStyle.Fill;
+            _jsonTree.Font = new System.Drawing.Font("Cascadia Mono, Consolas", 9F);
+            _jsonTree.HideSelection = false;
+            _jsonTree.ShowRootLines = true;
+            _jsonTree.Name = "_jsonTree";
+
+            _respTabHeaders.Text = "Headers";
+            _respTabHeaders.Padding = new System.Windows.Forms.Padding(0);
+            _respTabHeaders.UseVisualStyleBackColor = true;
+            _respTabHeaders.Controls.Add(_headersBox);
+
+            _headersBox.Dock = System.Windows.Forms.DockStyle.Fill;
+            _headersBox.Multiline = true;
+            _headersBox.ReadOnly = true;
+            _headersBox.ScrollBars = System.Windows.Forms.ScrollBars.Both;
+            _headersBox.WordWrap = false;
+            _headersBox.Font = new System.Drawing.Font("Cascadia Mono, Consolas", 9F);
+            _headersBox.Name = "_headersBox";
+            _headersBox.BackColor = System.Drawing.SystemColors.Window;
+
+            _respTabDescription.Text = "Description";
+            _respTabDescription.Padding = new System.Windows.Forms.Padding(0);
+            _respTabDescription.UseVisualStyleBackColor = true;
+            _respTabDescription.Controls.Add(_descriptionBox);
+
+            _descriptionBox.Dock = System.Windows.Forms.DockStyle.Fill;
+            _descriptionBox.Multiline = true;
+            _descriptionBox.ReadOnly = true;
+            _descriptionBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
+            _descriptionBox.WordWrap = true;
+            _descriptionBox.Font = new System.Drawing.Font("Segoe UI", 9.5F);
+            _descriptionBox.Name = "_descriptionBox";
+            _descriptionBox.BackColor = System.Drawing.SystemColors.Window;
+
+            // Fill first; Top-docked siblings layer above.
+            _responsePanel.Controls.Add(_responseTabs);    // Fill
+            _responsePanel.Controls.Add(_respSearchPanel); // Top (below header)
+            _responsePanel.Controls.Add(_responseHeader);  // Top (edge)
 
             _rightSplit.Panel2.Controls.Add(_responsePanel);
 
             _outerSplit.Panel2.Controls.Add(_rightSplit);
 
+            // ---- Status strip (bottom) ----------------------------------
+            _statusStrip.SizingGrip = false;
+            _statusStrip.Name = "_statusStrip";
+            _statusStrip.RenderMode = System.Windows.Forms.ToolStripRenderMode.System;
+            _statusStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[]
+            {
+                _statusBarLabel,
+                _statusBarElapsed,
+                _statusBarProgress
+            });
+
+            _statusBarLabel.Name = "_statusBarLabel";
+            _statusBarLabel.Text = "Ready.";
+            _statusBarLabel.Spring = true;
+            _statusBarLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+
+            _statusBarElapsed.Name = "_statusBarElapsed";
+            _statusBarElapsed.Text = "";
+            _statusBarElapsed.AutoSize = true;
+            _statusBarElapsed.Margin = new System.Windows.Forms.Padding(0, 3, 12, 2);
+
+            _statusBarProgress.Name = "_statusBarProgress";
+            _statusBarProgress.Style = System.Windows.Forms.ProgressBarStyle.Marquee;
+            _statusBarProgress.Width = 180;
+            _statusBarProgress.Visible = false;
+            _statusBarProgress.MarqueeAnimationSpeed = 30;
+
             // ---- Root ----------------------------------------------------
-            Controls.Add(_outerSplit);
-            Controls.Add(_toolStrip);
+            // Add Fill FIRST, then Top, then Bottom — that way the docked
+            // controls layer correctly above the fill.
+            Controls.Add(_outerSplit);   // Fill
+            Controls.Add(_toolStrip);    // Top
+            Controls.Add(_statusStrip);  // Bottom
             Name = "VerseOpsPluginControl";
             Size = new System.Drawing.Size(1000, 600);
 
-            _executeBar.ResumeLayout(false);
-            _requestPanel.ResumeLayout(false);
-            _requestPanel.PerformLayout();
+            _statusStrip.ResumeLayout(false);
+            _statusStrip.PerformLayout();
+            _respTabDescription.ResumeLayout(false);
+            _respTabHeaders.ResumeLayout(false);
+            _respTabTree.ResumeLayout(false);
+            _respTabBody.ResumeLayout(false);
+            _responseTabs.ResumeLayout(false);
+            _respSearchPanel.ResumeLayout(false);
             _responsePanel.ResumeLayout(false);
+            _formScrollHost.ResumeLayout(false);
+            _bodyTabRaw.ResumeLayout(false);
+            _bodyTabForm.ResumeLayout(false);
+            _bodyTabs.ResumeLayout(false);
+            _requestButtons.ResumeLayout(false);
+            _requestTopStrip.ResumeLayout(false);
+            _requestTopStrip.PerformLayout();
+            _requestPanel.ResumeLayout(false);
             _rightSplit.Panel1.ResumeLayout(false);
             _rightSplit.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)_rightSplit).EndInit();
