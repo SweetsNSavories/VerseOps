@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VerseOps.UiTests", "VerseOp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VerseOps.SdkTests", "VerseOps.SdkTests\VerseOps.SdkTests.csproj", "{3B24D6C1-85F5-4E58-9B0A-FD0AAD4CFEEA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VerseOps.Api.Core", "VerseOps.Api.Core\VerseOps.Api.Core.csproj", "{2C2233FE-1F2A-4128-A46C-4ED13870E8F9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{3B24D6C1-85F5-4E58-9B0A-FD0AAD4CFEEA}.Release|x64.Build.0 = Release|Any CPU
 		{3B24D6C1-85F5-4E58-9B0A-FD0AAD4CFEEA}.Release|x86.ActiveCfg = Release|Any CPU
 		{3B24D6C1-85F5-4E58-9B0A-FD0AAD4CFEEA}.Release|x86.Build.0 = Release|Any CPU
+		{2C2233FE-1F2A-4128-A46C-4ED13870E8F9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2C2233FE-1F2A-4128-A46C-4ED13870E8F9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2C2233FE-1F2A-4128-A46C-4ED13870E8F9}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2C2233FE-1F2A-4128-A46C-4ED13870E8F9}.Debug|x64.Build.0 = Debug|Any CPU
+		{2C2233FE-1F2A-4128-A46C-4ED13870E8F9}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2C2233FE-1F2A-4128-A46C-4ED13870E8F9}.Debug|x86.Build.0 = Debug|Any CPU
+		{2C2233FE-1F2A-4128-A46C-4ED13870E8F9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2C2233FE-1F2A-4128-A46C-4ED13870E8F9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2C2233FE-1F2A-4128-A46C-4ED13870E8F9}.Release|x64.ActiveCfg = Release|Any CPU
+		{2C2233FE-1F2A-4128-A46C-4ED13870E8F9}.Release|x64.Build.0 = Release|Any CPU
+		{2C2233FE-1F2A-4128-A46C-4ED13870E8F9}.Release|x86.ActiveCfg = Release|Any CPU
+		{2C2233FE-1F2A-4128-A46C-4ED13870E8F9}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

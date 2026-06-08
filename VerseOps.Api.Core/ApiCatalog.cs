@@ -1,4 +1,4 @@
-﻿namespace VerseOps.App.Api;
+﻿namespace VerseOps.Api.Core;
 
 public enum ApiSurface { Bap, Ppac, Local }
 

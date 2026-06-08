@@ -2,6 +2,7 @@ using System.IO;
 using Microsoft.Identity.Client;
 using Microsoft.Identity.Client.Broker;
 using Microsoft.Identity.Client.Extensions.Msal;
+using VerseOps.Api.Core;
 using VerseOps.App.Configuration;
 
 namespace VerseOps.App.Auth;
@@ -15,7 +16,7 @@ namespace VerseOps.App.Auth;
 ///   - App-only:         MSAL client credentials using an Azure AD app registration secret.
 ///                        Identical to VerseOps.Authentication.AppOnlyTokenProvider.
 /// </summary>
-public sealed class AuthService
+public sealed class AuthService : IAccessTokenProvider
 {
     public enum AuthMode { User, AppOnly }
 

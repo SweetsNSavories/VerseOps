@@ -32,6 +32,13 @@
     <PackageReference Include="SharpVectors.Reloaded" Version="1.8.4.2" />
   </ItemGroup>
 
+  <!-- Shared API catalog + executor lives in VerseOps.Api.Core (netstandard2.0)
+       so the XrmToolBox plugin (net472) can also consume the exact same 200+
+       PPAC/BAP operation definitions. Keep the catalog there, NOT here. -->
+  <ItemGroup>
+    <ProjectReference Include="..\VerseOps.Api.Core\VerseOps.Api.Core.csproj" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Update="Inventory\Sql\schema.sql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

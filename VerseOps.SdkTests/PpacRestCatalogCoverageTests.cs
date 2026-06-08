@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using VerseOps.App.Api;
+using VerseOps.Api.Core;
 using Xunit;
 using Xunit.Abstractions;
 
