@@ -37,12 +37,31 @@ namespace VerseOps.XrmToolBox
         private bool _isSignedIn;
         private CancellationTokenSource? _executeCts;
 
+        // One ToolTip provider for every parameter-form row. ToolTip is IDisposable;
+        // creating one per row leaks a native handle on each operation switch.
+        private readonly ToolTip _paramTooltip = new ToolTip
+        {
+            AutoPopDelay = 30000,
+            InitialDelay = 250,
+            ReshowDelay = 100,
+            ShowAlways = true
+        };
+
         public VerseOpsPluginControl()
         {
             InitializeComponent();
             _executor = new ApiExecutor(_auth);
             PopulateOpsTree(filter: null);
             Load += async (_, __) => await ProbeSilentAsync().ConfigureAwait(true);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _paramTooltip.Dispose();
+            }
+            base.Dispose(disposing);
         }
 
         // Best-effort silent token probe on plugin load. If the user signed
@@ -358,6 +377,7 @@ namespace VerseOps.XrmToolBox
             _paramTable.RowStyles.Clear();
             _paramTable.RowCount = 0;
             _paramInputs.Clear();
+            _paramTooltip.RemoveAll();
 
             var parameters = op.Parameters ?? Array.Empty<OpParam>();
             foreach (var p in parameters)
@@ -373,8 +393,7 @@ namespace VerseOps.XrmToolBox
                 };
                 if (!string.IsNullOrEmpty(p.Help))
                 {
-                    var tip = new ToolTip { AutoPopDelay = 30000, InitialDelay = 250, ReshowDelay = 100, ShowAlways = true };
-                    tip.SetToolTip(label, p.Help);
+                    _paramTooltip.SetToolTip(label, p.Help);
                 }
 
                 Control input = BuildInput(p);
@@ -484,7 +503,11 @@ namespace VerseOps.XrmToolBox
             var url = SubstituteTokens(op.UrlTemplate, values);
             var body = string.IsNullOrEmpty(_bodyEditor.Text) ? null : SubstituteTokens(_bodyEditor.Text, values);
 
-            _executeCts = new CancellationTokenSource();
+            // `using var` keeps the CTS lifetime scoped to this method; we still
+            // expose it via _executeCts so UpdateExecuteEnabled() can tell that
+            // a call is in flight (and a future Cancel button would have a handle).
+            using var cts = new CancellationTokenSource();
+            _executeCts = cts;
             UpdateExecuteEnabled();
             _btnExecute.Text = "Running\u2026";
             _responseHeader.Text = "Response \u2014 sending\u2026";
@@ -492,7 +515,7 @@ namespace VerseOps.XrmToolBox
 
             try
             {
-                var result = await _executor.ExecuteAsync(op.HttpMethod, url, body, op.TokenScope, _executeCts.Token)
+                var result = await _executor.ExecuteAsync(op.HttpMethod, url, body, op.TokenScope, cts.Token)
                                             .ConfigureAwait(true);
                 RenderResult(op, url, result);
             }
@@ -512,7 +535,6 @@ namespace VerseOps.XrmToolBox
             }
             finally
             {
-                _executeCts.Dispose();
                 _executeCts = null;
                 _btnExecute.Text = "Execute";
                 UpdateExecuteEnabled();
