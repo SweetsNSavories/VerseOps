@@ -13,6 +13,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VerseOps.Api.Core", "VerseO
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VerseOps.XrmToolBox", "VerseOps.XrmToolBox\VerseOps.XrmToolBox.csproj", "{ACF847B6-3633-427C-B1D9-06C9B39CB422}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{07C2787E-EAC7-C090-1BA3-A61EC2A24D84}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmokeTest", "tools\SmokeTest\SmokeTest.csproj", "{521F089D-2683-489F-BE75-BCD60B65FCA5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,9 +87,24 @@ Global
 		{ACF847B6-3633-427C-B1D9-06C9B39CB422}.Release|x64.Build.0 = Release|Any CPU
 		{ACF847B6-3633-427C-B1D9-06C9B39CB422}.Release|x86.ActiveCfg = Release|Any CPU
 		{ACF847B6-3633-427C-B1D9-06C9B39CB422}.Release|x86.Build.0 = Release|Any CPU
+		{521F089D-2683-489F-BE75-BCD60B65FCA5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{521F089D-2683-489F-BE75-BCD60B65FCA5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{521F089D-2683-489F-BE75-BCD60B65FCA5}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{521F089D-2683-489F-BE75-BCD60B65FCA5}.Debug|x64.Build.0 = Debug|Any CPU
+		{521F089D-2683-489F-BE75-BCD60B65FCA5}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{521F089D-2683-489F-BE75-BCD60B65FCA5}.Debug|x86.Build.0 = Debug|Any CPU
+		{521F089D-2683-489F-BE75-BCD60B65FCA5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{521F089D-2683-489F-BE75-BCD60B65FCA5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{521F089D-2683-489F-BE75-BCD60B65FCA5}.Release|x64.ActiveCfg = Release|Any CPU
+		{521F089D-2683-489F-BE75-BCD60B65FCA5}.Release|x64.Build.0 = Release|Any CPU
+		{521F089D-2683-489F-BE75-BCD60B65FCA5}.Release|x86.ActiveCfg = Release|Any CPU
+		{521F089D-2683-489F-BE75-BCD60B65FCA5}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{521F089D-2683-489F-BE75-BCD60B65FCA5} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {BFF50828-4B43-47C7-98A8-665769BF010C}

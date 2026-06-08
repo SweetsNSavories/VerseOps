@@ -72,3 +72,11 @@ Power-Platform-icons*.zip
 
 # ---- Ad-hoc UI test capture logs (debug scratch, may contain UI text) ----
 uitests*.out
+
+# ---- Smoke-test demo captures (may contain real tenant data — user, env GUID, tenant GUID) ----
+tools/demo/xrmtoolbox-smoke/
+
+# ---- SmokeTest build outputs ----
+tools/SmokeTest/bin/
+tools/SmokeTest/obj/
+tools/SmokeTest/out/
