@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- netstandard2.0 = lowest common denominator that BOTH net10.0-windows
+         (VerseOps.App) and net472 (VerseOps.XrmToolBox plugin) can consume.
+         net472 cannot consume netstandard2.1. Do NOT bump without removing the
+         XrmToolBox plugin as a consumer. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>VerseOps.Api.Core</RootNamespace>
+    <AssemblyName>VerseOps.Api.Core</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- System.Text.Json is in the BCL on net10 but ships as a package on
+         netstandard2.0 / net472. Used by ApiExecutor for response pretty-print
+         + JWT decode. -->
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+</Project>

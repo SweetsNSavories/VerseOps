@@ -9,7 +9,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
-using VerseOps.App.Api;
+using VerseOps.Api.Core;
 using VerseOps.App.Auth;
 using VerseOps.App.Configuration;
 using VerseOps.App.Inventory.Services;

@@ -2,9 +2,8 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using VerseOps.App.Auth;
 
-namespace VerseOps.App.Api;
+namespace VerseOps.Api.Core;
 
 public sealed record ApiCallResult(
     int StatusCode,
@@ -19,9 +18,9 @@ public sealed record ApiCallResult(
 public sealed class ApiExecutor
 {
     private readonly HttpClient _http = new();
-    private readonly AuthService _auth;
+    private readonly IAccessTokenProvider _auth;
 
-    public ApiExecutor(AuthService auth) => _auth = auth;
+    public ApiExecutor(IAccessTokenProvider auth) => _auth = auth;
 
     public async Task<ApiCallResult> ExecuteAsync(
         string method,
@@ -56,7 +55,9 @@ public sealed class ApiExecutor
         using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseContentRead, ct).ConfigureAwait(false);
         sw.Stop();
 
-        var respBody = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        // netstandard2.0 lacks ReadAsStringAsync(CancellationToken). Cancellation
+        // is already enforced by SendAsync above; the body read just buffers locally.
+        var respBody = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
         // Some 4xx responses (notably BAP 403) come back with no body. Synthesize a
         // minimal JSON envelope so the UI has something to render and the user is
         // not left looking at an empty Response panel.
@@ -68,7 +69,8 @@ public sealed class ApiExecutor
         // If the server returned S2S17001 (audience mismatch), or our pre-flight
         // detected one, prepend a friendly diagnosis so the user knows to fix
         // the scope rather than the URL.
-        var s2sHit = respBody.Contains("S2S17001", StringComparison.OrdinalIgnoreCase);
+        // netstandard2.0 lacks string.Contains(string, StringComparison); use IndexOf.
+        var s2sHit = respBody.IndexOf("S2S17001", StringComparison.OrdinalIgnoreCase) >= 0;
         if (s2sHit || (audMismatch != null && (int)resp.StatusCode is 401 or 403))
         {
             var diag = audMismatch ?? "Server reported S2S17001 (token audience mismatch).";
@@ -82,7 +84,7 @@ public sealed class ApiExecutor
 
         headers.TryGetValue("x-ms-correlation-request-id", out var correlation);
         headers.TryGetValue("Location", out var location);
-        location ??= headers.GetValueOrDefault("Operation-Location");
+        if (location is null) headers.TryGetValue("Operation-Location", out location);
 
         return new ApiCallResult(
             (int)resp.StatusCode, resp.ReasonPhrase ?? "",
