@@ -15,7 +15,9 @@ namespace VerseOps.XrmToolBox
      ExportMetadata("Description", "Power Platform PPAC/BAP REST API explorer — same catalog as the standalone VerseOps app, embedded in XrmToolBox."),
      ExportMetadata("BackgroundColor", "DimGray"),
      ExportMetadata("PrimaryFontColor", "White"),
-     ExportMetadata("SecondaryFontColor", "Gainsboro")]
+     ExportMetadata("SecondaryFontColor", "Gainsboro"),
+     ExportMetadata("SmallImageBase64", ""),
+     ExportMetadata("BigImageBase64", "")]
     public class VerseOpsPluginFactory : PluginBase
     {
         public override IXrmToolBoxPluginControl GetControl()

@@ -199,7 +199,10 @@ namespace VerseOps.XrmToolBox.Auth
             _publicApp = PublicClientApplicationBuilder
                 .Create(PublicClientId)
                 .WithAuthority($"https://login.microsoftonline.com/{TenantId}")
-                .WithDefaultRedirectUri()
+                // On .NET Framework 4.8 WithDefaultRedirectUri() returns the legacy
+                // ".../oauth2/nativeclient" URI, which MSAL >= 4.61 refuses for the
+                // interactive browser flow. Force the loopback URI explicitly.
+                .WithRedirectUri("http://localhost")
                 .Build();
             RegisterPersistentCache(_publicApp);
         }
