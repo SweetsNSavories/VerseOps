@@ -43,6 +43,17 @@
          silence MSB3277 binding conflicts. The plugin only uses public
          ConnectionDetail API that's stable across both. -->
     <PackageReference Include="MscrmTools.Xrm.Connection" Version="1.2025.7.63" />
+
+    <!-- MSAL stack. Versions MUST match VerseOps.App.csproj exactly so the
+         DPAPI-encrypted msal_cache.bin written by the WPF app under
+         %LOCALAPPDATA%\VerseOps stays binary-compatible with the plugin —
+         that's how signing into the WPF app once silently logs the plugin
+         in too. NO Microsoft.Identity.Client.Broker here: WAM requires a
+         reliable parent-window handle, and XrmToolBox's plugin host doesn't
+         give us one across all states (docked, undocked, MDI child). The
+         plugin uses system-browser interactive + device-code fallback. -->
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.81.0" />
+    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.81.0" />
   </ItemGroup>
 
   <ItemGroup>
