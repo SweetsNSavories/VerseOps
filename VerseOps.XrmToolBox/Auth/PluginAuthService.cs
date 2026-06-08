@@ -220,9 +220,12 @@ namespace VerseOps.XrmToolBox.Auth
                     {
                         if (s_cacheHelper == null)
                         {
-                            var dir = Path.Combine(
-                                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                                CacheDirName);
+                            // Manual join (Path.Join is netstandard2.1+; this target is net48).
+                            // CacheDirName is a const literal, so the rooted-segment hazard CodeQL
+                            // warns about for Path.Combine cannot apply here.
+                            var localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                            var dir = localApp.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                                + Path.DirectorySeparatorChar + CacheDirName;
                             Directory.CreateDirectory(dir);
                             var props = new StorageCreationPropertiesBuilder(CacheFileName, dir).Build();
                             s_cacheHelper = MsalCacheHelper.CreateAsync(props).GetAwaiter().GetResult();
@@ -231,9 +234,15 @@ namespace VerseOps.XrmToolBox.Auth
                 }
                 s_cacheHelper!.RegisterCache(app.UserTokenCache);
             }
-            catch
+            catch (IOException)
             {
                 // Non-fatal — in-memory cache still works for this session.
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+            catch (MsalCachePersistenceException)
+            {
             }
         }
     }

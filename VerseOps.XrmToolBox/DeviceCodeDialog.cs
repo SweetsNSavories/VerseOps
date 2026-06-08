@@ -92,11 +92,9 @@ namespace VerseOps.XrmToolBox
                 {
                     Process.Start(new ProcessStartInfo(_verificationUrl) { UseShellExecute = true });
                 }
-                catch
-                {
-                    // Last-ditch: try Process.Start without ShellExecute, no-op on failure.
-                    try { Process.Start(_verificationUrl); } catch { /* ignore */ }
-                }
+                catch (System.ComponentModel.Win32Exception) { TryStartFallback(); }
+                catch (InvalidOperationException) { TryStartFallback(); }
+                catch (System.IO.FileNotFoundException) { TryStartFallback(); }
             };
 
             _verifyLink = new LinkLabel
@@ -109,7 +107,9 @@ namespace VerseOps.XrmToolBox
             {
                 if (string.IsNullOrEmpty(_verificationUrl)) return;
                 try { Process.Start(new ProcessStartInfo(_verificationUrl) { UseShellExecute = true }); }
-                catch { /* ignore */ }
+                catch (System.ComponentModel.Win32Exception) { }
+                catch (InvalidOperationException) { }
+                catch (System.IO.FileNotFoundException) { }
             };
 
             _cancelBtn = new Button
@@ -155,6 +155,16 @@ namespace VerseOps.XrmToolBox
                 : message;
             _copyBtn.Enabled = !string.IsNullOrEmpty(userCode);
             _openBtn.Enabled = !string.IsNullOrEmpty(verificationUrl);
+        }
+
+        // Last-ditch fallback when ShellExecute via ProcessStartInfo fails;
+        // try the bare Process.Start overload and swallow the same narrow set.
+        private void TryStartFallback()
+        {
+            try { Process.Start(_verificationUrl); }
+            catch (System.ComponentModel.Win32Exception) { }
+            catch (InvalidOperationException) { }
+            catch (System.IO.FileNotFoundException) { }
         }
     }
 }

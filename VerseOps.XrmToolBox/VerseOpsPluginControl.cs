@@ -1,7 +1,9 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Microsoft.Identity.Client;
 using VerseOps.XrmToolBox.Auth;
 using XrmToolBox.Extensibility;
 
@@ -45,7 +47,11 @@ namespace VerseOps.XrmToolBox
                     SetSignedOut("No cached sign-in. Click Sign in to authenticate.");
                 }
             }
-            catch (Exception ex)
+            catch (OperationCanceledException)
+            {
+                SetSignedOut("Silent check cancelled.");
+            }
+            catch (MsalException ex)
             {
                 SetSignedOut("Silent check failed: " + ex.Message);
             }
@@ -71,7 +77,7 @@ namespace VerseOps.XrmToolBox
             {
                 SetSignedOut("Sign-in cancelled.");
             }
-            catch (Exception ex)
+            catch (MsalException ex)
             {
                 SetSignedOut("Sign-in failed: " + ex.Message);
                 MessageBox.Show(this, ex.Message, "VerseOps sign-in",
@@ -121,7 +127,7 @@ namespace VerseOps.XrmToolBox
                 {
                     SetSignedOut("Device-code sign-in cancelled.");
                 }
-                catch (Exception ex)
+                catch (MsalException ex)
                 {
                     SetSignedOut("Device-code sign-in failed: " + ex.Message);
                     MessageBox.Show(this, ex.Message, "VerseOps sign-in",
@@ -144,7 +150,15 @@ namespace VerseOps.XrmToolBox
                 await _auth.SignOutAsync().ConfigureAwait(true);
                 SetSignedOut("Signed out.");
             }
-            catch (Exception ex)
+            catch (MsalException ex)
+            {
+                SetSignedOut("Sign-out failed: " + ex.Message);
+            }
+            catch (IOException ex)
+            {
+                SetSignedOut("Sign-out failed: " + ex.Message);
+            }
+            catch (UnauthorizedAccessException ex)
             {
                 SetSignedOut("Sign-out failed: " + ex.Message);
             }
