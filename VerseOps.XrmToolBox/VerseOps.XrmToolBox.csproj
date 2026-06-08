@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    VerseOps XrmToolBox plugin.
+
+    Target: net48 — required by XrmToolBoxPackage 1.2025.x SDK.
+    Host:   XrmToolBox loads this DLL from
+            %appdata%\MscrmTools\XrmToolBox\Plugins\VerseOps\
+            (release pipeline zips this in PR #5).
+
+    Shared code lives in VerseOps.Api.Core (netstandard2.0) so this plugin
+    and the WPF app render the exact same 200+ PPAC/BAP operation catalog.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>VerseOps.XrmToolBox</RootNamespace>
+    <AssemblyName>VerseOps.XrmToolBox</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- XrmToolBox is the WinForms host; class library output only. -->
+    <OutputType>Library</OutputType>
+    <!-- XrmToolBoxPackage 1.2025.10.74 ships an embedded XrmToolBox.exe that
+         was built against MscrmTools.Xrm.Connection 1.2025.9.64 while the
+         package's own assembly references still point at 1.2025.7.63. MSBuild
+         can't reconcile the strong-name versions and floods the build with
+         MSB3277 conflict reports. The plugin DLL we produce only uses public
+         ConnectionDetail APIs that are stable across both versions, and the
+         actual binding is satisfied at runtime by the XrmToolBox host (which
+         loads its own copy). Demote the warning to a message so build output
+         stays readable. -->
+    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Brings in XrmToolBox.Extensibility (PluginBase, IXrmToolBoxPlugin)
+         + MscrmTools.Xrm.Connection (ConnectionDetail). -->
+    <PackageReference Include="XrmToolBoxPackage" Version="1.2025.10.74" />
+    <!-- XrmToolBoxPackage's embedded XrmToolBox.exe/ToolLibrary.dll were
+         compiled against MscrmTools.Xrm.Connection 1.2025.7.63 while the
+         package itself pulls 1.2025.9.64. Pin to the older version to
+         silence MSB3277 binding conflicts. The plugin only uses public
+         ConnectionDetail API that's stable across both. -->
+    <PackageReference Include="MscrmTools.Xrm.Connection" Version="1.2025.7.63" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VerseOps.Api.Core\VerseOps.Api.Core.csproj" />
+  </ItemGroup>
+
+</Project>
