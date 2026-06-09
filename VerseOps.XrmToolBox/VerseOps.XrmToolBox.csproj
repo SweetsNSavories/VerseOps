@@ -41,16 +41,80 @@
     <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
   </PropertyGroup>
 
+  <!--
+    NuGet packaging for the XrmToolBox plugin store.
+
+    The store (https://www.xrmtoolbox.com/plugins-store) scans nuget.org daily
+    for packages whose Tags include "XrmToolBox" and lists them automatically.
+    Tag is mandatory; everything else is metadata users see in the store UI.
+
+    The plugin store extracts the .nupkg directly into a user's
+    %APPDATA%\MscrmTools\XrmToolBox\Plugins\<PluginName>\ folder, so the
+    plugin DLL AND every runtime dependency (Api.Core, MSAL, etc.) must
+    ship inside the .nupkg under lib\net48\. MSAL is a PackageReference so
+    NuGet resolves it client-side, but Api.Core is a ProjectReference and
+    by default would be emitted as a <dependency>. The CopyProjectReferencesToPackage
+    target below force-packs Api.Core's DLL into lib\net48\ alongside ours.
+  -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>VerseOps.XrmToolBox</PackageId>
+    <Title>VerseOps API Explorer for Power Platform</Title>
+    <Authors>VerseOps</Authors>
+    <Company>SweetsNSavories</Company>
+    <Copyright>(c) 2026 SweetsNSavories</Copyright>
+    <Description>XrmToolBox plugin that turns the full Power Platform Admin (PPAC) + Business Application Platform (BAP) REST surface into a searchable, executable explorer. Browse 200+ documented operations (environments, environment groups, DLP policies, billing policies, governance, capacity, lifecycle, tenant settings), execute parameter-free GETs in one click, and inspect raw JSON responses — all using the XrmToolBox connection's signed-in user via silent MSAL token exchange. Same operation catalog as the standalone VerseOps WPF app.</Description>
+    <PackageTags>XrmToolBox;PowerPlatform;Dataverse;Dynamics365;PPAC;BAP;REST;API;Admin;Explorer;PowerApps</PackageTags>
+    <PackageProjectUrl>https://github.com/SweetsNSavories/VerseOps</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/SweetsNSavories/VerseOps</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReleaseNotes>v1.0.2 — Initial XrmToolBox store release. Search executes on Enter (not per-keystroke). FluentStyles theme pass. Tile branding (32x32 + 80x80 VerseOps mark). Catalog cleanup: removed bogus BAP environmentTemplates route (404 in all tested tenants); equivalent PPAC route remains available.</PackageReleaseNotes>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <!-- Force ProjectReferences (Api.Core) to be packed as files, not declared
+         as NuGet dependencies. The plugin store extracts the package directly
+         into the user's plugins folder; unresolved <dependency> nodes would
+         leave Api.Core missing and the plugin would FileNotFoundException on
+         first load. -->
+    <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);CopyProjectReferencesToPackage</TargetsForTfmSpecificBuildOutput>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Files included in the .nupkg at the package root for NuGet UI rendering. -->
+    <None Include="..\LICENSE" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="..\README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="..\docs\brand\verseops-mark-256.png" Pack="true" PackagePath="\icon.png" Visible="false" />
+    <!-- MSAL DLLs are explicitly packed into lib\net48\ because the XrmToolBox
+         plugin store does NOT run NuGet dependency resolution on install — it
+         just extracts the .nupkg straight into the user's Plugins folder. The
+         <PackageReference>s below carry PrivateAssets="all", so MSAL won't
+         appear as a <dependency> in the .nuspec (which would be unresolvable
+         at install time anyway) and we provide the actual binaries here. -->
+    <None Include="$(OutputPath)Microsoft.Identity.Client.dll" Pack="true" PackagePath="lib\net48\" Visible="false" />
+    <None Include="$(OutputPath)Microsoft.Identity.Client.Extensions.Msal.dll" Pack="true" PackagePath="lib\net48\" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="CopyProjectReferencesToPackage" DependsOnTargets="ResolveReferences">
+    <ItemGroup>
+      <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths->WithMetadataValue('ReferenceSourceTarget','ProjectReference'))" />
+    </ItemGroup>
+  </Target>
+
   <ItemGroup>
     <!-- Brings in XrmToolBox.Extensibility (PluginBase, IXrmToolBoxPlugin)
-         + MscrmTools.Xrm.Connection (ConnectionDetail). -->
-    <PackageReference Include="XrmToolBoxPackage" Version="1.2025.10.74" />
+         + MscrmTools.Xrm.Connection (ConnectionDetail).
+         PrivateAssets="all" — the XrmToolBox host provides these at runtime;
+         we use them only at compile time, so no .nupkg dependency entry. -->
+    <PackageReference Include="XrmToolBoxPackage" Version="1.2025.10.74" PrivateAssets="all" />
     <!-- XrmToolBoxPackage's embedded XrmToolBox.exe/ToolLibrary.dll were
          compiled against MscrmTools.Xrm.Connection 1.2025.7.63 while the
          package itself pulls 1.2025.9.64. Pin to the older version to
          silence MSB3277 binding conflicts. The plugin only uses public
-         ConnectionDetail API that's stable across both. -->
-    <PackageReference Include="MscrmTools.Xrm.Connection" Version="1.2025.7.63" />
+         ConnectionDetail API that's stable across both. Host-provided at
+         runtime, so PrivateAssets="all". -->
+    <PackageReference Include="MscrmTools.Xrm.Connection" Version="1.2025.7.63" PrivateAssets="all" />
 
     <!-- MSAL stack. Versions MUST match VerseOps.App.csproj exactly so the
          DPAPI-encrypted msal_cache.bin written by the WPF app under
@@ -59,13 +123,20 @@
          in too. NO Microsoft.Identity.Client.Broker here: WAM requires a
          reliable parent-window handle, and XrmToolBox's plugin host doesn't
          give us one across all states (docked, undocked, MDI child). The
-         plugin uses system-browser interactive + device-code fallback. -->
-    <PackageReference Include="Microsoft.Identity.Client" Version="4.81.0" />
-    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.81.0" />
+         plugin uses system-browser interactive + device-code fallback.
+         PrivateAssets="all" — we explicitly pack the DLLs above into the
+         .nupkg's lib\net48\ folder; the plugin store cannot fetch them
+         from a <dependency> entry at install time. -->
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.81.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.81.0" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\VerseOps.Api.Core\VerseOps.Api.Core.csproj" />
+    <!-- PrivateAssets="all" — Api.Core is a sibling project we want PACKED
+         (as a file, via the CopyProjectReferencesToPackage target above),
+         NOT emitted as a <dependency id="VerseOps.Api.Core"> entry that
+         would point at a non-existent nuget.org package and break install. -->
+    <ProjectReference Include="..\VerseOps.Api.Core\VerseOps.Api.Core.csproj" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>

@@ -83,3 +83,6 @@ tools/SmokeTest/out/
 # ---- BAP/PPAC catalog verification artifacts (regenerable via tools/parse-bap-verify.ps1) ----
 bap-verify.log
 bap-verify.csv
+
+# ---- NuGet pack output (binaries; build with: dotnet pack VerseOps.XrmToolBox -c Release -o ./artifacts) ----
+artifacts/
