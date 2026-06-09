@@ -61,9 +61,13 @@ jobs:
         run: dotnet build VerseOps.XrmToolBox/VerseOps.XrmToolBox.csproj -c Release --no-restore --nologo
 
       - name: Pack
+        # No --no-build here: the Pack step's CopyProjectReferencesToPackage
+        # target pulls in VerseOps.Api.Core.dll, and dotnet pack needs to
+        # (re-)build the ProjectReference to satisfy that dependency. With
+        # --no-build, NETSDK1085 fires the moment pack touches Api.Core.
         env:
           CI: true
-        run: dotnet pack VerseOps.XrmToolBox/VerseOps.XrmToolBox.csproj -c Release --no-build --no-restore -o ./artifacts --nologo
+        run: dotnet pack VerseOps.XrmToolBox/VerseOps.XrmToolBox.csproj -c Release -o ./artifacts --nologo
 
       - name: Inspect .nupkg contents (sanity check before push)
         shell: pwsh
