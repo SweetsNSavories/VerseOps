@@ -1,0 +1,109 @@
+name: Publish XrmToolBox plugin
+
+# Publishes the VerseOps XrmToolBox plugin (.nupkg) to nuget.org.
+#
+# Trust model: NuGet.org Trusted Publishing (OIDC). NO API key is stored
+# in this repo. Trust is established at https://www.nuget.org/account/apikeys
+# under "Trusted Publishing" with:
+#   Package owner    : pravint7
+#   Repository owner : SweetsNSavories
+#   Repository       : VerseOps
+#   Workflow file    : publish-xrmtoolbox-plugin.yml  (THIS file's name; do
+#                      not rename without updating the trusted publisher).
+#   Environment      : release  (must exist under Settings → Environments).
+#
+# Trigger: push a tag matching `xrmtoolbox-v*` (e.g. `xrmtoolbox-v1.0.2`).
+# The tag name is informational only — the actual NuGet version comes from
+# <Version> in VerseOps.XrmToolBox/VerseOps.XrmToolBox.csproj. Bump that
+# first, commit, then tag and push.
+#
+# Re-publishing the same NuGet version is REJECTED by nuget.org; bump the
+# csproj <Version> for every publish attempt.
+
+on:
+  push:
+    tags:
+      - "xrmtoolbox-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # required for OIDC exchange with nuget.org/login
+
+concurrency:
+  group: publish-xrmtoolbox-plugin
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Pack and publish to nuget.org
+    runs-on: windows-latest
+    environment: release
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so deterministic build / Source Link works
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore VerseOps.XrmToolBox/VerseOps.XrmToolBox.csproj
+
+      - name: Build (Release)
+        env:
+          CI: true
+        run: dotnet build VerseOps.XrmToolBox/VerseOps.XrmToolBox.csproj -c Release --no-restore --nologo
+
+      - name: Pack
+        env:
+          CI: true
+        run: dotnet pack VerseOps.XrmToolBox/VerseOps.XrmToolBox.csproj -c Release --no-build --no-restore -o ./artifacts --nologo
+
+      - name: Inspect .nupkg contents (sanity check before push)
+        shell: pwsh
+        run: |
+          $pkg = Get-ChildItem ./artifacts/*.nupkg | Select-Object -First 1
+          if (-not $pkg) { throw "No .nupkg produced under ./artifacts" }
+          Write-Host "Package: $($pkg.Name)  ($('{0:N1}' -f ($pkg.Length/1KB)) KB)"
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($pkg.FullName)
+          $libs = $zip.Entries | Where-Object { $_.FullName -like 'lib/net48/*' } | ForEach-Object { $_.FullName }
+          $zip.Dispose()
+          Write-Host "lib/net48 entries:"
+          $libs | ForEach-Object { Write-Host "  $_" }
+          # XrmToolBox plugin store extracts the .nupkg straight into Plugins/<Name>/
+          # so the plugin DLL + every runtime dep MUST be inside lib/net48.
+          $required = @(
+            'lib/net48/VerseOps.XrmToolBox.dll',
+            'lib/net48/VerseOps.Api.Core.dll',
+            'lib/net48/Microsoft.Identity.Client.dll',
+            'lib/net48/Microsoft.Identity.Client.Extensions.Msal.dll'
+          )
+          $missing = $required | Where-Object { $_ -notin $libs }
+          if ($missing) {
+            throw "nupkg missing required assemblies: $($missing -join ', ')"
+          }
+
+      - name: NuGet trusted publishing login (OIDC → short-lived API key)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: pravint7
+
+      - name: Push to nuget.org
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push ./artifacts/*.nupkg --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Upload nupkg as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xrmtoolbox-plugin-nupkg
+          path: artifacts/*.nupkg
+          if-no-files-found: error
