@@ -26,7 +26,7 @@
          attribute (e.g. swap the tile logo) without bumping this version,
          the host serves stale cached metadata and your change won't render.
          Bump on every brand/metadata change. -->
-    <Version>1.0.2.0</Version>
+    <Version>1.0.3.0</Version>
     <!-- XrmToolBox is the WinForms host; class library output only. -->
     <OutputType>Library</OutputType>
     <!-- XrmToolBoxPackage 1.2025.10.74 ships an embedded XrmToolBox.exe that
@@ -71,7 +71,7 @@
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageReleaseNotes>v1.0.2 — Initial XrmToolBox store release. Search executes on Enter (not per-keystroke). FluentStyles theme pass. Tile branding (32x32 + 80x80 VerseOps mark). Catalog cleanup: removed bogus BAP environmentTemplates route (404 in all tested tenants); equivalent PPAC route remains available.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.3 — Catalog cleanup: corrected 5 BAP routes proven 404 by tenant-side verification. "Get environment" now uses /scopes/admin/ prefix (bare path 404s for tenant-admin callers). "List backups" BAP duplicate removed (PPAC equivalent works). "Get tenant settings" switched from GET to POST {} — listTenantSettings is an ARM-style list-action verb. "Update tenant settings" /scopes/admin/ prefix dropped. "Get DLP policy" documented (URL is correct, test-rig seed mismatch). v1.0.2 — Initial XrmToolBox store release. Search executes on Enter (not per-keystroke). FluentStyles theme pass. Tile branding (32x32 + 80x80 VerseOps mark).</PackageReleaseNotes>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <!-- Force ProjectReferences (Api.Core) to be packed as files, not declared
          as NuGet dependencies. The plugin store extracts the package directly
