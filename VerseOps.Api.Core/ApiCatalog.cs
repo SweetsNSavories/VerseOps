@@ -156,8 +156,12 @@ public static class ApiCatalog
             "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/environments?api-version=2021-04-01&$expand=properties/billingPolicy",
             ScopePowerApps, null, "All environments visible to the caller."),
 
+        // NOTE: "Get environment" must use /scopes/admin/environments/{id} — the bare
+        // /environments/{id} variant 404s for tenant-admin callers even though the LIST
+        // /environments works without /scopes/admin/. Same pattern as the working
+        // "Environment capacity (expand on env GET)" row below.
         new("Environments", "Get environment", "GET",
-            "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/environments/{environmentId}?api-version=2021-04-01&$expand=properties/billingPolicy",
+            "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/{environmentId}?api-version=2021-04-01&$expand=properties/billingPolicy",
             ScopePowerApps, null, "Single environment by id.",
             ApiSurface.Bap, new[] { EnvParam }),
 
@@ -205,10 +209,11 @@ public static class ApiCatalog
 }", "Create a manual backup.",
             ApiSurface.Bap, new[] { EnvParam, LabelParam }),
 
-        new("Environments", "List backups", "GET",
-            "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/{environmentId}/backups?api-version=2021-04-01",
-            ScopePowerApps, null, "List backups for an environment.",
-            ApiSurface.Bap, new[] { EnvParam }),
+        // NOTE: the BAP "/scopes/admin/environments/{id}/backups" GET returns 404 — there is
+        // no list-backups route on api.bap.microsoft.com. Use the PPAC equivalent instead:
+        // PpacGeneratedCatalog "Environment Backups - Get Environment Backups" ->
+        // /environmentmanagement/environments/{environmentId}/backups?api-version=2022-03-01-preview
+        // The BAP POST ("Backup environment") still exists for create — only the GET is bogus.
 
         // ----- Lifecycle / Operations -----
         new("Operations", "Get lifecycle operation", "GET",
@@ -235,12 +240,18 @@ public static class ApiCatalog
         // route exists on api.bap.microsoft.com per Microsoft Docs. Templates now live under PPAC:
         // see PpacGeneratedCatalog "Get Templates By Location" -> /environmentmanagement/provisioning/locations/{location}/templates.
 
-        new("Tenant", "Get tenant settings", "GET",
-            "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/listTenantSettings?api-version=2020-10-01",
-            ScopePowerApps, "{}", "Tenant-wide Power Platform settings."),
+        // Tenant settings: drop the legacy "/scopes/admin/" prefix (404s) AND use POST, not GET.
+        // "listTenantSettings" / "updateTenantSettings" are ARM-style list-action verbs (same
+        // pattern as listKeys / listSecrets) — the action name is in the path, the HTTP verb is
+        // always POST with a (possibly empty) JSON body. Verified empirically across api-versions
+        // 2020-10-01, 2021-04-01, and 2023-06-01: POST returns 200, GET returns 404. The PowerShell
+        // cmdlet Get-TenantSettings wraps exactly this POST.
+        new("Tenant", "Get tenant settings", "POST",
+            "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/listTenantSettings?api-version=2020-10-01",
+            ScopePowerApps, "{}", "Tenant-wide Power Platform settings (ARM-style POST list-action; empty body returns full settings JSON)."),
 
         new("Tenant", "Update tenant settings", "POST",
-            "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/updateTenantSettings?api-version=2020-10-01",
+            "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/updateTenantSettings?api-version=2020-10-01",
             ScopePowerApps, TenantSettingsBody, "Patch tenant settings (only set fields you want to change)."),
 
         // ----- Capacity -----
@@ -267,6 +278,9 @@ public static class ApiCatalog
             "https://api.bap.microsoft.com/providers/PowerPlatform.Governance/v2/policies?api-version=2018-01-01",
             ScopePowerApps, null, "Tenant Data Loss Prevention policies."),
 
+        // NOTE: the test-rig warmup seeds {policyId} from the BillingPolicies list — a
+        // billing-policy GUID is not a DLP-policy GUID, so the coverage matrix 404s here.
+        // The URL itself is correct; supply a real DLP policyId from "List DLP policies".
         new("DLP", "Get DLP policy", "GET",
             "https://api.bap.microsoft.com/providers/PowerPlatform.Governance/v2/policies/{policyId}?api-version=2018-01-01",
             ScopePowerApps, null, "Single DLP policy.",
