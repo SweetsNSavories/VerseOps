@@ -22,8 +22,18 @@ namespace VerseOps.XrmToolBox
      // and docs/brand/verseops-mark-80.png).
      ExportMetadata("SmallImageBase64", VerseOpsBrand.SmallImageBase64),
      ExportMetadata("BigImageBase64",   VerseOpsBrand.BigImageBase64)]
-    public class VerseOpsPluginFactory : PluginBase
+    public class VerseOpsPluginFactory : PluginBase, IGitHubPlugin, IHelpPlugin
     {
+        // IGitHubPlugin — wires the "View on GitHub" / source-repo link on the
+        // plugin tile and About dialog. UserName + RepositoryName combine into
+        // https://github.com/{UserName}/{RepositoryName}.
+        public string UserName => "SweetsNSavories";
+        public string RepositoryName => "VerseOps";
+
+        // IHelpPlugin — wires the in-host "?" button on the plugin tile to the
+        // plugin-specific README rather than the WPF-app pitch.
+        public string HelpUrl => "https://github.com/SweetsNSavories/VerseOps/blob/main/VerseOps.XrmToolBox/README.md";
+
         public override IXrmToolBoxPluginControl GetControl()
         {
             return new VerseOpsPluginControl();

@@ -14,6 +14,7 @@ using Microsoft.Identity.Client;
 using VerseOps.Api.Core;
 using VerseOps.XrmToolBox.Auth;
 using XrmToolBox.Extensibility;
+using XrmToolBox.Extensibility.Interfaces;
 
 namespace VerseOps.XrmToolBox
 {
@@ -22,7 +23,14 @@ namespace VerseOps.XrmToolBox
     /// (browser + device-code) on top of a shared MSAL cache with the WPF app.
     /// PR #4 wires the operation catalog tree, parameter form, and Execute.
     /// </summary>
-    public partial class VerseOpsPluginControl : PluginControlBase
+    /// <remarks>
+    /// Implements <see cref="INoConnectionRequired"/>: the plugin talks to
+    /// tenant-level PPAC/BAP REST APIs via MSAL with the signed-in user, NOT
+    /// via the host's IOrganizationService. Marking the control this way
+    /// suppresses XrmToolBox's "pick a Dataverse connection" prompt on first
+    /// open — opening the tile lands the user straight on the operation tree.
+    /// </remarks>
+    public partial class VerseOpsPluginControl : PluginControlBase, INoConnectionRequired
     {
         // One PluginAuthService per control instance. The MSAL cache helper
         // underneath is a process-wide singleton, so multiple plugin instances

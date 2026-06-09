@@ -1,0 +1,70 @@
+name: Feature request
+description: Suggest a new operation, plugin UX improvement, or WPF dashboard feature.
+title: "[Feature] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! For new REST operations, the fastest path to acceptance is to link the official Microsoft Learn reference and (if possible) the response body from a successful call.
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface?
+      options:
+        - VerseOps XrmToolBox plugin
+        - VerseOps WPF app
+        - Shared catalog (both)
+        - Tooling / docs / CI
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of change?
+      options:
+        - Add a new PPAC/BAP operation to the catalog
+        - Fix a wrong route in the catalog (use "Bug report" if it 404s)
+        - Plugin UX improvement
+        - WPF dashboard improvement
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the workflow you can't complete today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to see?
+      description: For new operations, paste the Microsoft Learn URL and the HTTP method + URL template.
+      placeholder: |
+        Add: "List managed environments rules"
+        Method: GET
+        URL: https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/managedEnvironments/{envId}/rules?api-version=2021-04-01
+        Docs: https://learn.microsoft.com/...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+    validations:
+      required: false

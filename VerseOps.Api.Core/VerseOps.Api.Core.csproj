@@ -11,6 +11,12 @@
     <RootNamespace>VerseOps.Api.Core</RootNamespace>
     <AssemblyName>VerseOps.Api.Core</AssemblyName>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- NOT strong-name signed. The XrmToolBox plugin (our only "needs signed
+         deps" consumer) is itself unsigned to match the XrmToolBox host (which
+         is also unsigned). Signing this lib alone provides no benefit and
+         locks us out of possible InternalsVisibleTo conveniences later. -->
+    <!-- <SignAssembly>true</SignAssembly> -->
+    <!-- <AssemblyOriginatorKeyFile>..\VerseOps.snk</AssemblyOriginatorKeyFile> -->
   </PropertyGroup>
 
   <ItemGroup>

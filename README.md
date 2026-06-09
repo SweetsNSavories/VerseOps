@@ -2,12 +2,21 @@
 
 > **Power Platform inventory dashboard for tenant administrators — WPF / .NET 10 desktop app.**
 
+[![CI](https://github.com/SweetsNSavories/VerseOps/actions/workflows/ci.yml/badge.svg)](https://github.com/SweetsNSavories/VerseOps/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/SweetsNSavories/VerseOps/actions/workflows/codeql.yml/badge.svg)](https://github.com/SweetsNSavories/VerseOps/actions/workflows/codeql.yml)
+[![XrmToolBox plugin](https://img.shields.io/nuget/v/VerseOps.XrmToolBox.svg?label=XrmToolBox%20plugin)](https://www.nuget.org/packages/VerseOps.XrmToolBox)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 VerseOps is a single-window Windows desktop tool that pulls a live, read-mostly inventory of
 your Power Platform tenant — environments, capacity, solutions, apps, flows, agents, users,
 licenses, security groups — into one place. It calls the official
 [`Microsoft.PowerPlatform.Management`](https://www.nuget.org/packages/Microsoft.PowerPlatform.Management)
 SDK, the BAP capacity API, and Microsoft Graph; everything is local-first (cached in SQLite at
 `%LOCALAPPDATA%\VerseOps\verseops.db`).
+
+There is also a companion **XrmToolBox plugin** that exposes the same PPAC/BAP REST operation
+catalog inside the XrmToolBox host — see
+[VerseOps.XrmToolBox/README.md](VerseOps.XrmToolBox/README.md).
 
 > **VerseOps is not a Microsoft product.** It is an independent open-source
 > project, developed and maintained by **Praveen Thonda** in a personal
@@ -78,6 +87,21 @@ dotnet build VerseOps.sln -c Release
 
 > **Sign your own build before distributing internally.** See [SIGNING.md](SIGNING.md)
 > for `signtool` / Azure Trusted Signing instructions.
+
+### Install the XrmToolBox plugin
+
+VerseOps also ships as an XrmToolBox plugin (`VerseOps.XrmToolBox`) that exposes the same
+PPAC/BAP operation catalog inside the XrmToolBox host. Install via:
+
+1. **XrmToolBox → Configuration → Tool Library**, search `VerseOps`, click **Install**.
+
+   *or*
+
+2. `dotnet add package VerseOps.XrmToolBox` against your local plugin folder — see
+   [VerseOps.XrmToolBox/README.md](VerseOps.XrmToolBox/README.md) for the full guide.
+
+The plugin marks itself `INoConnectionRequired` (it uses tenant-level MSAL, not a Dataverse
+connection) and ships with **zero telemetry** beyond the documented Microsoft endpoints.
 
 ### Required permissions
 
@@ -173,12 +197,14 @@ folder.
 
 ## Contributing
 
-PRs welcome. Please:
+PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for build / test / release notes
+covering both the WPF app and the XrmToolBox plugin. Quick rules:
 
 * Run `dotnet build VerseOps.sln -c Release` clean (warnings are errors).
 * Don't include tenant IDs, env IDs, user IDs, or tokens in commits, screenshots, or issue
   reports. The `.gitignore` excludes `*.log` and `appsettings.local.json`; respect that.
-* Open an issue first for non-trivial changes.
+* Use the [issue templates](.github/ISSUE_TEMPLATE/) — `[Bug]` for reproducible problems,
+  `[Feature]` for new operations / UX improvements.
 
 Security issues — see [SECURITY.md](SECURITY.md), don't open a public issue.
 

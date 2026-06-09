@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security disclosure
+    url: https://github.com/SweetsNSavories/VerseOps/blob/main/SECURITY.md
+    about: Please report security vulnerabilities privately — do NOT open a public issue.
+  - name: XrmToolBox plugin store listing
+    url: https://www.nuget.org/packages/VerseOps.XrmToolBox
+    about: NuGet package page for the XrmToolBox plugin.
+  - name: Documentation
+    url: https://github.com/SweetsNSavories/VerseOps/tree/main/docs
+    about: Architecture, threat model, network endpoints, and roadmap.

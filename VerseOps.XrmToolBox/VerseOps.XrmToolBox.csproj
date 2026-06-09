@@ -26,9 +26,16 @@
          attribute (e.g. swap the tile logo) without bumping this version,
          the host serves stale cached metadata and your change won't render.
          Bump on every brand/metadata change. -->
-    <Version>1.0.3.0</Version>
+    <Version>1.0.4.0</Version>
     <!-- XrmToolBox is the WinForms host; class library output only. -->
     <OutputType>Library</OutputType>
+    <!-- NOT strong-name signed. XrmToolBox.Extensibility itself is unsigned,
+         so a strong-named plugin would (a) fail to build (CS8002) without a
+         suppression and (b) FileLoadException at runtime trying to resolve
+         the unsigned host DLL. Matches the community convention for XTB
+         plugins. If the host ever ships signed assemblies, revisit. -->
+    <!-- <SignAssembly>true</SignAssembly> -->
+    <!-- <AssemblyOriginatorKeyFile>..\VerseOps.snk</AssemblyOriginatorKeyFile> -->
     <!-- XrmToolBoxPackage 1.2025.10.74 ships an embedded XrmToolBox.exe that
          was built against MscrmTools.Xrm.Connection 1.2025.9.64 while the
          package's own assembly references still point at 1.2025.7.63. MSBuild
@@ -71,7 +78,7 @@
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageReleaseNotes>v1.0.3 — Catalog cleanup: corrected 5 BAP routes proven 404 by tenant-side verification. "Get environment" now uses /scopes/admin/ prefix (bare path 404s for tenant-admin callers). "List backups" BAP duplicate removed (PPAC equivalent works). "Get tenant settings" switched from GET to POST {} — listTenantSettings is an ARM-style list-action verb. "Update tenant settings" /scopes/admin/ prefix dropped. "Get DLP policy" documented (URL is correct, test-rig seed mismatch). v1.0.2 — Initial XrmToolBox store release. Search executes on Enter (not per-keystroke). FluentStyles theme pass. Tile branding (32x32 + 80x80 VerseOps mark).</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.4 — Plugin-store polish: implements IGitHubPlugin (View on GitHub button on the tile), IHelpPlugin (? button → plugin README), INoConnectionRequired (no Dataverse connection prompt — the plugin uses tenant-level MSAL, not the host's IOrganizationService). Ships a dedicated plugin-focused README so the nuget.org / plugin-store landing page no longer pitches the standalone WPF app. New ISSUE_TEMPLATE + CONTRIBUTING.md in the repo. v1.0.3 — Catalog cleanup: corrected 5 BAP routes proven 404 by tenant-side verification. "Get environment" now uses /scopes/admin/ prefix (bare path 404s for tenant-admin callers). "List backups" BAP duplicate removed (PPAC equivalent works). "Get tenant settings" switched from GET to POST {} — listTenantSettings is an ARM-style list-action verb. "Update tenant settings" /scopes/admin/ prefix dropped. "Get DLP policy" documented (URL is correct, test-rig seed mismatch). v1.0.2 — Initial XrmToolBox store release. Search executes on Enter (not per-keystroke). FluentStyles theme pass. Tile branding (32x32 + 80x80 VerseOps mark).</PackageReleaseNotes>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <!-- Force ProjectReferences (Api.Core) to be packed as files, not declared
          as NuGet dependencies. The plugin store extracts the package directly
@@ -84,7 +91,11 @@
   <ItemGroup>
     <!-- Files included in the .nupkg at the package root for NuGet UI rendering. -->
     <None Include="..\LICENSE" Pack="true" PackagePath="\" Visible="false" />
-    <None Include="..\README.md" Pack="true" PackagePath="\" Visible="false" />
+    <!-- The XrmToolBox plugin store and nuget.org render PackageReadmeFile
+         on the package landing page. Ship the plugin-focused README from
+         this folder, NOT the root README (which pitches the WPF app and
+         confuses prospective plugin users). -->
+    <None Include="README.md" Pack="true" PackagePath="\" Visible="false" />
     <None Include="..\docs\brand\verseops-mark-256.png" Pack="true" PackagePath="\icon.png" Visible="false" />
     <!-- MSAL DLLs are explicitly packed into lib\net48\ because the XrmToolBox
          plugin store does NOT run NuGet dependency resolution on install — it

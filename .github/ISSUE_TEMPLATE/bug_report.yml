@@ -1,0 +1,97 @@
+name: Bug report
+description: A reproducible problem with VerseOps (WPF app or XrmToolBox plugin).
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug report! A clear repro is the single most important thing.
+
+        **Please redact tenant data.** Strip / replace tenant IDs, environment GUIDs, user UPNs, and security-group GUIDs before pasting URLs, response bodies, or screenshots. The plugin redacts `Authorization` headers in its own logs, but it does not redact response bodies you paste here.
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface?
+      options:
+        - VerseOps XrmToolBox plugin
+        - VerseOps WPF app
+        - Both
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: For the plugin, the version shown on the tile. For the WPF app, the title-bar or About dialog.
+      placeholder: "1.0.3"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS / .NET
+      description: Windows version + `dotnet --info` first line.
+      placeholder: "Windows 11 23H2 / .NET 10.0.0"
+    validations:
+      required: false
+
+  - type: input
+    id: xtb-version
+    attributes:
+      label: XrmToolBox version (plugin reports only)
+      description: Shown in the XrmToolBox title bar.
+      placeholder: "1.2025.10.74"
+    validations:
+      required: false
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps. Include the operation name and any parameter values (redacted).
+      placeholder: |
+        1. Open XrmToolBox, click VerseOps API Explorer.
+        2. Sign in.
+        3. Search "list environments" → click "List environments".
+        4. Click Send.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include status code, error message, and any correlation id from the response panel.
+    validations:
+      required: true
+
+  - type: textarea
+    id: response
+    attributes:
+      label: Request URL + response body (redacted)
+      description: Paste the URL from the request panel and the response body. Replace any GUIDs / tenant ids with `<redacted>`.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I have redacted all tenant identifiers from URLs, response bodies, and screenshots.
+          required: true
+        - label: I am NOT reporting a security vulnerability (those go via SECURITY.md, not public issues).
+          required: true
