@@ -231,10 +231,9 @@ public static class ApiCatalog
             ScopePowerApps, null, "Base languages supported in a geo.",
             ApiSurface.Bap, new[] { LocationParam }),
 
-        new("Tenant", "List Dataverse templates", "GET",
-            "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/locations/{location}/environmentTemplates?api-version=2021-04-01",
-            ScopePowerApps, null, "Templates installable on a new Dataverse environment.",
-            ApiSurface.Bap, new[] { LocationParam }),
+        // NOTE: legacy BAP "/locations/{location}/environmentTemplates" returns 404 NotFound — no such
+        // route exists on api.bap.microsoft.com per Microsoft Docs. Templates now live under PPAC:
+        // see PpacGeneratedCatalog "Get Templates By Location" -> /environmentmanagement/provisioning/locations/{location}/templates.
 
         new("Tenant", "Get tenant settings", "GET",
             "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/listTenantSettings?api-version=2020-10-01",
@@ -247,11 +246,21 @@ public static class ApiCatalog
         // ----- Capacity -----
         // NOTE: legacy BAP "/scopes/admin/tenant/capacity" route returns 404 NotFound — superseded by
         // PPAC "/licensing/tenantCapacity" (see PpacGeneratedCatalog "Get Tenant Capacity Details").
+        // Same story for the legacy per-environment "/scopes/admin/environments/{id}/capacity" route —
+        // it 404s; per the Microsoft "daily capacity report" tutorial and the PowerShell
+        // Get-AdminPowerAppEnvironment -Capacity flag, capacity is returned inline via
+        // $expand=properties.capacity on the normal environment GET.
 
-        new("Capacity", "Environment capacity", "GET",
-            "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/{environmentId}/capacity?api-version=2021-04-01",
-            ScopePowerApps, null, "Storage breakdown for one environment.",
+        new("Capacity", "Environment capacity (expand on env GET)", "GET",
+            "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments/{environmentId}?api-version=2021-04-01&$expand=properties.capacity",
+            ScopePowerApps, null,
+            "Storage breakdown for one environment. Capacity is returned inside properties.capacity (database/file/log entries with actualConsumption + capacityUnit). The legacy /capacity sub-route returns 404.",
             ApiSurface.Bap, new[] { EnvParam }),
+
+        new("Capacity", "All environments with capacity (expand)", "GET",
+            "https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments?api-version=2021-04-01&$expand=properties.capacity",
+            ScopePowerApps, null,
+            "List every admin-visible environment with properties.capacity inlined. Mirrors PowerShell Get-AdminPowerAppEnvironment -Capacity."),
 
         // ----- DLP Policies -----
         new("DLP", "List DLP policies", "GET",

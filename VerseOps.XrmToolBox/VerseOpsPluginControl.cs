@@ -38,6 +38,20 @@ namespace VerseOps.XrmToolBox
         private bool _isSignedIn;
         private CancellationTokenSource? _executeCts;
 
+        // Last successful response — cached so the JSON tree + Headers tab can
+        // be populated lazily when the user actually switches to them. Builds
+        // can be expensive for large bodies (e.g. 700+ envs) so we skip the
+        // work on the Send path and only pay it on demand.
+        private string? _lastResponseBody;
+        private IReadOnlyDictionary<string, string>? _lastResponseHeaders;
+        private bool _treePopulatedForCurrentBody;
+        private bool _headersPopulatedForCurrentBody;
+        // Captured from the last 202 response's operation-location header, plus
+        // the scope used to make the call. Enables the "Poll op" button to
+        // re-GET the long-running operation without retyping the URL.
+        private string? _lastOperationLocation;
+        private string? _lastResponseScope;
+
         // Per-kind dynamic dropdown caches. null = never loaded; an empty list
         // means the load completed but returned no rows (still better than null
         // so we don't show the "click Load" hint after a real call). Shared
@@ -62,9 +76,78 @@ namespace VerseOps.XrmToolBox
         public VerseOpsPluginControl()
         {
             InitializeComponent();
+            // Centralised Fluent / XrmToolBox-friendly styling pass. Walks
+            // every child control once and normalises fonts, button sizes,
+            // combo chrome, and tab strip height. See FluentStyles.cs.
+            FluentStyles.Apply(this);
             _executor = new ApiExecutor(_auth);
             PopulateOpsTree(filter: null);
             Load += async (_, __) => await ProbeSilentAsync().ConfigureAwait(true);
+            // Designer-time SplitterDistance values get clamped to the design
+            // surface size (1000 px), so a larger value silently shrinks once
+            // the control is docked into the XrmToolBox host. Reapply on load
+            // and on resize so the left tree column is wide enough to show
+            // full API names and the request/response panes are 50/50.
+            Load += (_, __) => ApplySplitterDefaults();
+            SizeChanged += (_, __) => ApplySplitterDefaults();
+        }
+
+        // Track whether the user has manually dragged either splitter; once
+        // they have, stop force-resizing so we don't fight them.
+        private bool _outerSplitUserMoved;
+        private bool _rightSplitUserMoved;
+        private bool _applyingSplitterDefaults;
+
+        private void ApplySplitterDefaults()
+        {
+            _applyingSplitterDefaults = true;
+            try
+            {
+                if (_outerSplit != null && _outerSplit.IsHandleCreated && !_outerSplitUserMoved)
+                {
+                    int target = Math.Min(Math.Max(360, (int)(ClientSize.Width * 0.28)), 520);
+                    if (_outerSplit.Width > _outerSplit.Panel1MinSize + _outerSplit.Panel2MinSize + _outerSplit.SplitterWidth + 16)
+                    {
+                        _outerSplit.SplitterDistance = Math.Min(target, _outerSplit.Width - _outerSplit.Panel2MinSize - _outerSplit.SplitterWidth - 1);
+                    }
+                    // Hook once: mark as user-moved when the splitter is
+                    // actually dragged so future resizes don't snap back.
+                    _outerSplit.SplitterMoved -= OuterSplit_OnSplitterMoved;
+                    _outerSplit.SplitterMoved += OuterSplit_OnSplitterMoved;
+                }
+                if (_rightSplit != null && _rightSplit.IsHandleCreated && !_rightSplitUserMoved)
+                {
+                    // 50/50 vertical split between request and response.
+                    if (_rightSplit.Height > 80)
+                    {
+                        _rightSplit.SplitterDistance = Math.Max(120, _rightSplit.Height / 2);
+                    }
+                    _rightSplit.SplitterMoved -= RightSplit_OnSplitterMoved;
+                    _rightSplit.SplitterMoved += RightSplit_OnSplitterMoved;
+                }
+            }
+            catch
+            {
+                // SplitContainer throws InvalidOperationException if the
+                // requested distance violates Panel1MinSize/Panel2MinSize
+                // during very small transient sizes. Ignore — next resize
+                // event will reapply with a valid value.
+            }
+            finally
+            {
+                _applyingSplitterDefaults = false;
+            }
+        }
+
+        private void OuterSplit_OnSplitterMoved(object sender, SplitterEventArgs e)
+        {
+            if (_applyingSplitterDefaults) return;
+            _outerSplitUserMoved = true;
+        }
+        private void RightSplit_OnSplitterMoved(object sender, SplitterEventArgs e)
+        {
+            if (_applyingSplitterDefaults) return;
+            _rightSplitUserMoved = true;
         }
 
         protected override void Dispose(bool disposing)
@@ -263,6 +346,8 @@ namespace VerseOps.XrmToolBox
             _btnCancel.Enabled  = _executeCts != null;
             // Decode bearer needs a token (i.e. signed in) but doesn't need a selected op.
             _btnDecode.Enabled  = _isSignedIn && _executeCts == null;
+            // Apply just needs an operation; works offline too.
+            _btnApply.Enabled   = _currentOp != null && _executeCts == null;
             if (!_isSignedIn)
                 _statusBarLabel.Text = "Sign in to enable Send.";
             else if (_currentOp == null)
@@ -541,13 +626,35 @@ namespace VerseOps.XrmToolBox
             {
                 NumericUpDown n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 // Picker combos store a PickerItem in SelectedItem whose Id
-                // (Tag-equivalent) is the value we want to substitute. Fall
-                // back to typed text if the user hasn't picked anything.
+                // (Tag-equivalent) is the value we want to substitute. If the
+                // user typed text without clicking a row, try to match it
+                // against the items so we still send the right GUID.
                 ComboBox c when c.SelectedItem is PickerItem pi && !string.IsNullOrEmpty(pi.Id) => pi.Id,
+                ComboBox c when ResolvePickerByText(c) is PickerItem mp => mp.Id,
                 ComboBox c     => (c.SelectedItem?.ToString() ?? c.Text) ?? string.Empty,
                 TextBox t      => t.Text ?? string.Empty,
                 _              => control.Text ?? string.Empty
             };
+        }
+
+        // Try to resolve typed text to a PickerItem by full ToString, by
+        // DisplayName, or by raw Id. Returns null when no items are
+        // PickerItems (e.g. plain string ComboBoxes for HTTP methods).
+        private static PickerItem? ResolvePickerByText(ComboBox cb)
+        {
+            var text = (cb.Text ?? string.Empty).Trim();
+            if (text.Length == 0) return null;
+            foreach (var o in cb.Items)
+            {
+                if (o is not PickerItem pi) continue;
+                if (string.Equals(pi.ToString(), text, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(pi.DisplayName, text, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(pi.Id, text, StringComparison.OrdinalIgnoreCase))
+                {
+                    return pi;
+                }
+            }
+            return null;
         }
 
         // ============================================================
@@ -593,16 +700,14 @@ namespace VerseOps.XrmToolBox
             UpdateExecuteEnabled();
             _btnExecute.Text = "Running\u2026";
             _responseHeader.Text = "Response \u2014 sending\u2026";
-            _responseBox.Text = string.Empty;
-            _headersBox.Text = string.Empty;
-            _jsonTree.Nodes.Clear();
+            ClearResponseSurface();
             SetBusy(true, method + " " + url);
 
             try
             {
                 var result = await _executor.ExecuteAsync(method, url, body, scope, cts.Token)
                                             .ConfigureAwait(true);
-                RenderResult(op, method, url, scope, result);
+                RenderResult(method, url, scope, result);
             }
             catch (OperationCanceledException)
             {
@@ -634,6 +739,39 @@ namespace VerseOps.XrmToolBox
             try { _executeCts?.Cancel(); } catch (ObjectDisposedException) { }
         }
 
+        // Apply the current form values into the URL and body editors so the user
+        // can review the substituted request before sending. Mirrors the WPF API
+        // Explorer's "Apply to URL + Body" button. Send still re-substitutes as a
+        // safety net.
+        private void BtnApply_Click(object sender, EventArgs e)
+        {
+            if (_currentOp == null) return;
+            var op = _currentOp;
+
+            var values = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var p in op.Parameters ?? Array.Empty<OpParam>())
+            {
+                var v = _paramInputs.TryGetValue(p.Token, out var ctrl)
+                    ? ReadInputValue(ctrl).Trim()
+                    : string.Empty;
+                values[p.Token] = v;
+            }
+
+            var urlTemplate = string.IsNullOrWhiteSpace(_urlBox.Text)
+                ? (op.UrlTemplate ?? string.Empty)
+                : _urlBox.Text;
+            _urlBox.Text = SubstituteTokens(urlTemplate, values);
+
+            if (!string.IsNullOrEmpty(_bodyEditor.Text))
+                _bodyEditor.Text = SubstituteTokens(_bodyEditor.Text, values);
+            else if (!string.IsNullOrEmpty(op.RequestBodyTemplate))
+                _bodyEditor.Text = SubstituteTokens(op.RequestBodyTemplate!, values);
+
+            var applied = 0;
+            foreach (var kv in values) if (!string.IsNullOrEmpty(kv.Value)) applied++;
+            _formLoaderStatus.Text = $"Applied {applied} value(s) to URL and body.";
+        }
+
         // Decode the current bearer (for the selected scope, or PPAC default)
         // into header+payload+expiry. Pure local op — no HTTP. Routed through
         // ApiExecutor's special URL so we reuse its decode + pretty-print logic.
@@ -646,9 +784,7 @@ namespace VerseOps.XrmToolBox
             _executeCts = cts;
             UpdateExecuteEnabled();
             _responseHeader.Text = "Response \u2014 decoding bearer\u2026";
-            _responseBox.Text = string.Empty;
-            _headersBox.Text = string.Empty;
-            _jsonTree.Nodes.Clear();
+            ClearResponseSurface();
             SetBusy(true, "Decoding bearer\u2026");
             try
             {
@@ -656,8 +792,8 @@ namespace VerseOps.XrmToolBox
                                             .ConfigureAwait(true);
                 _responseHeader.Text = "Response  \u2014  decoded JWT for scope: " + scope;
                 _responseBox.Text = "// scope: " + scope + "\r\n// (local decode \u2014 no network call)\r\n\r\n" + result.ResponseBody;
-                PopulateJsonTree(_jsonTree, result.ResponseBody);
-                PopulateHeaders(result.ResponseHeaders);
+                CacheResponse(result.ResponseBody, result.ResponseHeaders, scope, operationLocation: null);
+                EnsureActiveTabPopulated();
                 SetBusy(false, "Decoded.");
                 _responseTabs.SelectedTab = _respTabBody;
             }
@@ -679,6 +815,65 @@ namespace VerseOps.XrmToolBox
             }
         }
 
+        // Re-GET the URL captured from the last response's operation-location
+        // header. Mirrors the WPF API Explorer's "Poll op" button. The Async
+        // Power Platform APIs typically return 202 with this header for long
+        // running operations (env create, link, etc.) and the client is
+        // expected to poll until 200/201/204. We render the response into the
+        // same surface so the user can hit Poll op repeatedly to watch state
+        // transition (Running -> Succeeded).
+        private async void BtnPollOp_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrEmpty(_lastOperationLocation)) return;
+            var url = _lastOperationLocation!;
+            var scope = string.IsNullOrEmpty(_lastResponseScope) ? PluginAuthService.ScopePpac : _lastResponseScope!;
+
+            using var cts = new CancellationTokenSource();
+            _executeCts = cts;
+            UpdateExecuteEnabled();
+            _responseHeader.Text = "Response \u2014 polling\u2026";
+            ClearResponseSurface();
+            SetBusy(true, "GET " + url);
+
+            try
+            {
+                var result = await _executor.ExecuteAsync("GET", url, null, scope, cts.Token)
+                                            .ConfigureAwait(true);
+                RenderResult("GET", url, scope, result);
+            }
+            catch (OperationCanceledException)
+            {
+                _responseHeader.Text = "Response \u2014 poll cancelled.";
+                SetBusy(false, "Cancelled.");
+            }
+            catch (MsalException ex)
+            {
+                _responseHeader.Text = "Response \u2014 sign-in error.";
+                _responseBox.Text = "MSAL error: " + ex.Message;
+                SetBusy(false, "Sign-in error.");
+            }
+            catch (System.Net.Http.HttpRequestException ex)
+            {
+                _responseHeader.Text = "Response \u2014 network error.";
+                _responseBox.Text = "HTTP error: " + ex.Message;
+                SetBusy(false, "Network error.");
+            }
+            finally
+            {
+                _executeCts = null;
+                UpdateExecuteEnabled();
+            }
+        }
+
+        // Poll op is meaningful only when the previous response captured an
+        // operation-location header. Cleared by ClearResponseSurface so a fresh
+        // Send hides the button until the new response either provides one or
+        // doesn't.
+        private void UpdatePollOpVisibility()
+        {
+            _btnPollOp.Visible = !string.IsNullOrEmpty(_lastOperationLocation);
+        }
+
         private static string SubstituteTokens(string template, IReadOnlyDictionary<string, string> values)
         {
             return s_tokenRegex.Replace(template, m =>
@@ -688,7 +883,7 @@ namespace VerseOps.XrmToolBox
             });
         }
 
-        private void RenderResult(ApiOperation op, string method, string url, string scope, ApiCallResult result)
+        private void RenderResult(string method, string url, string scope, ApiCallResult result)
         {
             _responseHeader.Text =
                 "Response  \u2014  " + result.StatusCode + " " + result.ReasonPhrase +
@@ -708,11 +903,60 @@ namespace VerseOps.XrmToolBox
             sb.Append(result.ResponseBody);
             _responseBox.Text = sb.ToString();
 
-            PopulateHeaders(result.ResponseHeaders);
-            PopulateJsonTree(_jsonTree, result.ResponseBody);
+            CacheResponse(result.ResponseBody, result.ResponseHeaders, scope, result.OperationLocation);
+            EnsureActiveTabPopulated();
 
             _statusBarElapsed.Text = result.ElapsedMs + " ms  \u2022  " + result.StatusCode + " " + result.ReasonPhrase;
             SetBusy(false, "Ready.");
+        }
+
+        // Wipe response surfaces fast: clear the body/header textboxes and the
+        // JSON tree, and reset the lazy-populate cache so the next switch
+        // repopulates from scratch. BeginUpdate avoids per-node redraws when
+        // the previous response was large.
+        private void ClearResponseSurface()
+        {
+            _responseBox.Text = string.Empty;
+            _headersBox.Text = string.Empty;
+            _jsonTree.BeginUpdate();
+            try { _jsonTree.Nodes.Clear(); } finally { _jsonTree.EndUpdate(); }
+            _lastResponseBody = null;
+            _lastResponseHeaders = null;
+            _lastResponseScope = null;
+            _lastOperationLocation = null;
+            _treePopulatedForCurrentBody = false;
+            _headersPopulatedForCurrentBody = false;
+            UpdatePollOpVisibility();
+        }
+
+        private void CacheResponse(string body, IReadOnlyDictionary<string, string> headers, string scope, string? operationLocation)
+        {
+            _lastResponseBody = body;
+            _lastResponseHeaders = headers;
+            _lastResponseScope = scope;
+            _lastOperationLocation = operationLocation;
+            _treePopulatedForCurrentBody = false;
+            _headersPopulatedForCurrentBody = false;
+            UpdatePollOpVisibility();
+        }
+
+        // Populate whichever response tab is active right now (no-op for Body
+        // since it was already filled). Heavy work (parsing JSON, building
+        // thousands of TreeNodes) is deferred until the user actually opens
+        // the tab, which is the main win for large responses.
+        private void EnsureActiveTabPopulated()
+        {
+            var tab = _responseTabs.SelectedTab;
+            if (tab == _respTabTree && !_treePopulatedForCurrentBody)
+            {
+                PopulateJsonTree(_jsonTree, _lastResponseBody ?? string.Empty);
+                _treePopulatedForCurrentBody = true;
+            }
+            else if (tab == _respTabHeaders && !_headersPopulatedForCurrentBody)
+            {
+                PopulateHeaders(_lastResponseHeaders ?? new Dictionary<string, string>(0));
+                _headersPopulatedForCurrentBody = true;
+            }
         }
 
         // ============================================================
@@ -845,16 +1089,15 @@ namespace VerseOps.XrmToolBox
 
         private void RespSearchBox_TextChanged(object sender, EventArgs e)
         {
-            // Reset the find-next anchor whenever the term changes.
+            // Search runs on Enter only. Edits just reset the find-next anchor
+            // and the previous result label so the UI doesn't lie about staleness.
             _lastSearchAnchor = -1;
-            // Live-filter the JSON tree when that tab is active.
-            if (_responseTabs.SelectedTab == _respTabTree)
+            _respSearchInfo.Text = string.Empty;
+            // If the user cleared the box on the tree tab, restore the full tree
+            // (otherwise the previous filter would stay visible until next Enter).
+            if (string.IsNullOrEmpty(_respSearchBox.Text) && _responseTabs.SelectedTab == _respTabTree)
             {
-                ApplyTreeFilter(_respSearchBox.Text);
-            }
-            else
-            {
-                _respSearchInfo.Text = string.Empty;
+                PopulateJsonTree(_jsonTree, _responseBox.Text);
             }
         }
 
@@ -863,6 +1106,8 @@ namespace VerseOps.XrmToolBox
             if (e.KeyCode == Keys.Enter)
             {
                 e.SuppressKeyPress = true;
+                e.Handled = true;
+                Trace.WriteLine($"[VerseOps] RespSearch: Enter pressed, term='{_respSearchBox.Text}'");
                 BtnRespSearchNext_Click(sender, e);
             }
         }
@@ -870,6 +1115,8 @@ namespace VerseOps.XrmToolBox
         private void BtnRespSearchNext_Click(object sender, EventArgs e)
         {
             var term = _respSearchBox.Text;
+            var tabName = _responseTabs.SelectedTab?.Text ?? "(none)";
+            Trace.WriteLine($"[VerseOps] RespSearch: run term='{term}' tab='{tabName}' anchor={_lastSearchAnchor}");
             if (string.IsNullOrEmpty(term)) return;
             if (_responseTabs.SelectedTab == _respTabTree)
             {
@@ -969,11 +1216,14 @@ namespace VerseOps.XrmToolBox
         }
 
         // When the active response tab changes, the search-info label can
-        // become misleading (e.g. "(wrapped)" on a different surface). Clear it.
+        // become misleading (e.g. "(wrapped)" on a different surface). Clear
+        // it, and lazily populate the freshly-activated tab from the cached
+        // body if we deferred it during Render.
         private void ResponseTabs_SelectedIndexChanged(object sender, EventArgs e)
         {
             _respSearchInfo.Text = string.Empty;
             _lastSearchAnchor = -1;
+            EnsureActiveTabPopulated();
         }
 
         // ============================================================
@@ -991,19 +1241,23 @@ namespace VerseOps.XrmToolBox
             public override string ToString() => string.IsNullOrEmpty(Id) ? DisplayName : DisplayName + "  (" + Id + ")";
         }
 
-        // Build a filterable editable ComboBox seeded from a cached list, or
-        // a single placeholder row when the cache is still null. We always
-        // attach the substring filter so a typed query narrows the dropdown
-        // immediately; preset _default is shown as Text only (not selected).
+        // Build an editable ComboBox seeded from a cached list. Uses native
+        // WinForms SuggestAppend autocomplete over the Items collection: the
+        // user types the start of the display name, the dropdown narrows,
+        // arrow-keys / Enter / mouse-click pick a row. No manual TextUpdate
+        // filter — that path turned out to be impossible to make non-finicky.
         private ComboBox MakePickerCombo(List<(string Id, string DisplayName)>? cache, string loadHint, string? def)
         {
             var cb = new ComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDown,
                 Font = new Font("Segoe UI", 9F),
-                AutoCompleteMode = AutoCompleteMode.None,
-                AutoCompleteSource = AutoCompleteSource.None,
-                MaxDropDownItems = 14
+                AutoCompleteMode = AutoCompleteMode.SuggestAppend,
+                AutoCompleteSource = AutoCompleteSource.ListItems,
+                IntegralHeight = false,
+                MaxDropDownItems = 20,
+                DropDownHeight = 320,
+                Sorted = false
             };
             if (cache != null)
             {
@@ -1014,7 +1268,14 @@ namespace VerseOps.XrmToolBox
                 cb.Items.Add(new PickerItem(string.Empty, "(click '" + loadHint + "' to populate)"));
             }
             cb.Text = def ?? string.Empty;
-            EnableSubstringFilter(cb);
+
+            // When the dropdown opens, leave the typed query intact; when the
+            // user clicks back in after a selection, select-all so the next
+            // keystroke replaces the previous label instead of appending.
+            cb.Enter += (_, __) =>
+            {
+                if (!string.IsNullOrEmpty(cb.Text)) cb.SelectAll();
+            };
             return cb;
         }
 
@@ -1022,104 +1283,14 @@ namespace VerseOps.XrmToolBox
         // user types, the dropdown narrows to items whose ToString() contains
         // the entered query (case-insensitive). WinForms equivalent of the WPF
         // ICollectionView filter in VerseOps.App.Explorer.ApiExplorerView.
+        // NOTE: Replaced by the native SuggestAppend autocomplete in
+        // MakePickerCombo — keystroke-driven Items rewriting could not be made
+        // reliable (caret jitter, sticky selected item). Left as a no-op so we
+        // don't break any future callers that haven't been updated.
         private static void EnableSubstringFilter(ComboBox cb)
         {
-            // Snapshot the full item set once on Load (or now if already alive).
-            // We rewrite Items on every keystroke; without the snapshot we'd
-            // lose rows the first time the filter eliminates them.
-            object[]? full = null;
-            bool suppress = false;
-
-            void EnsureSnapshot()
-            {
-                if (full != null) return;
-                full = new object[cb.Items.Count];
-                cb.Items.CopyTo(full, 0);
-            }
-
-            cb.HandleCreated += (_, __) => EnsureSnapshot();
-            EnsureSnapshot();
-
-            cb.TextUpdate += (_, __) =>
-            {
-                if (suppress || full == null) return;
-                suppress = true;
-                try
-                {
-                    var q = (cb.Text ?? string.Empty).Trim();
-                    var caret = cb.SelectionStart;
-                    var selLen = cb.SelectionLength;
-                    var preserved = cb.Text;
-
-                    cb.BeginUpdate();
-                    cb.Items.Clear();
-                    if (q.Length == 0)
-                    {
-                        cb.Items.AddRange(full);
-                    }
-                    else
-                    {
-                        foreach (var o in full)
-                        {
-                            var s = o?.ToString() ?? string.Empty;
-                            if (s.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)
-                                cb.Items.Add(o);
-                        }
-                    }
-                    cb.EndUpdate();
-
-                    // TextUpdate writes don't fire SelectedIndexChanged, so we
-                    // can restore the typed query and cursor without recursion.
-                    cb.Text = preserved;
-                    cb.SelectionStart = Math.Min(caret, cb.Text?.Length ?? 0);
-                    cb.SelectionLength = selLen;
-
-                    // Auto-open the dropdown when the filter has hits; close
-                    // when filter eliminates everything (otherwise an empty
-                    // dropdown briefly flashes).
-                    if (cb.Items.Count > 0 && !cb.DroppedDown)
-                    {
-                        cb.DroppedDown = true;
-                        // DroppedDown=true steals the caret; put it back.
-                        cb.SelectionStart = Math.Min(caret, cb.Text?.Length ?? 0);
-                        cb.SelectionLength = selLen;
-                    }
-                    else if (cb.Items.Count == 0 && cb.DroppedDown)
-                    {
-                        cb.DroppedDown = false;
-                    }
-                }
-                finally
-                {
-                    suppress = false;
-                }
-            };
-
-            // When the user picks a row, replace any filtered Items collection
-            // with the full snapshot so the next time they open the dropdown
-            // they see everything again.
-            cb.SelectionChangeCommitted += (_, __) =>
-            {
-                if (full == null) return;
-                suppress = true;
-                try
-                {
-                    var picked = cb.SelectedItem;
-                    cb.BeginUpdate();
-                    cb.Items.Clear();
-                    cb.Items.AddRange(full);
-                    cb.EndUpdate();
-                    if (picked != null)
-                    {
-                        var idx = cb.Items.IndexOf(picked);
-                        if (idx >= 0) cb.SelectedIndex = idx;
-                    }
-                }
-                finally
-                {
-                    suppress = false;
-                }
-            };
+            cb.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+            cb.AutoCompleteSource = AutoCompleteSource.ListItems;
         }
 
         // Show only the loader buttons that match parameters declared by the
@@ -1145,7 +1316,9 @@ namespace VerseOps.XrmToolBox
             _btnLoadGroups.Visible  = needGroup;
             _btnLoadDlp.Visible     = needDlp;
             _btnLoadBilling.Visible = needBilling;
-            _formLoadersStrip.Visible = needEnv || needGroup || needDlp || needBilling;
+            // Apply is always available when an op is selected, even if no
+            // loader buttons are needed, so the strip stays visible.
+            _formLoadersStrip.Visible = op != null;
         }
 
         // ---------- Loader button handlers ----------
@@ -1251,11 +1424,12 @@ namespace VerseOps.XrmToolBox
                             string id =
                                 TryGuidFromArmId(el)
                                 ?? TryStr(el, "policyId")
-                                ?? TryStr(el, "name")
                                 ?? TryStr(el, "id")
+                                ?? TryStr(el, "name")
                                 ?? string.Empty;
                             string name =
                                 TryStr(el, "displayName")
+                                ?? TryStr(el, "name")
                                 ?? (el.TryGetProperty("properties", out var pp) ? (TryStr(pp, "displayName") ?? id) : id);
                             if (string.IsNullOrEmpty(name)) name = id;
                             if (!string.IsNullOrEmpty(id)) items.Add((id, name));

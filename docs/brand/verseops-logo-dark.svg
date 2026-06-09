@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- VerseOps lockup, dark background variant (white wordmark). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="600" viewBox="0 0 2400 600" role="img" aria-label="VerseOps">
+  <defs>
+    <linearGradient id="verseopsBrand" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0078D4"/>
+      <stop offset="1" stop-color="#106EBE"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(0,0) scale(0.5859375)">
+    <rect x="0" y="0" width="1024" height="1024" rx="180" ry="180" fill="url(#verseopsBrand)"/>
+    <g fill="none" stroke="#FFFFFF" stroke-width="116" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 248 296 L 512 760"/>
+      <path d="M 776 296 L 512 760"/>
+    </g>
+    <circle cx="512" cy="212" r="66" fill="#FFFFFF"/>
+  </g>
+
+  <g font-family="'Segoe UI Variable Display', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" fill="#F2F2F2">
+    <text x="700" y="410" font-size="280" font-weight="600" letter-spacing="-4">Verse</text>
+    <text x="1505" y="410" font-size="280" font-weight="800" letter-spacing="-4" fill="#2EA0F2">Ops</text>
+  </g>
+</svg>

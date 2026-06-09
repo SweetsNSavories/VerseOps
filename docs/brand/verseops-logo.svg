@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  VerseOps horizontal lockup (mark + wordmark).
+  ViewBox 2400 x 600 (4:1) — fits comfortably as a README header, blog
+  hero, GitHub social card, or XrmToolBox marketplace banner.
+  The wordmark is "Verse" (semibold) + "Ops" (bold) so the two halves of
+  the brand read distinctly without a colour split.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="600" viewBox="0 0 2400 600" role="img" aria-label="VerseOps">
+  <defs>
+    <linearGradient id="verseopsBrand" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0078D4"/>
+      <stop offset="1" stop-color="#106EBE"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ===== Mark (scaled copy of verseops-mark.svg into 600x600 slot) ===== -->
+  <g transform="translate(0,0) scale(0.5859375)">
+    <!-- 0.5859375 = 600 / 1024 -->
+    <rect x="0" y="0" width="1024" height="1024" rx="180" ry="180" fill="url(#verseopsBrand)"/>
+    <g fill="none" stroke="#FFFFFF" stroke-width="116" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 248 296 L 512 760"/>
+      <path d="M 776 296 L 512 760"/>
+    </g>
+    <circle cx="512" cy="212" r="66" fill="#FFFFFF"/>
+  </g>
+
+  <!-- ===== Wordmark =====
+       Segoe UI Variable is the Windows 11 system font; falls back through
+       Segoe UI, then a generic sans for non-Windows renderers (GitHub does
+       its own server-side SVG handling so the fallback matters). -->
+  <g font-family="'Segoe UI Variable Display', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" fill="#1B1B1B">
+    <text x="700" y="410" font-size="280" font-weight="600" letter-spacing="-4">Verse</text>
+    <text x="1505" y="410" font-size="280" font-weight="800" letter-spacing="-4" fill="#0078D4">Ops</text>
+  </g>
+</svg>

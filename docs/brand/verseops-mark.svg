@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  VerseOps brand mark.
+  Concept: a stylised "V" (verse / convergence) formed by two strokes that
+  funnel three signal nodes (the "verses" of a Power Platform tenant —
+  environments, identities, policies) into a single operational view.
+  Colour: Fluent brand blue gradient (#0078D4 -> #106EBE) on a rounded
+  square, matching the WPF dashboard tile palette used elsewhere in the
+  product.
+  ViewBox 1024 x 1024; corner radius 180 (~17.6%) keeps the silhouette
+  recognisable down to 16 px favicons.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="VerseOps mark">
+  <defs>
+    <linearGradient id="verseopsBrand" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0078D4"/>
+      <stop offset="1" stop-color="#106EBE"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded brand-square background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="180" ry="180" fill="url(#verseopsBrand)"/>
+
+  <!-- The "V": two thick rounded strokes converging at (512, 760) -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="116" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 248 296 L 512 760"/>
+    <path d="M 776 296 L 512 760"/>
+  </g>
+
+  <!-- Single signal dot above the V apex — reads as a marker / pulse / the
+       singular operational view that the streams converge into. -->
+  <circle cx="512" cy="212" r="66" fill="#FFFFFF"/>
+</svg>

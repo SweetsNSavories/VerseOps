@@ -19,6 +19,14 @@
     <RootNamespace>VerseOps.XrmToolBox</RootNamespace>
     <AssemblyName>VerseOps.XrmToolBox</AssemblyName>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- XrmToolBox caches plugin tile metadata (Name, BackgroundColor,
+         SmallImageBase64, BigImageBase64, ...) in
+         %APPDATA%\MscrmTools\XrmToolBox\Plugins\manifest.json, keyed by
+         (assembly path, AssemblyVersion). If you change any ExportMetadata
+         attribute (e.g. swap the tile logo) without bumping this version,
+         the host serves stale cached metadata and your change won't render.
+         Bump on every brand/metadata change. -->
+    <Version>1.0.2.0</Version>
     <!-- XrmToolBox is the WinForms host; class library output only. -->
     <OutputType>Library</OutputType>
     <!-- XrmToolBoxPackage 1.2025.10.74 ships an embedded XrmToolBox.exe that

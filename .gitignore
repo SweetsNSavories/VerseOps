@@ -80,3 +80,6 @@ tools/demo/xrmtoolbox-smoke/
 tools/SmokeTest/bin/
 tools/SmokeTest/obj/
 tools/SmokeTest/out/
+# ---- BAP/PPAC catalog verification artifacts (regenerable via tools/parse-bap-verify.ps1) ----
+bap-verify.log
+bap-verify.csv

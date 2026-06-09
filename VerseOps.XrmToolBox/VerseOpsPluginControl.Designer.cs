@@ -33,6 +33,7 @@ namespace VerseOps.XrmToolBox
         private System.Windows.Forms.Button _btnExecute;
         private System.Windows.Forms.Button _btnCancel;
         private System.Windows.Forms.Button _btnDecode;
+        private System.Windows.Forms.Button _btnApply;
         private System.Windows.Forms.Label _urlLbl;
         private System.Windows.Forms.TextBox _urlBox;
         // Body as Form/Raw tabs (Form keeps existing TableLayoutPanel).
@@ -62,6 +63,7 @@ namespace VerseOps.XrmToolBox
         private System.Windows.Forms.TextBox _respSearchBox;
         private System.Windows.Forms.Button _btnRespSearchNext;
         private System.Windows.Forms.Button _btnRespSearchClear;
+        private System.Windows.Forms.Button _btnPollOp;
         private System.Windows.Forms.Label _respSearchInfo;
         // Response tabs.
         private System.Windows.Forms.TabControl _responseTabs;
@@ -105,6 +107,7 @@ namespace VerseOps.XrmToolBox
             _btnExecute           = new System.Windows.Forms.Button();
             _btnCancel            = new System.Windows.Forms.Button();
             _btnDecode            = new System.Windows.Forms.Button();
+            _btnApply             = new System.Windows.Forms.Button();
             _urlLbl               = new System.Windows.Forms.Label();
             _urlBox               = new System.Windows.Forms.TextBox();
             _bodyTabs             = new System.Windows.Forms.TabControl();
@@ -127,6 +130,7 @@ namespace VerseOps.XrmToolBox
             _respSearchBox        = new System.Windows.Forms.TextBox();
             _btnRespSearchNext    = new System.Windows.Forms.Button();
             _btnRespSearchClear   = new System.Windows.Forms.Button();
+            _btnPollOp            = new System.Windows.Forms.Button();
             _respSearchInfo       = new System.Windows.Forms.Label();
             _responseTabs         = new System.Windows.Forms.TabControl();
             _respTabBody          = new System.Windows.Forms.TabPage();
@@ -213,8 +217,9 @@ namespace VerseOps.XrmToolBox
             _outerSplit.Dock = System.Windows.Forms.DockStyle.Fill;
             _outerSplit.FixedPanel = System.Windows.Forms.FixedPanel.Panel1;
             _outerSplit.Orientation = System.Windows.Forms.Orientation.Vertical;
-            _outerSplit.SplitterDistance = 320;
+            _outerSplit.SplitterDistance = 460;
             _outerSplit.SplitterWidth = 5;
+            _outerSplit.Panel1MinSize = 280;
             _outerSplit.Name = "_outerSplit";
 
             // Left pane: search + tree
@@ -249,12 +254,16 @@ namespace VerseOps.XrmToolBox
             _requestPanel.Padding = new System.Windows.Forms.Padding(8);
             _requestPanel.Name = "_requestPanel";
 
+            // _opMetaLabel kept as an invisible 0-height carrier so existing
+            // code paths that write to it still compile; method/URL/scope are
+            // in the strip below and Description now lives in a body tab.
             _opMetaLabel.Dock = System.Windows.Forms.DockStyle.Top;
             _opMetaLabel.AutoSize = false;
-            _opMetaLabel.Height = 52;
-            _opMetaLabel.Padding = new System.Windows.Forms.Padding(0, 0, 0, 4);
+            _opMetaLabel.Height = 0;
+            _opMetaLabel.Padding = new System.Windows.Forms.Padding(0);
             _opMetaLabel.Font = new System.Drawing.Font("Segoe UI", 9F);
-            _opMetaLabel.Text = "Select an operation from the tree on the left.";
+            _opMetaLabel.Text = string.Empty;
+            _opMetaLabel.Visible = false;
             _opMetaLabel.Name = "_opMetaLabel";
 
             // ---- Request top strip (Method/URL/Scope + buttons) ---------
@@ -372,6 +381,10 @@ namespace VerseOps.XrmToolBox
             _bodyTabs.Name = "_bodyTabs";
             _bodyTabs.TabPages.Add(_bodyTabForm);
             _bodyTabs.TabPages.Add(_bodyTabRaw);
+            // Description moved out of the response panel into the request
+            // body tabs so it sits next to the form the user is filling in,
+            // freeing vertical space above the URL strip.
+            _bodyTabs.TabPages.Add(_respTabDescription);
 
             _bodyTabForm.Text = "Form";
             _bodyTabForm.Padding = new System.Windows.Forms.Padding(6);
@@ -401,6 +414,15 @@ namespace VerseOps.XrmToolBox
             _btnLoadEnvs.UseVisualStyleBackColor = true;
             _btnLoadEnvs.Visible = false;
             _btnLoadEnvs.Click += BtnLoadEnvs_Click;
+
+            _btnApply.Text = "Apply to URL + Body";
+            _btnApply.AutoSize = true;
+            _btnApply.Height = 26;
+            _btnApply.Margin = new System.Windows.Forms.Padding(0, 0, 12, 0);
+            _btnApply.UseVisualStyleBackColor = true;
+            _btnApply.Enabled = false;
+            _btnApply.Name = "_btnApply";
+            _btnApply.Click += BtnApply_Click;
 
             _btnLoadGroups.Text = "Load groups";
             _btnLoadGroups.AutoSize = true;
@@ -432,6 +454,7 @@ namespace VerseOps.XrmToolBox
             _formLoaderStatus.Text = string.Empty;
             _formLoaderStatus.Name = "_formLoaderStatus";
 
+            _formLoadersStrip.Controls.Add(_btnApply);
             _formLoadersStrip.Controls.Add(_btnLoadEnvs);
             _formLoadersStrip.Controls.Add(_btnLoadGroups);
             _formLoadersStrip.Controls.Add(_btnLoadDlp);
@@ -519,6 +542,14 @@ namespace VerseOps.XrmToolBox
             _btnRespSearchClear.UseVisualStyleBackColor = true;
             _btnRespSearchClear.Click += BtnRespSearchClear_Click;
 
+            _btnPollOp.Text = "Poll op";
+            _btnPollOp.Width = 70;
+            _btnPollOp.Dock = System.Windows.Forms.DockStyle.Right;
+            _btnPollOp.UseVisualStyleBackColor = true;
+            _btnPollOp.Visible = false;
+            _btnPollOp.Name = "_btnPollOp";
+            _btnPollOp.Click += BtnPollOp_Click;
+
             _respSearchInfo.Text = "";
             _respSearchInfo.AutoSize = false;
             _respSearchInfo.Width = 150;
@@ -531,6 +562,7 @@ namespace VerseOps.XrmToolBox
             _respSearchPanel.Controls.Add(_respSearchInfo);    // Right
             _respSearchPanel.Controls.Add(_btnRespSearchClear);// Right
             _respSearchPanel.Controls.Add(_btnRespSearchNext); // Right
+            _respSearchPanel.Controls.Add(_btnPollOp);         // Right
             _respSearchPanel.Controls.Add(_respSearchLbl);     // Left
 
             // ---- Response tabs ------------------------------------------
@@ -540,7 +572,6 @@ namespace VerseOps.XrmToolBox
             _responseTabs.TabPages.Add(_respTabBody);
             _responseTabs.TabPages.Add(_respTabTree);
             _responseTabs.TabPages.Add(_respTabHeaders);
-            _responseTabs.TabPages.Add(_respTabDescription);
             _responseTabs.SelectedIndexChanged += ResponseTabs_SelectedIndexChanged;
 
             _respTabBody.Text = "Body";

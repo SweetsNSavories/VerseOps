@@ -1,0 +1,10 @@
+$log = "c:\Users\pravth\Downloads\VerseOps\VerseOps\bap-verify.log"
+Write-Host ("xUnit lines  : {0}" -f (Select-String -Path $log -Pattern '\[xUnit\.net').Count)
+Write-Host ("  ..[SKIP]   : {0}" -f (Select-String -Path $log -Pattern '\[SKIP\]\s*$').Count)
+Write-Host ("  ..[PASS]   : {0}" -f (Select-String -Path $log -Pattern '\[PASS\]\s*$').Count)
+Write-Host ("  ..[FAIL]   : {0}" -f (Select-String -Path $log -Pattern '\[FAIL\]\s*$').Count)
+Write-Host ("console Skipped: {0}" -f (Select-String -Path $log -Pattern '^\s*Skipped\s').Count)
+Write-Host ("console Passed : {0}" -f (Select-String -Path $log -Pattern '^\s*Passed\s').Count)
+Write-Host ("console Failed : {0}" -f (Select-String -Path $log -Pattern '^\s*Failed\s').Count)
+Write-Host ("Rest_Op_Matrix : {0}" -f (Select-String -Path $log -Pattern 'Rest_Op_Matrix\(').Count)
+Write-Host ("ApiOperation { : {0}" -f (Select-String -Path $log -Pattern 'ApiOperation\s*\{').Count)
