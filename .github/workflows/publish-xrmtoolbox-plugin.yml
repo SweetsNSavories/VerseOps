@@ -101,9 +101,18 @@ jobs:
           user: pravint7
 
       - name: Push to nuget.org
+        # PowerShell on the Windows runner does NOT expand globs in argument
+        # positions the way bash does, and dotnet nuget push on .NET 10 SDK
+        # rejects literal "*.nupkg" with "File does not exist". Resolve the
+        # nupkg path explicitly via Get-ChildItem so we pass a real file.
+        shell: pwsh
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
-        run: dotnet nuget push ./artifacts/*.nupkg --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: |
+          $pkg = Get-ChildItem ./artifacts/*.nupkg | Select-Object -First 1
+          if (-not $pkg) { throw "No .nupkg under ./artifacts after pack" }
+          Write-Host "Pushing $($pkg.FullName) to nuget.org"
+          dotnet nuget push $pkg.FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
 
       - name: Upload nupkg as workflow artifact
         uses: actions/upload-artifact@v4
