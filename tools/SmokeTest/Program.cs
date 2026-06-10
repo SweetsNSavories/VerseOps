@@ -42,6 +42,16 @@ namespace SmokeTest
         {
             try
             {
+                // --view : host the plugin in an on-screen interactive form so you
+                //         can poke at the UI without needing XrmToolBox.exe (which
+                //         fires a WIF 3.5 prereq dialog on Win11). Pass an op-name
+                //         hint as the second arg to preselect (substring match).
+                if (args.Length > 0 && string.Equals(args[0], "--view", StringComparison.OrdinalIgnoreCase))
+                {
+                    var preselect = args.Length > 1 ? args[1] : null;
+                    return ViewMode(preselect);
+                }
+
                 s_outDir = args.Length > 0
                     ? args[0]
                     : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "out");

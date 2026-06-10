@@ -970,24 +970,39 @@ namespace VerseOps.XrmToolBox
             }
         }
 
-        // Re-GET the URL captured from the last response's operation-location
-        // header. Mirrors the WPF API Explorer's "Poll op" button. The Async
-        // Power Platform APIs typically return 202 with this header for long
-        // running operations (env create, link, etc.) and the client is
-        // expected to poll until 200/201/204. We render the response into the
-        // same surface so the user can hit Poll op repeatedly to watch state
-        // transition (Running -> Succeeded).
+        // Re-GET an operation URL. Prefers the URL captured from the last
+        // response's Operation-Location header (the original async-API case:
+        // env create/delete/link/copy returns 202 + Operation-Location, client
+        // polls until 200/201/204 with terminal status). Falls back to the
+        // current URL box value so the user can paste *any* operation URL and
+        // poll it without having to pick the matching catalog entry first.
         private async void BtnPollOp_Click(object sender, EventArgs e)
         {
-            if (string.IsNullOrEmpty(_lastOperationLocation)) return;
-            var url = _lastOperationLocation!;
-            var scope = string.IsNullOrEmpty(_lastResponseScope) ? PluginAuthService.ScopePpac : _lastResponseScope!;
+            string url = !string.IsNullOrEmpty(_lastOperationLocation)
+                ? _lastOperationLocation!
+                : (_urlBox.Text ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(url))
+            {
+                MessageBox.Show(this,
+                    "Nothing to poll \u2014 paste an operation URL into the URL box first, or run a request that returns an Operation-Location header.",
+                    "VerseOps", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            var scope = string.IsNullOrEmpty(_lastResponseScope)
+                ? ((_scopeCombo.SelectedItem?.ToString() ?? _scopeCombo.Text ?? PluginAuthService.ScopePpac).Trim())
+                : _lastResponseScope!;
 
             using var cts = new CancellationTokenSource();
             _executeCts = cts;
             UpdateExecuteEnabled();
             _responseHeader.Text = "Response \u2014 polling\u2026";
+            // Keep the Poll-op button visible (just disabled) during the in-flight
+            // poll. ClearResponseSurface nulls _lastOperationLocation; capture it
+            // first so we can re-pin after RenderResult if the op is still running.
+            _btnPollOp.Enabled = false;
+            var preservedOpLoc = _lastOperationLocation;
             ClearResponseSurface();
+            _lastOperationLocation = preservedOpLoc;
             SetBusy(true, "GET " + url);
 
             try
@@ -995,6 +1010,18 @@ namespace VerseOps.XrmToolBox
                 var result = await _executor.ExecuteAsync("GET", url, null, scope, cts.Token)
                                             .ConfigureAwait(true);
                 RenderResult("GET", url, scope, result);
+
+                // Power Platform operation polling: the response of a GET against the
+                // operation-location URL rarely echoes its own Operation-Location header
+                // back, so RenderResult → CacheResponse would null _lastOperationLocation
+                // and hide the Poll-op button after the very first poll. Keep the button
+                // pinned to the original operation URL until the body reports a terminal
+                // state (Succeeded / Failed / Cancelled), matching what the user actually
+                // wants: "leave the button until the action is done".
+                if (!IsTerminalOperationStatus(result.ResponseBody))
+                {
+                    _lastOperationLocation = preservedOpLoc;
+                }
             }
             catch (OperationCanceledException)
             {
@@ -1017,16 +1044,40 @@ namespace VerseOps.XrmToolBox
             {
                 _executeCts = null;
                 UpdateExecuteEnabled();
+                _btnPollOp.Enabled = true;
             }
         }
 
-        // Poll op is meaningful only when the previous response captured an
-        // operation-location header. Cleared by ClearResponseSurface so a fresh
-        // Send hides the button until the new response either provides one or
-        // doesn't.
+        // Poll op is now always visible (generic GET button). This stub is kept
+        // because other call-sites (RenderResult → CacheResponse, ClearResponseSurface)
+        // still invoke it; harmless no-op now that Visible is set once in the designer.
         private void UpdatePollOpVisibility()
         {
-            _btnPollOp.Visible = !string.IsNullOrEmpty(_lastOperationLocation);
+            // intentionally no-op — _btnPollOp.Visible is set true in InitializeComponent
+        }
+
+        // True when the response body's top-level "status" is one of the terminal
+        // values Power Platform uses for long-running operations. Anything else
+        // (Queued, Running, NotStarted, Accepted, missing) is non-terminal and the
+        // Poll-op button stays available.
+        private static bool IsTerminalOperationStatus(string? body)
+        {
+            if (body == null) return false;
+            string trimmed = body.Trim();
+            if (trimmed.Length == 0) return false;
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object) return false;
+                if (!doc.RootElement.TryGetProperty("status", out var s) ||
+                    s.ValueKind != JsonValueKind.String) return false;
+                var v = s.GetString();
+                return string.Equals(v, "Succeeded", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(v, "Failed",    StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(v, "Cancelled", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(v, "Canceled",  StringComparison.OrdinalIgnoreCase);
+            }
+            catch (JsonException) { return false; }
         }
 
         private static string SubstituteTokens(string template, IReadOnlyDictionary<string, string> values)

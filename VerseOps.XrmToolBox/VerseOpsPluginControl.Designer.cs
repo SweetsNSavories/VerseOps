@@ -58,7 +58,10 @@ namespace VerseOps.XrmToolBox
         private System.Windows.Forms.Panel _responsePanel;
         private System.Windows.Forms.Label _responseHeader;
         // Search bar: find-next (body tab) / live filter (tree tab).
-        private System.Windows.Forms.Panel _respSearchPanel;
+        // Implemented as a TableLayoutPanel (single auto-sized row) so the
+        // textbox and buttons share the same baseline at any DPI — same
+        // pattern that keeps the request strip's Send/Cancel/Decode aligned.
+        private System.Windows.Forms.TableLayoutPanel _respSearchPanel;
         private System.Windows.Forms.Label _respSearchLbl;
         private System.Windows.Forms.TextBox _respSearchBox;
         private System.Windows.Forms.Button _btnRespSearchNext;
@@ -128,7 +131,7 @@ namespace VerseOps.XrmToolBox
 
             _responsePanel        = new System.Windows.Forms.Panel();
             _responseHeader       = new System.Windows.Forms.Label();
-            _respSearchPanel      = new System.Windows.Forms.Panel();
+            _respSearchPanel      = new System.Windows.Forms.TableLayoutPanel();
             _respSearchLbl        = new System.Windows.Forms.Label();
             _respSearchBox        = new System.Windows.Forms.TextBox();
             _btnRespSearchNext    = new System.Windows.Forms.Button();
@@ -243,11 +246,18 @@ namespace VerseOps.XrmToolBox
             _outerSplit.Panel1.Controls.Add(_searchBox);
             _outerSplit.Panel1.Padding = new System.Windows.Forms.Padding(0);
 
-            // Right pane: nested vertical split (request top, response bottom)
+            // Right pane: nested vertical split (request top, response bottom).
+            // BackColor is what paints inside the splitter gutter, so setting it
+            // to ControlDark gives a clearly visible horizontal divider between
+            // the Request and Response panels instead of the default near-invisible
+            // ButtonFace strip.
             _rightSplit.Dock = System.Windows.Forms.DockStyle.Fill;
             _rightSplit.Orientation = System.Windows.Forms.Orientation.Horizontal;
             _rightSplit.SplitterDistance = 300;
-            _rightSplit.SplitterWidth = 5;
+            // 2-px dark splitter line — wide enough to grab, thin enough that it
+            // reads as a clean horizontal divider between Request and Response.
+            _rightSplit.SplitterWidth = 2;
+            _rightSplit.BackColor = System.Drawing.SystemColors.ControlDark;
             _rightSplit.Name = "_rightSplit";
 
             // ============================================================
@@ -255,6 +265,7 @@ namespace VerseOps.XrmToolBox
             // ============================================================
             _requestPanel.Dock = System.Windows.Forms.DockStyle.Fill;
             _requestPanel.Padding = new System.Windows.Forms.Padding(8);
+            _requestPanel.BackColor = System.Drawing.SystemColors.Window;
             _requestPanel.Name = "_requestPanel";
 
             // _opMetaLabel kept as an invisible 0-height carrier so existing
@@ -506,6 +517,7 @@ namespace VerseOps.XrmToolBox
             // ============================================================
             _responsePanel.Dock = System.Windows.Forms.DockStyle.Fill;
             _responsePanel.Padding = new System.Windows.Forms.Padding(8);
+            _responsePanel.BackColor = System.Drawing.SystemColors.Window;
             _responsePanel.Name = "_responsePanel";
 
             _responseHeader.Dock = System.Windows.Forms.DockStyle.Top;
@@ -513,60 +525,88 @@ namespace VerseOps.XrmToolBox
             _responseHeader.Height = 22;
             _responseHeader.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
             _responseHeader.Text = "Response";
+            _responseHeader.BackColor = System.Drawing.SystemColors.Window;
             _responseHeader.Name = "_responseHeader";
 
             // ---- Search bar above response tabs -------------------------
+            // TableLayoutPanel with one auto-sized row — same pattern that makes
+            // the request strip's Send/Cancel/Decode buttons align perfectly.
+            // Each cell sizes to its tallest control, so the textbox and the
+            // 26-px buttons share the row and centre on each other automatically.
             _respSearchPanel.Dock = System.Windows.Forms.DockStyle.Top;
-            _respSearchPanel.Height = 30;
+            _respSearchPanel.AutoSize = true;
+            _respSearchPanel.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            _respSearchPanel.ColumnCount = 6;
+            _respSearchPanel.RowCount = 1;
+            _respSearchPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));   // "Search:"
+            _respSearchPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F)); // textbox
+            _respSearchPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));   // info
+            _respSearchPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));   // Clear
+            _respSearchPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));   // Find next
+            _respSearchPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));   // Poll op
+            _respSearchPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
             _respSearchPanel.Padding = new System.Windows.Forms.Padding(0, 2, 0, 4);
+            _respSearchPanel.BackColor = System.Drawing.SystemColors.Window;
             _respSearchPanel.Name = "_respSearchPanel";
 
             _respSearchLbl.Text = "Search:";
-            _respSearchLbl.AutoSize = false;
-            _respSearchLbl.Width = 52;
+            _respSearchLbl.AutoSize = true;
             _respSearchLbl.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            _respSearchLbl.Dock = System.Windows.Forms.DockStyle.Left;
+            _respSearchLbl.Anchor = System.Windows.Forms.AnchorStyles.Left;
+            _respSearchLbl.Margin = new System.Windows.Forms.Padding(0, 6, 6, 4);
 
-            _respSearchBox.Dock = System.Windows.Forms.DockStyle.Fill;
+            _respSearchBox.Anchor = System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right;
+            _respSearchBox.Margin = new System.Windows.Forms.Padding(0, 3, 8, 3);
             _respSearchBox.Font = new System.Drawing.Font("Cascadia Mono, Consolas", 9F);
             _respSearchBox.Name = "_respSearchBox";
             _respSearchBox.TextChanged += RespSearchBox_TextChanged;
             _respSearchBox.KeyDown += RespSearchBox_KeyDown;
 
-            _btnRespSearchNext.Text = "Find next";
-            _btnRespSearchNext.Width = 78;
-            _btnRespSearchNext.Dock = System.Windows.Forms.DockStyle.Right;
-            _btnRespSearchNext.UseVisualStyleBackColor = true;
-            _btnRespSearchNext.Click += BtnRespSearchNext_Click;
+            _respSearchInfo.Text = string.Empty;
+            _respSearchInfo.AutoSize = true;
+            _respSearchInfo.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            _respSearchInfo.ForeColor = System.Drawing.SystemColors.GrayText;
+            _respSearchInfo.Anchor = System.Windows.Forms.AnchorStyles.Right;
+            _respSearchInfo.Margin = new System.Windows.Forms.Padding(0, 6, 8, 4);
 
+            // Match request-strip button metrics (Width auto, Height 26).
             _btnRespSearchClear.Text = "Clear";
+            _btnRespSearchClear.AutoSize = false;
             _btnRespSearchClear.Width = 60;
-            _btnRespSearchClear.Dock = System.Windows.Forms.DockStyle.Right;
+            _btnRespSearchClear.Height = 26;
+            _btnRespSearchClear.Margin = new System.Windows.Forms.Padding(0, 0, 6, 0);
             _btnRespSearchClear.UseVisualStyleBackColor = true;
             _btnRespSearchClear.Click += BtnRespSearchClear_Click;
 
+            _btnRespSearchNext.Text = "Find next";
+            _btnRespSearchNext.AutoSize = false;
+            _btnRespSearchNext.Width = 80;
+            _btnRespSearchNext.Height = 26;
+            _btnRespSearchNext.Margin = new System.Windows.Forms.Padding(0, 0, 6, 0);
+            _btnRespSearchNext.UseVisualStyleBackColor = true;
+            _btnRespSearchNext.Click += BtnRespSearchNext_Click;
+
             _btnPollOp.Text = "Poll op";
+            _btnPollOp.AutoSize = false;
             _btnPollOp.Width = 70;
-            _btnPollOp.Dock = System.Windows.Forms.DockStyle.Right;
+            _btnPollOp.Height = 26;
+            _btnPollOp.Margin = new System.Windows.Forms.Padding(0, 0, 0, 0);
             _btnPollOp.UseVisualStyleBackColor = true;
-            _btnPollOp.Visible = false;
+            // Generic GET button: always visible. Polls the last Operation-Location
+            // header if one was captured, otherwise GETs whatever is in the URL box,
+            // so the user can paste any operation URL and poll it without having to
+            // pick the matching catalog entry first.
+            _btnPollOp.Visible = true;
             _btnPollOp.Name = "_btnPollOp";
             _btnPollOp.Click += BtnPollOp_Click;
 
-            _respSearchInfo.Text = "";
-            _respSearchInfo.AutoSize = false;
-            _respSearchInfo.Width = 150;
-            _respSearchInfo.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
-            _respSearchInfo.ForeColor = System.Drawing.SystemColors.GrayText;
-            _respSearchInfo.Dock = System.Windows.Forms.DockStyle.Right;
-
-            // Fill first so docked Left/Right siblings layer above it.
-            _respSearchPanel.Controls.Add(_respSearchBox);     // Fill
-            _respSearchPanel.Controls.Add(_respSearchInfo);    // Right
-            _respSearchPanel.Controls.Add(_btnRespSearchClear);// Right
-            _respSearchPanel.Controls.Add(_btnRespSearchNext); // Right
-            _respSearchPanel.Controls.Add(_btnPollOp);         // Right
-            _respSearchPanel.Controls.Add(_respSearchLbl);     // Left
+            // Add cells left → right. Each goes into (col, row=0).
+            _respSearchPanel.Controls.Add(_respSearchLbl, 0, 0);
+            _respSearchPanel.Controls.Add(_respSearchBox, 1, 0);
+            _respSearchPanel.Controls.Add(_respSearchInfo, 2, 0);
+            _respSearchPanel.Controls.Add(_btnRespSearchClear, 3, 0);
+            _respSearchPanel.Controls.Add(_btnRespSearchNext, 4, 0);
+            _respSearchPanel.Controls.Add(_btnPollOp, 5, 0);
 
             // ---- Response tabs ------------------------------------------
             _responseTabs.Dock = System.Windows.Forms.DockStyle.Fill;
@@ -686,6 +726,7 @@ namespace VerseOps.XrmToolBox
             _respTabBody.ResumeLayout(false);
             _responseTabs.ResumeLayout(false);
             _respSearchPanel.ResumeLayout(false);
+            _respSearchPanel.PerformLayout();
             _responsePanel.ResumeLayout(false);
             _formScrollHost.ResumeLayout(false);
             _formLoadersStrip.ResumeLayout(false);
