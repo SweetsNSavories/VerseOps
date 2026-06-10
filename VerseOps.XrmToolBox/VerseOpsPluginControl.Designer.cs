@@ -74,7 +74,10 @@ namespace VerseOps.XrmToolBox
         private System.Windows.Forms.TextBox _responseBox;
         private System.Windows.Forms.TreeView _jsonTree;
         private System.Windows.Forms.TextBox _headersBox;
-        private System.Windows.Forms.TextBox _descriptionBox;
+        // Description tab uses RichTextBox so DetectUrls auto-linkifies the Microsoft Learn
+        // doc URL the catalog embeds after "Docs: " — click is routed through LinkClicked to
+        // the user's default browser. Zero new dependencies (no WebView2 / no fetch).
+        private System.Windows.Forms.RichTextBox _descriptionBox;
 
         // ---- App-wide status strip (PR #5) ----------------------------
         private System.Windows.Forms.StatusStrip _statusStrip;
@@ -140,7 +143,7 @@ namespace VerseOps.XrmToolBox
             _responseBox          = new System.Windows.Forms.TextBox();
             _jsonTree             = new System.Windows.Forms.TreeView();
             _headersBox           = new System.Windows.Forms.TextBox();
-            _descriptionBox       = new System.Windows.Forms.TextBox();
+            _descriptionBox       = new System.Windows.Forms.RichTextBox();
 
             _statusStrip          = new System.Windows.Forms.StatusStrip();
             _statusBarLabel       = new System.Windows.Forms.ToolStripStatusLabel();
@@ -620,13 +623,15 @@ namespace VerseOps.XrmToolBox
             _respTabDescription.Controls.Add(_descriptionBox);
 
             _descriptionBox.Dock = System.Windows.Forms.DockStyle.Fill;
-            _descriptionBox.Multiline = true;
             _descriptionBox.ReadOnly = true;
-            _descriptionBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
+            _descriptionBox.BorderStyle = System.Windows.Forms.BorderStyle.None;
+            _descriptionBox.ScrollBars = System.Windows.Forms.RichTextBoxScrollBars.Vertical;
             _descriptionBox.WordWrap = true;
+            _descriptionBox.DetectUrls = true;
             _descriptionBox.Font = new System.Drawing.Font("Segoe UI", 9.5F);
             _descriptionBox.Name = "_descriptionBox";
             _descriptionBox.BackColor = System.Drawing.SystemColors.Window;
+            _descriptionBox.LinkClicked += DescriptionBox_LinkClicked;
 
             // Fill first; Top-docked siblings layer above.
             _responsePanel.Controls.Add(_responseTabs);    // Fill

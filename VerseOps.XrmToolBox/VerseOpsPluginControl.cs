@@ -493,7 +493,7 @@ namespace VerseOps.XrmToolBox
                 _paramInputs.Clear();
                 _bodyEditor.Text = string.Empty;
                 _urlBox.Text = string.Empty;
-                _descriptionBox.Text = string.Empty;
+                _descriptionBox.Clear();
                 UpdateExecuteEnabled();
             }
         }
@@ -516,13 +516,108 @@ namespace VerseOps.XrmToolBox
             _urlBox.Text = op.UrlTemplate;
             SelectComboValue(_scopeCombo, op.TokenScope);
 
-            _descriptionBox.Text = string.IsNullOrEmpty(op.Description)
-                ? "(no description in catalog)"
-                : op.HttpMethod + "  " + op.UrlTemplate + "\r\n" +
-                  "scope: " + op.TokenScope + "\r\n\r\n" +
-                  op.Description;
+            RenderDescription(op);
 
             UpdateExecuteEnabled();
+        }
+
+        // ---- Description tab rendering ---------------------------------
+        // Writes formatted runs into the RichTextBox: a color-coded HTTP-method
+        // pill, the URL in code font, a gray scope line, the catalog prose, and
+        // — for PPAC ops, whose Description ends in " | Docs: <learn url>" — the
+        // Microsoft Learn URL on its own line. RichTextBox.DetectUrls auto-linkifies
+        // the URL; LinkClicked routes the click to the user's default browser.
+        private void RenderDescription(ApiOperation op)
+        {
+            _descriptionBox.SuspendLayout();
+            try
+            {
+                _descriptionBox.Clear();
+
+                // Method pill
+                _descriptionBox.SelectionFont = new System.Drawing.Font("Segoe UI", 11F, System.Drawing.FontStyle.Bold);
+                _descriptionBox.SelectionColor = MethodColor(op.HttpMethod);
+                _descriptionBox.AppendText(op.HttpMethod + "  ");
+
+                // URL in monospace
+                _descriptionBox.SelectionFont = new System.Drawing.Font("Cascadia Mono, Consolas", 10F);
+                _descriptionBox.SelectionColor = System.Drawing.Color.FromArgb(40, 40, 40);
+                _descriptionBox.AppendText(op.UrlTemplate + "\r\n");
+
+                // Scope (gray)
+                _descriptionBox.SelectionFont = new System.Drawing.Font("Segoe UI", 9F);
+                _descriptionBox.SelectionColor = System.Drawing.SystemColors.GrayText;
+                _descriptionBox.AppendText("scope: " + (op.TokenScope ?? string.Empty) + "\r\n\r\n");
+
+                if (string.IsNullOrEmpty(op.Description))
+                {
+                    _descriptionBox.SelectionFont = new System.Drawing.Font("Segoe UI", 9.5F, System.Drawing.FontStyle.Italic);
+                    _descriptionBox.SelectionColor = System.Drawing.SystemColors.GrayText;
+                    _descriptionBox.AppendText("(no description in catalog)");
+                    return;
+                }
+
+                // Split out the Microsoft Learn URL the PPAC catalog appends after
+                // "  |  Docs: ". BAP / hand-authored ops typically don't have this
+                // suffix — in that case we just write the description as-is.
+                string body = op.Description;
+                string? docsUrl = null;
+                const string sep = "  |  Docs: ";
+                var sepIdx = body.IndexOf(sep, System.StringComparison.Ordinal);
+                if (sepIdx >= 0)
+                {
+                    docsUrl = body.Substring(sepIdx + sep.Length).Trim();
+                    body = body.Substring(0, sepIdx).TrimEnd();
+                }
+
+                _descriptionBox.SelectionFont = new System.Drawing.Font("Segoe UI", 9.5F);
+                _descriptionBox.SelectionColor = System.Drawing.SystemColors.ControlText;
+                _descriptionBox.AppendText(body);
+
+                if (!string.IsNullOrEmpty(docsUrl))
+                {
+                    _descriptionBox.AppendText("\r\n\r\n");
+                    _descriptionBox.SelectionFont = new System.Drawing.Font("Segoe UI", 9.5F, System.Drawing.FontStyle.Bold);
+                    _descriptionBox.SelectionColor = System.Drawing.SystemColors.ControlText;
+                    _descriptionBox.AppendText("\ud83d\udcd6 Microsoft Learn:\r\n");
+                    _descriptionBox.SelectionFont = new System.Drawing.Font("Segoe UI", 9.5F);
+                    // RichTextBox auto-linkifies this URL via DetectUrls and routes the
+                    // click through LinkClicked → default browser. No manual link insert.
+                    _descriptionBox.AppendText(docsUrl);
+                }
+            }
+            finally
+            {
+                _descriptionBox.SelectionStart = 0;
+                _descriptionBox.SelectionLength = 0;
+                _descriptionBox.ResumeLayout();
+            }
+        }
+
+        private static System.Drawing.Color MethodColor(string method)
+        {
+            switch ((method ?? string.Empty).ToUpperInvariant())
+            {
+                case "GET":    return System.Drawing.Color.FromArgb(0, 120, 60);    // green
+                case "POST":   return System.Drawing.Color.FromArgb(0, 90, 158);    // blue
+                case "PUT":    return System.Drawing.Color.FromArgb(196, 102, 0);   // orange
+                case "PATCH":  return System.Drawing.Color.FromArgb(120, 60, 160);  // purple
+                case "DELETE": return System.Drawing.Color.FromArgb(180, 30, 30);   // red
+                default:       return System.Drawing.SystemColors.ControlText;
+            }
+        }
+
+        private void DescriptionBox_LinkClicked(object sender, System.Windows.Forms.LinkClickedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(e.LinkText)) return;
+            try
+            {
+                System.Diagnostics.Process.Start(e.LinkText);
+            }
+            catch (System.Exception ex)
+            {
+                System.Diagnostics.Trace.WriteLine("[VerseOps] DescriptionBox link open failed: " + ex.Message);
+            }
         }
 
         private static void SelectComboValue(ComboBox combo, string value)
