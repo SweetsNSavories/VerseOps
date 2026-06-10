@@ -163,10 +163,25 @@ namespace VerseOps.XrmToolBox
             if (disposing)
             {
                 _paramTooltip.Dispose();
-                _loaderCts?.Cancel();
-                _loaderCts?.Dispose();
+                // XrmToolBox can call Dispose(true) more than once on a tab close
+                // (PluginControlBase + the WinForms tab-page parent both fire it),
+                // and either CTS may already be disposed if a prior load/execute
+                // path tore it down. Guard both Cancel() and Dispose() and null
+                // out the fields so a second pass is a no-op rather than a crash
+                // dialog that masks any real shutdown error.
+                DisposeCts(ref _loaderCts);
+                DisposeCts(ref _executeCts);
             }
             base.Dispose(disposing);
+        }
+
+        private static void DisposeCts(ref CancellationTokenSource? cts)
+        {
+            var local = cts;
+            cts = null;
+            if (local == null) return;
+            try { local.Cancel(); } catch (ObjectDisposedException) { } catch (AggregateException) { }
+            try { local.Dispose(); } catch (ObjectDisposedException) { }
         }
 
         // Best-effort silent token probe on plugin load. If the user signed

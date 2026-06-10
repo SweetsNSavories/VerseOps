@@ -26,7 +26,7 @@
          attribute (e.g. swap the tile logo) without bumping this version,
          the host serves stale cached metadata and your change won't render.
          Bump on every brand/metadata change. -->
-    <Version>1.0.4.0</Version>
+    <Version>1.0.5.0</Version>
     <!-- XrmToolBox is the WinForms host; class library output only. -->
     <OutputType>Library</OutputType>
     <!-- NOT strong-name signed. XrmToolBox.Extensibility itself is unsigned,
@@ -78,7 +78,7 @@
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageReleaseNotes>v1.0.4 — Plugin-store polish: implements IGitHubPlugin (View on GitHub button on the tile), IHelpPlugin (? button → plugin README), INoConnectionRequired (no Dataverse connection prompt — the plugin uses tenant-level MSAL, not the host's IOrganizationService). Ships a dedicated plugin-focused README so the nuget.org / plugin-store landing page no longer pitches the standalone WPF app. New ISSUE_TEMPLATE + CONTRIBUTING.md in the repo. v1.0.3 — Catalog cleanup: corrected 5 BAP routes proven 404 by tenant-side verification. "Get environment" now uses /scopes/admin/ prefix (bare path 404s for tenant-admin callers). "List backups" BAP duplicate removed (PPAC equivalent works). "Get tenant settings" switched from GET to POST {} — listTenantSettings is an ARM-style list-action verb. "Update tenant settings" /scopes/admin/ prefix dropped. "Get DLP policy" documented (URL is correct, test-rig seed mismatch). v1.0.2 — Initial XrmToolBox store release. Search executes on Enter (not per-keystroke). FluentStyles theme pass. Tile branding (32x32 + 80x80 VerseOps mark).</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.5 — Host-startup + tab-close stability. Pack Microsoft.IdentityModel.Abstractions.dll alongside MSAL: MSAL 4.81 references it transitively for its telemetry surface, and without it XrmToolBox's MEF Assembly.GetTypes() scan throws ReflectionTypeLoadException during host startup, crashing Program.Main before the tile gallery renders. Make Dispose() idempotent on the plugin control: XTB can call Dispose(true) more than once on tab close, and the second call's Cancel() on the loader/executor CancellationTokenSource was throwing ObjectDisposedException and surfacing a crash dialog. v1.0.4 — Plugin-store polish: implements IGitHubPlugin (View on GitHub button on the tile), IHelpPlugin (? button → plugin README), INoConnectionRequired (no Dataverse connection prompt — the plugin uses tenant-level MSAL, not the host's IOrganizationService). Ships a dedicated plugin-focused README so the nuget.org / plugin-store landing page no longer pitches the standalone WPF app. New ISSUE_TEMPLATE + CONTRIBUTING.md in the repo. v1.0.3 — Catalog cleanup: corrected 5 BAP routes proven 404 by tenant-side verification. "Get environment" now uses /scopes/admin/ prefix (bare path 404s for tenant-admin callers). "List backups" BAP duplicate removed (PPAC equivalent works). "Get tenant settings" switched from GET to POST {} — listTenantSettings is an ARM-style list-action verb. "Update tenant settings" /scopes/admin/ prefix dropped. "Get DLP policy" documented (URL is correct, test-rig seed mismatch). v1.0.2 — Initial XrmToolBox store release. Search executes on Enter (not per-keystroke). FluentStyles theme pass. Tile branding (32x32 + 80x80 VerseOps mark).</PackageReleaseNotes>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <!-- Force ProjectReferences (Api.Core) to be packed as files, not declared
          as NuGet dependencies. The plugin store extracts the package directly
@@ -102,9 +102,17 @@
          just extracts the .nupkg straight into the user's Plugins folder. The
          <PackageReference>s below carry PrivateAssets="all", so MSAL won't
          appear as a <dependency> in the .nuspec (which would be unresolvable
-         at install time anyway) and we provide the actual binaries here. -->
+         at install time anyway) and we provide the actual binaries here.
+         IMPORTANT: Microsoft.IdentityModel.Abstractions is a TRANSITIVE
+         dep of MSAL 4.81 (used by its telemetry callback surface). Even
+         though we never call it, MSAL's metadata references it, so MEF's
+         Assembly.GetTypes() scan in XrmToolBox.PluginManagerExtended.LoadParts
+         throws ReflectionTypeLoadException at host startup if it's not
+         dropped alongside MSAL — and that exception crashes Program.Main
+         before the splash even closes. Ship it. -->
     <None Include="$(OutputPath)Microsoft.Identity.Client.dll" Pack="true" PackagePath="lib\net48\" Visible="false" />
     <None Include="$(OutputPath)Microsoft.Identity.Client.Extensions.Msal.dll" Pack="true" PackagePath="lib\net48\" Visible="false" />
+    <None Include="$(OutputPath)Microsoft.IdentityModel.Abstractions.dll" Pack="true" PackagePath="lib\net48\" Visible="false" />
   </ItemGroup>
 
   <Target Name="CopyProjectReferencesToPackage" DependsOnTargets="ResolveReferences">
