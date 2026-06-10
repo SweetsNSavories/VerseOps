@@ -559,7 +559,7 @@ namespace VerseOps.XrmToolBox
                     Anchor = AnchorStyles.Left | AnchorStyles.Right,
                     TextAlign = ContentAlignment.MiddleLeft,
                     Margin = new Padding(0, 4, 8, 4),
-                    Height = 24
+                    Height = 26
                 };
                 if (!string.IsNullOrEmpty(p.Help))
                 {
@@ -571,6 +571,15 @@ namespace VerseOps.XrmToolBox
                 input.Margin = new Padding(0, 2, 0, 2);
                 _paramInputs[p.Token] = input;
 
+                // Picker kinds keep their cache between op-switches; surface
+                // that on the input itself so the user can see at a glance
+                // that the dropdown is already populated.
+                var hint = GetCacheHint(p.Kind);
+                if (!string.IsNullOrEmpty(hint))
+                {
+                    _paramTooltip.SetToolTip(input, hint);
+                }
+
                 _paramTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));
                 _paramTable.RowCount++;
                 _paramTable.Controls.Add(label, 0, _paramTable.RowCount - 1);
@@ -578,6 +587,34 @@ namespace VerseOps.XrmToolBox
             }
 
             _paramTable.ResumeLayout();
+
+            // Bring the just-built dynamic controls in line with the rest of
+            // the chrome (URL box, method combo, scope combo, search box).
+            // FluentStyles.Apply runs once in the constructor — before any
+            // param row exists — so these post-construction controls would
+            // otherwise keep their WinForms defaults and look 1-2pt smaller
+            // than every other ComboBox/TextBox on the surface.
+            FluentStyles.Apply(_paramTable);
+        }
+
+        // Returns a human cache hint for picker-kind params, or null for
+        // kinds that don't use one. Mirrors the loader-button text so the
+        // user gets the same signal in two places.
+        private string? GetCacheHint(ParamKind kind)
+        {
+            List<(string Id, string DisplayName)>? cache;
+            string loadHint;
+            switch (kind)
+            {
+                case ParamKind.Environment:      cache = _envCache;     loadHint = "Load environments"; break;
+                case ParamKind.EnvironmentGroup: cache = _groupCache;   loadHint = "Load groups";       break;
+                case ParamKind.DlpPolicy:        cache = _dlpCache;     loadHint = "Load DLP";          break;
+                case ParamKind.BillingPolicy:    cache = _billingCache; loadHint = "Load billing";      break;
+                default: return null;
+            }
+            if (cache == null)    return "Click '" + loadHint + "' once to populate this picker (cached for the session).";
+            if (cache.Count == 0) return "No items returned from last '" + loadHint + "' \u2014 click to retry.";
+            return "Cached " + cache.Count + " items \u2014 click the dropdown or type to filter. ('" + loadHint + "' to refresh.)";
         }
 
         private Control BuildInput(OpParam p)
@@ -1465,6 +1502,22 @@ namespace VerseOps.XrmToolBox
                     ? "Loaded " + sorted.Count + " " + label + "."
                     : "No " + label + " returned (HTTP " + (int)result.StatusCode + ").";
                 SetStatus(_formLoaderStatus.Text, busy: false);
+
+                // Surface the count on the button itself so the user can see
+                // the cache survived across op-switches and doesn't need to
+                // be re-loaded. Tag holds the original caption so re-loads
+                // overwrite the "(N)" suffix instead of doubling it.
+                if (!(triggeringButton.Tag is string baseCaption))
+                {
+                    baseCaption = triggeringButton.Text;
+                    triggeringButton.Tag = baseCaption;
+                }
+                triggeringButton.Text = sorted.Count > 0
+                    ? baseCaption + " (" + sorted.Count + ")"
+                    : baseCaption;
+                _paramTooltip.SetToolTip(triggeringButton, sorted.Count > 0
+                    ? "Cached " + sorted.Count + " " + label + " for this session. Click to refresh."
+                    : "Click to load " + label + ".");
 
                 // Rebuild the form so any matching kind shows the populated picker.
                 if (_currentOp != null)
