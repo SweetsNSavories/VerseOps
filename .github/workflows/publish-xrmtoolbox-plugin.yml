@@ -25,6 +25,15 @@ on:
     tags:
       - "xrmtoolbox-v*"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Operation to run"
+        required: true
+        default: "publish"
+        type: choice
+        options:
+          - "publish"
+          - "unlist-old-versions"
 
 permissions:
   contents: read
@@ -37,6 +46,7 @@ concurrency:
 jobs:
   publish:
     name: Pack and publish to nuget.org
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'publish'
     runs-on: windows-latest
     environment: release
     timeout-minutes: 20
@@ -147,3 +157,45 @@ jobs:
           name: xrmtoolbox-plugin-nupkg
           path: artifacts/*.nupkg
           if-no-files-found: error
+
+  unlist-old-versions:
+    name: Unlist old invalid versions from nuget.org
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'unlist-old-versions'
+    runs-on: windows-latest
+    environment: release
+    timeout-minutes: 10
+
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: NuGet trusted publishing login (OIDC -> short-lived API key)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: pravint7
+
+      - name: Unlist old packages missing XrmToolBox marker
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: |
+          $versions = @(
+            '1.0.2',
+            '1.0.3',
+            '1.0.4',
+            '1.0.7',
+            '1.0.8',
+            '1.0.9',
+            '1.0.10'
+          )
+
+          foreach ($version in $versions) {
+            Write-Host "Unlisting VerseOps.XrmToolBox $version"
+            dotnet nuget delete VerseOps.XrmToolBox $version --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --non-interactive
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to unlist VerseOps.XrmToolBox $version"
+            }
+          }
