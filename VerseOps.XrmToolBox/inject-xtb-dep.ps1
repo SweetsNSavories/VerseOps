@@ -93,6 +93,20 @@ try {
         [void] $metadata.AppendChild($deps)
     }
 
+    # NuGet's dependency model is "either grouped or flat, not both": if any
+    # <group> child exists, loose top-level <dependency> siblings are ignored
+    # by readers (including the XrmToolBox plugin-store validator). The SDK
+    # often emits empty per-TFM <group> elements (e.g.
+    # <group targetFramework=".NETFramework4.8" />) when PrivateAssets="all"
+    # strips every real dep; those empty groups must be removed before we add
+    # a flat marker, otherwise the marker is silently swallowed and the
+    # validator reports "XrmToolBox version dependency is missing".
+    $emptyGroups = @($deps.SelectNodes("n:group[not(n:dependency)]", $nsMgr))
+    foreach ($g in $emptyGroups) {
+        Write-Host "InjectXrmToolBoxDep: removing empty <group targetFramework='$($g.GetAttribute('targetFramework'))' />"
+        [void] $deps.RemoveChild($g)
+    }
+
     # Idempotency: skip if marker already present at any depth (top-level or
     # inside a <group>).
     $existing = $deps.SelectSingleNode("descendant::n:dependency[@id='$DepId']", $nsMgr)
@@ -101,11 +115,24 @@ try {
         return
     }
 
-    $dep = $doc.CreateElement('dependency', $ns)
-    $dep.SetAttribute('id', $DepId)
-    $dep.SetAttribute('version', $DepVersion)
-    [void] $deps.AppendChild($dep)
-    Write-Host "InjectXrmToolBoxDep: appended <dependency id='$DepId' version='$DepVersion' />"
+    # If non-empty <group> elements remain, NuGet readers will still ignore
+    # loose siblings - add the marker into every remaining group instead.
+    $remainingGroups = @($deps.SelectNodes("n:group", $nsMgr))
+    if ($remainingGroups.Count -gt 0) {
+        foreach ($g in $remainingGroups) {
+            $dep = $doc.CreateElement('dependency', $ns)
+            $dep.SetAttribute('id', $DepId)
+            $dep.SetAttribute('version', $DepVersion)
+            [void] $g.AppendChild($dep)
+            Write-Host "InjectXrmToolBoxDep: appended <dependency id='$DepId' version='$DepVersion' /> into group targetFramework='$($g.GetAttribute('targetFramework'))'"
+        }
+    } else {
+        $dep = $doc.CreateElement('dependency', $ns)
+        $dep.SetAttribute('id', $DepId)
+        $dep.SetAttribute('version', $DepVersion)
+        [void] $deps.AppendChild($dep)
+        Write-Host "InjectXrmToolBoxDep: appended flat <dependency id='$DepId' version='$DepVersion' />"
+    }
 
     # Serialize XML through a MemoryStream so the writer's declared encoding
     # matches the actual byte encoding. StringBuilder forces utf-16 into the
