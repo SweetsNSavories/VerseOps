@@ -68,6 +68,50 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 Write-Host "InjectXrmToolBoxDep: opening $NupkgPath"
 $zip = [System.IO.Compression.ZipFile]::Open($NupkgPath, [System.IO.Compression.ZipArchiveMode]::Update)
 try {
+    # [Content_Types].xml fix: NuGet's pack writes <Default Extension="png"
+    # ContentType="application/octet" />, which makes the nuget.org icon-proxy
+    # endpoint (https://api.nuget.org/v3-flatcontainer/<id>/<ver>/icon) serve
+    # the embedded PNG with Content-Type: application/octet-stream. The
+    # XrmToolBox plugin-store validator reads the iconUrl from the nuget.org
+    # search index (which IS that proxy URL when <icon> is embedded) and
+    # rejects with "Logo Url is not valid" when the response Content-Type
+    # isn't image/*. Rewrite the entry to ContentType="image/png".
+    $ctEntry = $zip.Entries | Where-Object { $_.FullName -eq '[Content_Types].xml' } | Select-Object -First 1
+    if ($ctEntry) {
+        $ctReader = New-Object System.IO.StreamReader($ctEntry.Open())
+        try { $ctText = $ctReader.ReadToEnd() } finally { $ctReader.Dispose() }
+        [xml] $ctDoc = $ctText
+        $ctNs = $ctDoc.DocumentElement.NamespaceURI
+        $ctNsMgr = New-Object System.Xml.XmlNamespaceManager($ctDoc.NameTable)
+        $ctNsMgr.AddNamespace('c', $ctNs)
+        $pngDefault = $ctDoc.SelectSingleNode("/c:Types/c:Default[@Extension='png']", $ctNsMgr)
+        if ($pngDefault) {
+            $current = $pngDefault.GetAttribute('ContentType')
+            if ($current -ne 'image/png') {
+                Write-Host "InjectXrmToolBoxDep: rewriting [Content_Types].xml png ContentType '$current' -> 'image/png'"
+                $pngDefault.SetAttribute('ContentType', 'image/png')
+                $ctMs = New-Object System.IO.MemoryStream
+                $ctSettings = New-Object System.Xml.XmlWriterSettings
+                $ctSettings.Indent = $true
+                $ctSettings.IndentChars = '  '
+                $ctSettings.Encoding = New-Object System.Text.UTF8Encoding($false)
+                $ctSettings.OmitXmlDeclaration = $false
+                $ctWriter = [System.Xml.XmlWriter]::Create($ctMs, $ctSettings)
+                try { $ctDoc.Save($ctWriter) } finally { $ctWriter.Dispose() }
+                $ctBytes = $ctMs.ToArray()
+                $ctMs.Dispose()
+                $ctStream = $ctEntry.Open()
+                try {
+                    $ctStream.SetLength(0)
+                    $ctStream.Write($ctBytes, 0, $ctBytes.Length)
+                } finally {
+                    $ctStream.Dispose()
+                }
+                Write-Host "InjectXrmToolBoxDep: [Content_Types].xml rewrite complete"
+            }
+        }
+    }
+
     $nuspecEntry = $zip.Entries | Where-Object { $_.FullName -like '*.nuspec' -and $_.FullName -notlike '*/*' } | Select-Object -First 1
     if (-not $nuspecEntry) {
         throw "No top-level .nuspec entry found inside $NupkgPath"
