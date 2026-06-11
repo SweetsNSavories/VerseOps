@@ -81,17 +81,31 @@ jobs:
           $zip.Dispose()
           Write-Host "lib/net48 entries:"
           $libs | ForEach-Object { Write-Host "  $_" }
-          # XrmToolBox plugin store extracts the .nupkg straight into Plugins/<Name>/
-          # so the plugin DLL + every runtime dep MUST be inside lib/net48.
+          # XrmToolBox plugin store extracts the .nupkg straight into the user's
+          # %APPDATA%\MscrmTools\XrmToolBox\Plugins\<Name>\ folder, AND the
+          # plugin-store validator (https://www.xrmtoolbox.com/plugins/new/)
+          # requires the plugin assembly under a "Plugins" subfolder of
+          # lib/<tfm>/ (per the canonical sample at xrmtoolbox.com and
+          # confirmed against MsCrmTools.Iconator). Every shipped DLL must
+          # live under lib/net48/Plugins/.
           $required = @(
-            'lib/net48/VerseOps.XrmToolBox.dll',
-            'lib/net48/VerseOps.Api.Core.dll',
-            'lib/net48/Microsoft.Identity.Client.dll',
-            'lib/net48/Microsoft.Identity.Client.Extensions.Msal.dll'
+            'lib/net48/Plugins/VerseOps.XrmToolBox.dll',
+            'lib/net48/Plugins/VerseOps.Api.Core.dll',
+            'lib/net48/Plugins/Microsoft.Identity.Client.dll',
+            'lib/net48/Plugins/Microsoft.Identity.Client.Extensions.Msal.dll',
+            'lib/net48/Plugins/Microsoft.IdentityModel.Abstractions.dll'
           )
           $missing = $required | Where-Object { $_ -notin $libs }
           if ($missing) {
             throw "nupkg missing required assemblies: $($missing -join ', ')"
+          }
+          # Reject the OLD bare-lib/net48/ layout — re-introducing it would
+          # make the XTB store validator silently reject the submission with
+          # the misleading "XrmToolBox version dependency is missing" error
+          # (see v1.0.10/v1.0.11 saga in the release notes).
+          $bareLayout = $libs | Where-Object { $_ -notlike 'lib/net48/Plugins/*' -and $_ -ne 'lib/net48/Plugins/' }
+          if ($bareLayout) {
+            throw "nupkg has assemblies at bare lib/net48/ (must be under lib/net48/Plugins/): $($bareLayout -join ', ')"
           }
 
       - name: NuGet trusted publishing login (OIDC → short-lived API key)
