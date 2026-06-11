@@ -86,18 +86,27 @@ jobs:
           # plugin-store validator (https://www.xrmtoolbox.com/plugins/new/)
           # requires the plugin assembly under a "Plugins" subfolder of
           # lib/<tfm>/ (per the canonical sample at xrmtoolbox.com and
-          # confirmed against MsCrmTools.Iconator). Every shipped DLL must
-          # live under lib/net48/Plugins/.
+          # confirmed against MsCrmTools.Iconator).
+          #
+          # Known-good multi-DLL packages (e.g. FetchXML Builder) keep exactly
+          # one DLL directly under lib/<tfm>/Plugins/: the tool assembly. Support
+          # DLLs live under lib/<tfm>/Plugins/<ToolAssemblyName>/. This prevents
+          # the portal validator from scanning a support DLL first and reporting
+          # the same misleading "XrmToolBox version dependency is missing" error.
           $required = @(
             'lib/net48/Plugins/VerseOps.XrmToolBox.dll',
-            'lib/net48/Plugins/VerseOps.Api.Core.dll',
-            'lib/net48/Plugins/Microsoft.Identity.Client.dll',
-            'lib/net48/Plugins/Microsoft.Identity.Client.Extensions.Msal.dll',
-            'lib/net48/Plugins/Microsoft.IdentityModel.Abstractions.dll'
+            'lib/net48/Plugins/VerseOps.XrmToolBox/VerseOps.Api.Core.dll',
+            'lib/net48/Plugins/VerseOps.XrmToolBox/Microsoft.Identity.Client.dll',
+            'lib/net48/Plugins/VerseOps.XrmToolBox/Microsoft.Identity.Client.Extensions.Msal.dll',
+            'lib/net48/Plugins/VerseOps.XrmToolBox/Microsoft.IdentityModel.Abstractions.dll'
           )
           $missing = $required | Where-Object { $_ -notin $libs }
           if ($missing) {
             throw "nupkg missing required assemblies: $($missing -join ', ')"
+          }
+          $rootPluginDlls = @($libs | Where-Object { $_ -match '^lib/net48/Plugins/[^/]+\.dll$' })
+          if ($rootPluginDlls.Count -ne 1 -or $rootPluginDlls[0] -ne 'lib/net48/Plugins/VerseOps.XrmToolBox.dll') {
+            throw "nupkg must have exactly one root plugin DLL (VerseOps.XrmToolBox.dll); found: $($rootPluginDlls -join ', ')"
           }
           # Reject the OLD bare-lib/net48/ layout — re-introducing it would
           # make the XTB store validator silently reject the submission with
