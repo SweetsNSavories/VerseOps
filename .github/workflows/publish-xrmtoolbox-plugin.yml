@@ -117,6 +117,10 @@ jobs:
             throw "nupkg has assemblies at bare lib/net48/ (must be under lib/net48/Plugins/): $($bareLayout -join ', ')"
           }
 
+      - name: Validate XrmToolBox portal metadata
+        shell: pwsh
+        run: ./tools/validate-xrmtoolbox-nupkg.ps1 -PackageOutputDir ./artifacts -ExpectedXrmToolBoxVersion 1.2025.10.74
+
       - name: NuGet trusted publishing login (OIDC → short-lived API key)
         id: nuget-login
         uses: NuGet/login@v1

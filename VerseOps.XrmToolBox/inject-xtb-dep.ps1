@@ -5,11 +5,11 @@
 
 .DESCRIPTION
     The XrmToolBox plugin-store registration page rejects submissions whose
-    nuspec dependencies block does not contain
-        <dependency id="XrmToolBox" version="1.2017.10.19" />
+    nuspec dependencies block does not contain an XrmToolBox dependency whose
+    version matches the minimum XrmToolBox host version targeted by the tool,
     with the error "XrmToolBox version dependency is missing in Nuget
-    package". The package id "XrmToolBox" does not actually exist on
-    nuget.org (404 on flatcontainer); this is purely a metadata signal.
+    package". The package id "XrmToolBox" is a Tool Library compatibility
+    signal rather than the SDK package used at build time.
 
     Our SDK-style csproj sets PrivateAssets="all" on every PackageReference
     so the generated nuspec ships with an empty <dependencies/> element.
@@ -17,7 +17,8 @@
     XML, ensures the marker dependency is present, and saves the modified
     .nuspec back into the .nupkg.
 
-    Idempotent: re-running on an already-fixed nupkg is a no-op.
+    Idempotent: re-running on an already-fixed nupkg does not duplicate the
+    marker. If an older marker version is present, it is updated in place.
 
 .PARAMETER NupkgPath
     Absolute path to the .nupkg file to rewrite.
@@ -26,7 +27,7 @@
     NuGet package id to inject as a dependency. Default: XrmToolBox.
 
 .PARAMETER DepVersion
-    Version constraint for the injected dependency. Default: 1.2017.10.19.
+    Version constraint for the injected dependency. Default: 1.2025.10.74.
 
 .NOTES
     Runs from MSBuild AfterTargets="Pack" in VerseOps.XrmToolBox.csproj.
@@ -41,7 +42,7 @@ param(
 
     [string] $DepId = 'XrmToolBox',
 
-    [string] $DepVersion = '1.2017.10.19'
+    [string] $DepVersion = '1.2025.10.74'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -151,31 +152,61 @@ try {
         [void] $deps.RemoveChild($g)
     }
 
-    # Idempotency: skip if marker already present at any depth (top-level or
-    # inside a <group>).
-    $existing = $deps.SelectSingleNode("descendant::n:dependency[@id='$DepId']", $nsMgr)
-    if ($existing) {
-        Write-Host "InjectXrmToolBoxDep: dependency id='$DepId' already present (version='$($existing.GetAttribute('version'))'); no change"
-        return
-    }
-
     # If non-empty <group> elements remain, NuGet readers will still ignore
-    # loose siblings - add the marker into every remaining group instead.
+    # loose siblings - ensure the marker is present inside every remaining
+    # group instead. Remove loose marker entries so readers cannot disagree
+    # about whether the package uses grouped or flat dependencies.
     $remainingGroups = @($deps.SelectNodes("n:group", $nsMgr))
     if ($remainingGroups.Count -gt 0) {
+        $looseMarkers = @($deps.SelectNodes("n:dependency[@id='$DepId']", $nsMgr))
+        foreach ($loose in $looseMarkers) {
+            Write-Host "InjectXrmToolBoxDep: removing loose <dependency id='$DepId' /> because grouped dependencies are present"
+            [void] $deps.RemoveChild($loose)
+        }
+
         foreach ($g in $remainingGroups) {
+            $dep = $g.SelectSingleNode("n:dependency[@id='$DepId']", $nsMgr)
+            if ($dep) {
+                $currentVersion = $dep.GetAttribute('version')
+                if ($currentVersion -ne $DepVersion) {
+                    Write-Host "InjectXrmToolBoxDep: updating <dependency id='$DepId' /> in group targetFramework='$($g.GetAttribute('targetFramework'))' from version '$currentVersion' to '$DepVersion'"
+                    $dep.SetAttribute('version', $DepVersion)
+                } else {
+                    Write-Host "InjectXrmToolBoxDep: dependency id='$DepId' already present in group targetFramework='$($g.GetAttribute('targetFramework'))' with version '$DepVersion'"
+                }
+            } else {
+                $dep = $doc.CreateElement('dependency', $ns)
+                $dep.SetAttribute('id', $DepId)
+                $dep.SetAttribute('version', $DepVersion)
+                [void] $g.AppendChild($dep)
+                Write-Host "InjectXrmToolBoxDep: appended <dependency id='$DepId' version='$DepVersion' /> into group targetFramework='$($g.GetAttribute('targetFramework'))'"
+            }
+        }
+    } else {
+        $markerDeps = @($deps.SelectNodes("n:dependency[@id='$DepId']", $nsMgr))
+        if ($markerDeps.Count -gt 0) {
+            $primary = $markerDeps[0]
+            $currentVersion = $primary.GetAttribute('version')
+            if ($currentVersion -ne $DepVersion) {
+                Write-Host "InjectXrmToolBoxDep: updating flat <dependency id='$DepId' /> from version '$currentVersion' to '$DepVersion'"
+                $primary.SetAttribute('version', $DepVersion)
+            } else {
+                Write-Host "InjectXrmToolBoxDep: flat dependency id='$DepId' already present with version '$DepVersion'"
+            }
+
+            if ($markerDeps.Count -gt 1) {
+                foreach ($duplicate in $markerDeps[1..($markerDeps.Count - 1)]) {
+                    Write-Host "InjectXrmToolBoxDep: removing duplicate flat <dependency id='$DepId' />"
+                    [void] $deps.RemoveChild($duplicate)
+                }
+            }
+        } else {
             $dep = $doc.CreateElement('dependency', $ns)
             $dep.SetAttribute('id', $DepId)
             $dep.SetAttribute('version', $DepVersion)
-            [void] $g.AppendChild($dep)
-            Write-Host "InjectXrmToolBoxDep: appended <dependency id='$DepId' version='$DepVersion' /> into group targetFramework='$($g.GetAttribute('targetFramework'))'"
+            [void] $deps.AppendChild($dep)
+            Write-Host "InjectXrmToolBoxDep: appended flat <dependency id='$DepId' version='$DepVersion' />"
         }
-    } else {
-        $dep = $doc.CreateElement('dependency', $ns)
-        $dep.SetAttribute('id', $DepId)
-        $dep.SetAttribute('version', $DepVersion)
-        [void] $deps.AppendChild($dep)
-        Write-Host "InjectXrmToolBoxDep: appended flat <dependency id='$DepId' version='$DepVersion' />"
     }
 
     # Serialize XML through a MemoryStream so the writer's declared encoding

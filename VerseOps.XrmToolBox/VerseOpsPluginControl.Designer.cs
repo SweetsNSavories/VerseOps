@@ -85,6 +85,7 @@ namespace VerseOps.XrmToolBox
         // ---- App-wide status strip (PR #5) ----------------------------
         private System.Windows.Forms.StatusStrip _statusStrip;
         private System.Windows.Forms.ToolStripStatusLabel _statusBarLabel;
+        private System.Windows.Forms.ToolStripStatusLabel _statusBarVersion;
         private System.Windows.Forms.ToolStripStatusLabel _statusBarElapsed;
         private System.Windows.Forms.ToolStripProgressBar _statusBarProgress;
 
@@ -150,6 +151,7 @@ namespace VerseOps.XrmToolBox
 
             _statusStrip          = new System.Windows.Forms.StatusStrip();
             _statusBarLabel       = new System.Windows.Forms.ToolStripStatusLabel();
+            _statusBarVersion     = new System.Windows.Forms.ToolStripStatusLabel();
             _statusBarElapsed     = new System.Windows.Forms.ToolStripStatusLabel();
             _statusBarProgress    = new System.Windows.Forms.ToolStripProgressBar();
 
@@ -689,6 +691,7 @@ namespace VerseOps.XrmToolBox
             _statusStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[]
             {
                 _statusBarLabel,
+                _statusBarVersion,
                 _statusBarElapsed,
                 _statusBarProgress
             });
@@ -697,6 +700,11 @@ namespace VerseOps.XrmToolBox
             _statusBarLabel.Text = "Ready.";
             _statusBarLabel.Spring = true;
             _statusBarLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+
+            _statusBarVersion.Name = "_statusBarVersion";
+            _statusBarVersion.Text = "Build v?";
+            _statusBarVersion.AutoSize = true;
+            _statusBarVersion.Margin = new System.Windows.Forms.Padding(0, 3, 12, 2);
 
             _statusBarElapsed.Name = "_statusBarElapsed";
             _statusBarElapsed.Text = "";

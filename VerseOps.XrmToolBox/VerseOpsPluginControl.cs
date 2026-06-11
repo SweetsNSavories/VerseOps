@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -84,6 +85,8 @@ namespace VerseOps.XrmToolBox
         public VerseOpsPluginControl()
         {
             InitializeComponent();
+            _statusBarVersion.Text = GetLoadedBuildText();
+            _statusBarVersion.ToolTipText = GetLoadedBuildToolTip();
             // Centralised Fluent / XrmToolBox-friendly styling pass. Walks
             // every child control once and normalises fonts, button sizes,
             // combo chrome, and tab strip height. See FluentStyles.cs.
@@ -98,6 +101,46 @@ namespace VerseOps.XrmToolBox
             // full API names and the request/response panes are 50/50.
             Load += (_, __) => ApplySplitterDefaults();
             SizeChanged += (_, __) => ApplySplitterDefaults();
+        }
+
+        private static string GetLoadedBuildText()
+        {
+            var asm = typeof(VerseOpsPluginControl).Assembly;
+            var version = GetDisplayVersion(asm);
+            var location = asm.Location;
+            if (!string.IsNullOrEmpty(location) && File.Exists(location))
+            {
+                var stamp = File.GetLastWriteTime(location).ToString("yyyy-MM-dd HH:mm");
+                return "Build v" + version + " - DLL " + stamp;
+            }
+
+            return "Build v" + version;
+        }
+
+        private static string GetLoadedBuildToolTip()
+        {
+            var asm = typeof(VerseOpsPluginControl).Assembly;
+            var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+                ?? asm.GetName().Version?.ToString()
+                ?? "unknown";
+            var location = asm.Location;
+            var loadedFrom = string.IsNullOrEmpty(location) ? "unknown" : location;
+            var stamp = !string.IsNullOrEmpty(location) && File.Exists(location)
+                ? File.GetLastWriteTime(location).ToString("yyyy-MM-dd HH:mm:ss")
+                : "unknown";
+
+            return "Loaded assembly: " + loadedFrom + "\r\n" +
+                   "Version: " + info + "\r\n" +
+                   "DLL modified: " + stamp;
+        }
+
+        private static string GetDisplayVersion(Assembly asm)
+        {
+            var version = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+                ?? asm.GetName().Version?.ToString()
+                ?? "unknown";
+            var plusIndex = version.IndexOf('+');
+            return plusIndex >= 0 ? version.Substring(0, plusIndex) : version;
         }
 
         // Track whether the user has manually dragged either splitter; once

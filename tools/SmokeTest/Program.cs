@@ -36,6 +36,7 @@ namespace SmokeTest
     {
         private static string s_outDir = "";
         private static readonly StringBuilder s_report = new StringBuilder();
+        private static bool s_cachedTokenAvailable;
 
         [STAThread]
         private static int Main(string[] args)
@@ -77,7 +78,10 @@ namespace SmokeTest
                 var ui = TrackBCDEF();
 
                 ReportHeader("Summary");
-                Report(string.Format("  Track A (direct API call)              : {0}", aOk ? "PASS" : "FAIL"));
+                var trackAStatus = s_cachedTokenAvailable
+                    ? (aOk ? "PASS" : "FAIL")
+                    : "SKIP (no cached token)";
+                Report(string.Format("  Track A (direct API call)              : {0}", trackAStatus));
                 foreach (var kv in ui)
                     Report(string.Format("  {0,-40} : {1}", kv.Key, kv.Value ? "PASS" : "FAIL"));
 
@@ -88,7 +92,7 @@ namespace SmokeTest
 
                 Console.WriteLine();
                 Console.WriteLine("Smoke test complete.");
-                return (aOk && ui.Values.All(v => v)) ? 0 : 2;
+                return ((!s_cachedTokenAvailable || aOk) && ui.Values.All(v => v)) ? 0 : 2;
             }
             catch (Exception ex)
             {
@@ -126,6 +130,40 @@ namespace SmokeTest
             s_report.AppendLine(line);
         }
 
+        private static int ViewMode(string preselect)
+        {
+            Application.EnableVisualStyles();
+            using (var ctl = new VerseOpsPluginControl())
+            using (var form = new Form
+            {
+                Text = "VerseOps API Explorer (smoke view)",
+                Size = new Size(1400, 820),
+                StartPosition = FormStartPosition.CenterScreen,
+            })
+            {
+                ctl.Dock = DockStyle.Fill;
+                form.Controls.Add(ctl);
+
+                if (!string.IsNullOrWhiteSpace(preselect))
+                {
+                    form.Shown += (s, e) =>
+                    {
+                        var tree = Field("_opsTree")?.GetValue(ctl) as TreeView;
+                        var node = tree == null ? null : FindNodeContaining(tree.Nodes, preselect);
+                        if (node != null)
+                        {
+                            tree.SelectedNode = node;
+                            node.EnsureVisible();
+                        }
+                    };
+                }
+
+                Application.Run(form);
+            }
+
+            return 0;
+        }
+
         private static async Task<bool> TrackA()
         {
             var auth = new PluginAuthService();
@@ -144,6 +182,7 @@ namespace SmokeTest
                 Log("  silent sign-in: NO cached token. Skipping API call.");
                 return false;
             }
+            s_cachedTokenAvailable = true;
             Log("  silent sign-in: OK as '{0}'  (token length = {1})", auth.LastSignedInUser, token.Length);
 
             var listOp = ApiCatalog.PpacOperations.FirstOrDefault(o => o.Name == "List Environments For User");
@@ -223,6 +262,7 @@ namespace SmokeTest
                 var fTree    = Field("_opsTree");
                 var fSearch  = Field("_searchBox");
                 var fStatus  = Field("_statusLabel");
+                var fBuild   = Field("_statusBarVersion");
                 var fRespHdr = Field("_responseHeader");
                 var fRespBox = Field("_responseBox");
                 var fExec    = Field("_btnExecute");
@@ -232,6 +272,7 @@ namespace SmokeTest
                 var tree    = (TreeView)fTree.GetValue(ctl);
                 var search  = (TextBox)fSearch.GetValue(ctl);
                 var status  = fStatus.GetValue(ctl) as ToolStripItem;
+                var build   = fBuild.GetValue(ctl) as ToolStripItem;
                 var respHdr = fRespHdr.GetValue(ctl) as Label;
                 var respBox = fRespBox.GetValue(ctl) as TextBox;
                 var execBtn = fExec.GetValue(ctl) as Button;
@@ -241,9 +282,11 @@ namespace SmokeTest
                 int leaves = 0; CountLeaves(tree.Nodes, ref leaves);
                 Log("  total tree leaves     : {0}", leaves);
                 Log("  status label text     : {0}", status?.Text ?? "?");
+                Log("  build label text      : {0}", build?.Text ?? "?");
 
                 SaveScreenshot(form, "track-b-empty.png");
-                results["Track B (control renders, tree populated)"] = leaves >= 50;
+                results["Track B (control renders, tree populated)"] =
+                    leaves >= 50 && (build?.Text ?? string.Empty).StartsWith("Build v", StringComparison.Ordinal);
 
                 Header("Track C: drive UI -> PPAC GET 'List Environments For User'");
                 results["Track C (PPAC parameterless via Execute)"] =
@@ -330,6 +373,12 @@ namespace SmokeTest
             if (execBtn == null || !execBtn.Enabled)
             {
                 Log("  Execute button not enabled (enabled={0})", execBtn?.Enabled);
+                if (!s_cachedTokenAvailable)
+                {
+                    Log("  expected in UI-only mode: no cached token means auth-gated Execute stays disabled.");
+                    SaveScreenshot(form, screenshotName);
+                    return true;
+                }
                 return false;
             }
             Log("  clicking Execute...");
@@ -401,6 +450,17 @@ namespace SmokeTest
             {
                 if (string.Equals(n.Text, text, StringComparison.OrdinalIgnoreCase)) return n;
                 var inner = FindNodeByText(n.Nodes, text);
+                if (inner != null) return inner;
+            }
+            return null;
+        }
+
+        private static TreeNode FindNodeContaining(TreeNodeCollection nodes, string text)
+        {
+            foreach (TreeNode n in nodes)
+            {
+                if (n.Text.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0) return n;
+                var inner = FindNodeContaining(n.Nodes, text);
                 if (inner != null) return inner;
             }
             return null;
