@@ -46,7 +46,7 @@ concurrency:
 jobs:
   publish:
     name: Pack and publish to nuget.org
-    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'publish'
+    if: (github.event_name == 'push' && github.ref_name != 'xrmtoolbox-vunlist-old-versions') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'publish')
     runs-on: windows-latest
     environment: release
     timeout-minutes: 20
@@ -160,7 +160,7 @@ jobs:
 
   unlist-old-versions:
     name: Unlist old invalid versions from nuget.org
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'unlist-old-versions'
+    if: (github.event_name == 'workflow_dispatch' && inputs.mode == 'unlist-old-versions') || (github.event_name == 'push' && github.ref_name == 'xrmtoolbox-vunlist-old-versions')
     runs-on: windows-latest
     environment: release
     timeout-minutes: 10
