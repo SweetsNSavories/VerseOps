@@ -85,31 +85,48 @@ try {
         $ctNs = $ctDoc.DocumentElement.NamespaceURI
         $ctNsMgr = New-Object System.Xml.XmlNamespaceManager($ctDoc.NameTable)
         $ctNsMgr.AddNamespace('c', $ctNs)
+        $changedContentTypes = $false
+
+        $overrides = @($ctDoc.SelectNodes('/c:Types/c:Override', $ctNsMgr))
+        foreach ($override in $overrides) {
+            $partName = $override.GetAttribute('PartName')
+            if ($partName.StartsWith('//')) {
+                $fixedPartName = '/' + $partName.TrimStart('/')
+                Write-Host "InjectXrmToolBoxDep: rewriting [Content_Types].xml Override PartName '$partName' -> '$fixedPartName'"
+                $override.SetAttribute('PartName', $fixedPartName)
+                $changedContentTypes = $true
+            }
+        }
+
         $pngDefault = $ctDoc.SelectSingleNode("/c:Types/c:Default[@Extension='png']", $ctNsMgr)
         if ($pngDefault) {
             $current = $pngDefault.GetAttribute('ContentType')
             if ($current -ne 'image/png') {
                 Write-Host "InjectXrmToolBoxDep: rewriting [Content_Types].xml png ContentType '$current' -> 'image/png'"
                 $pngDefault.SetAttribute('ContentType', 'image/png')
-                $ctMs = New-Object System.IO.MemoryStream
-                $ctSettings = New-Object System.Xml.XmlWriterSettings
-                $ctSettings.Indent = $true
-                $ctSettings.IndentChars = '  '
-                $ctSettings.Encoding = New-Object System.Text.UTF8Encoding($false)
-                $ctSettings.OmitXmlDeclaration = $false
-                $ctWriter = [System.Xml.XmlWriter]::Create($ctMs, $ctSettings)
-                try { $ctDoc.Save($ctWriter) } finally { $ctWriter.Dispose() }
-                $ctBytes = $ctMs.ToArray()
-                $ctMs.Dispose()
-                $ctStream = $ctEntry.Open()
-                try {
-                    $ctStream.SetLength(0)
-                    $ctStream.Write($ctBytes, 0, $ctBytes.Length)
-                } finally {
-                    $ctStream.Dispose()
-                }
-                Write-Host "InjectXrmToolBoxDep: [Content_Types].xml rewrite complete"
+                $changedContentTypes = $true
             }
+        }
+
+        if ($changedContentTypes) {
+            $ctMs = New-Object System.IO.MemoryStream
+            $ctSettings = New-Object System.Xml.XmlWriterSettings
+            $ctSettings.Indent = $true
+            $ctSettings.IndentChars = '  '
+            $ctSettings.Encoding = New-Object System.Text.UTF8Encoding($false)
+            $ctSettings.OmitXmlDeclaration = $false
+            $ctWriter = [System.Xml.XmlWriter]::Create($ctMs, $ctSettings)
+            try { $ctDoc.Save($ctWriter) } finally { $ctWriter.Dispose() }
+            $ctBytes = $ctMs.ToArray()
+            $ctMs.Dispose()
+            $ctStream = $ctEntry.Open()
+            try {
+                $ctStream.SetLength(0)
+                $ctStream.Write($ctBytes, 0, $ctBytes.Length)
+            } finally {
+                $ctStream.Dispose()
+            }
+            Write-Host "InjectXrmToolBoxDep: [Content_Types].xml rewrite complete"
         }
     }
 

@@ -68,6 +68,9 @@ $zip = [System.IO.Compression.ZipFile]::OpenRead($NupkgPath)
 $tempDllPath = $null
 try {
     $entries = @($zip.Entries | ForEach-Object { $_.FullName })
+    $invalidEntryNames = @($entries | Where-Object { $_ -match '^[/\\]' -or $_ -match '//' -or $_ -match '\\\\' })
+    Assert-Condition ($invalidEntryNames.Count -eq 0) "nupkg contains invalid package entry name(s): $($invalidEntryNames -join ', ')"
+
     $nuspecEntry = $zip.Entries | Where-Object { $_.FullName -like '*.nuspec' -and $_.FullName -notlike '*/*' } | Select-Object -First 1
     Assert-Condition ($null -ne $nuspecEntry) "No top-level .nuspec entry found inside $NupkgPath"
 
@@ -120,6 +123,12 @@ try {
     $pngDefault = $contentTypes.SelectSingleNode("/c:Types/c:Default[@Extension='png']", $ctNsMgr)
     Assert-Condition ($null -ne $pngDefault) '[Content_Types].xml has no PNG default content type'
     Assert-Condition ($pngDefault.GetAttribute('ContentType') -eq 'image/png') "PNG content type is '$($pngDefault.GetAttribute('ContentType'))'; expected 'image/png'"
+
+    $invalidPartNames = @($contentTypes.SelectNodes('/c:Types/c:Override', $ctNsMgr) | Where-Object {
+        $partName = $_.GetAttribute('PartName')
+        $partName -match '^//' -or $partName -notmatch '^/'
+    } | ForEach-Object { $_.GetAttribute('PartName') })
+    Assert-Condition ($invalidPartNames.Count -eq 0) "[Content_Types].xml contains invalid Override PartName(s): $($invalidPartNames -join ', ')"
 
     $requiredEntries = @(
         'lib/net48/Plugins/VerseOps.XrmToolBox.dll',
