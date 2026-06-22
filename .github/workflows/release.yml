@@ -143,6 +143,10 @@ jobs:
             VerseOps.App-${{ github.ref_name }}-win-x64.zip
             VerseOps.App-${{ github.ref_name }}-win-x64-selfcontained.zip
 
+      # Publish directly (not draft). draft: true previously caused a race
+      # window where an empty manually-created release for the same tag could
+      # exist before this step ran, forcing softprops to create an orphan
+      # draft at an untagged-* URL while the visible release stayed empty.
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -153,4 +157,7 @@ jobs:
             sbom\sbom.cdx.json
             publish\SHA256SUMS.txt
           generate_release_notes: true
-          draft: true
+          draft: false
+          prerelease: false
+          make_latest: "true"
+          fail_on_unmatched_files: true
