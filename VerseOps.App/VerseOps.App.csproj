@@ -29,7 +29,7 @@
     <PackageReference Include="WPF-UI" Version="3.0.5" />
     <!-- Renders Microsoft brand SVG assets (Power Platform / D365 / Entra /
          Azure architecture icons) natively as XAML at runtime. MIT licensed. -->
-    <PackageReference Include="SharpVectors.Reloaded" Version="1.8.4.2" />
+    <PackageReference Include="SharpVectors.Reloaded" Version="1.8.5" />
   </ItemGroup>
 
   <!-- Shared API catalog + executor lives in VerseOps.Api.Core (netstandard2.0)
