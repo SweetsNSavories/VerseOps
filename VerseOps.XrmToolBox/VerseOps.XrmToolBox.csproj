@@ -52,8 +52,8 @@
          reliable parent-window handle, and XrmToolBox's plugin host doesn't
          give us one across all states (docked, undocked, MDI child). The
          plugin uses system-browser interactive + device-code fallback. -->
-    <PackageReference Include="Microsoft.Identity.Client" Version="4.81.0" />
-    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.81.0" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.85.2" />
+    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.85.2" />
   </ItemGroup>
 
   <ItemGroup>
